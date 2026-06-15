@@ -53,6 +53,7 @@ const state = {
   calendarDragCurrentDate: "",
   calendarDragHandled: false,
   calendarDragPointer: null,
+  calendarTaskDrag: null,
   calendarSwipe: null,
   calendarWheelAt: 0,
   calendarTaskOpenSuppressedUntil: 0,
@@ -2681,7 +2682,7 @@ function renderCalendarTask(task, dateKey = task.date) {
   const colorClass = range ? `range-color-${rangeColorIndex(task)}` : "";
   const icon = range && range !== "start" ? taskContinuationIcon(range) : taskTypeIcon(task.type);
   return `
-    <button class="calendar-task ${task.checked ? "done" : ""} ${task.type} ${range ? `range-task ${colorClass}` : ""}" type="button" data-path="${escapeAttribute(task.path)}" data-line="${task.line}" title="${escapeAttribute(title)}">
+    <button class="calendar-task ${task.checked ? "done" : ""} ${task.type} ${range ? `range-task ${colorClass}` : ""}" type="button" data-path="${escapeAttribute(task.path)}" data-line="${task.line}" data-date="${escapeAttribute(dateKey)}" title="${escapeAttribute(title)}">
       <span>${icon}</span>
       <span>${escapeHtml(task.text)}</span>
     </button>
@@ -2753,12 +2754,16 @@ function bindCalendarEvents() {
   });
 
   els.calendarView.querySelectorAll(".calendar-task").forEach((button) => {
-    if (button.hasAttribute("data-line")) bindTaskLongPress(button);
+    if (button.hasAttribute("data-line")) {
+      bindTaskDrag(button);
+      bindTaskLongPress(button);
+    }
     button.addEventListener("click", async (event) => {
-      if (button.dataset.longPressed === "true" || Date.now() < state.calendarTaskOpenSuppressedUntil) {
+      if (button.dataset.longPressed === "true" || button.dataset.dragged === "true" || Date.now() < state.calendarTaskOpenSuppressedUntil) {
         event.preventDefault();
         event.stopPropagation();
         button.dataset.longPressed = "";
+        button.dataset.dragged = "";
         return;
       }
       const path = button.getAttribute("data-path");
@@ -2882,6 +2887,85 @@ function parseDateKey(value) {
   return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
 }
 
+function bindTaskDrag(button) {
+  button.addEventListener("pointerdown", (event) => {
+    if (event.button !== undefined && event.button !== 0) return;
+    state.calendarTaskDrag = {
+      pointerId: event.pointerId,
+      path: button.getAttribute("data-path") || "",
+      line: Number(button.getAttribute("data-line")),
+      sourceDate: button.getAttribute("data-date") || "",
+      x: event.clientX,
+      y: event.clientY,
+      active: false,
+      button,
+    };
+    button.setPointerCapture?.(event.pointerId);
+  });
+
+  button.addEventListener("pointermove", (event) => {
+    const drag = state.calendarTaskDrag;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const distance = Math.hypot(event.clientX - drag.x, event.clientY - drag.y);
+    if (!drag.active && distance < 10) return;
+    if (!drag.active) {
+      drag.active = true;
+      button.dataset.dragged = "true";
+      button.classList.add("dragging");
+      state.calendarTaskOpenSuppressedUntil = Date.now() + 1200;
+    }
+    event.preventDefault();
+    updateCalendarTaskDropTarget(event.clientX, event.clientY);
+  });
+
+  button.addEventListener("pointerup", async (event) => {
+    const drag = state.calendarTaskDrag;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    button.releasePointerCapture?.(event.pointerId);
+    clearCalendarTaskDropTarget();
+    state.calendarTaskDrag = null;
+    button.classList.remove("dragging");
+    if (!drag.active) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const targetDate = calendarDateFromPoint(event.clientX, event.clientY);
+    if (targetDate && targetDate !== drag.sourceDate) {
+      await moveCalendarTaskDate(drag.path, drag.line, targetDate, drag.sourceDate);
+    }
+    window.setTimeout(() => {
+      button.dataset.dragged = "";
+    }, 0);
+  });
+
+  button.addEventListener("pointercancel", () => {
+    button.classList.remove("dragging");
+    clearCalendarTaskDropTarget();
+    state.calendarTaskDrag = null;
+    window.setTimeout(() => {
+      button.dataset.dragged = "";
+    }, 0);
+  });
+}
+
+function updateCalendarTaskDropTarget(x, y) {
+  clearCalendarTaskDropTarget();
+  const date = calendarDateFromPoint(x, y);
+  if (!date) return;
+  els.calendarView.querySelectorAll(`[data-calendar-date="${date}"]`).forEach((cell) => {
+    cell.classList.add("task-drop-target");
+  });
+}
+
+function clearCalendarTaskDropTarget() {
+  els.calendarView.querySelectorAll(".task-drop-target").forEach((cell) => {
+    cell.classList.remove("task-drop-target");
+  });
+}
+
+function calendarDateFromPoint(x, y) {
+  return document.elementFromPoint(x, y)?.closest?.("[data-calendar-date]")?.getAttribute("data-calendar-date") || "";
+}
+
 function bindTaskLongPress(button) {
   let timer = null;
   let startX = 0;
@@ -2966,6 +3050,73 @@ async function toggleCalendarTask(path, lineNumber, button) {
   } finally {
     button.disabled = false;
   }
+}
+
+async function moveCalendarTaskDate(path, lineNumber, targetDate, sourceDate = "") {
+  const node = state.files.get(path);
+  if (!canEditNode(node) || !Number.isInteger(lineNumber) || lineNumber < 1 || !parseDateKey(targetDate)) {
+    alert("실제 vault 파일에서만 task 날짜를 바꿀 수 있습니다.");
+    return;
+  }
+
+  const granted = await ensureNodeWritePermission(node);
+  if (!granted) {
+    alert("파일 편집 권한이 필요합니다.");
+    return;
+  }
+
+  const content = await readFileNode(node);
+  const lines = content.replace(/\r\n/g, "\n").split("\n");
+  const index = lineNumber - 1;
+  if (!lines[index] || !/^\s*[-*+]\s+\[[ xX-]\]/.test(lines[index])) return;
+
+  const task = state.tasks.find((item) => item.path === path && item.line === lineNumber);
+  const marker = taskDateMarkerForMove(task, sourceDate);
+  const nextLine = replaceTaskLineDate(lines[index], targetDate, marker);
+  if (nextLine === lines[index]) return;
+
+  lines[index] = nextLine;
+  const nextContent = lines.join("\n");
+  const metadata = await writeNodeContent(node, nextContent, { backup: false, previousContent: content });
+  Object.assign(node, metadata);
+  refreshDirectoryMetadata();
+  if (typeof node.content === "string") node.content = nextContent;
+  updateTasksForFile(path, nextContent);
+
+  if (state.currentPath === path) {
+    state.currentContent = nextContent;
+    if (state.editMode) {
+      setEditorValue(nextContent);
+      markEditorDirty();
+    } else {
+      renderCurrentDocument();
+    }
+  }
+
+  if (state.activeView === "calendar" && state.calendarKind === "tasks") renderCalendar();
+}
+
+function taskDateMarkerForMove(task, sourceDate) {
+  if (task?.dates?.start && sourceDate === task.dates.start) return "\u{1F6EB}";
+  if (task?.dates?.scheduled) return "\u{23F3}";
+  if (task?.dates?.done) return "\u{2705}";
+  if (task?.dates?.cancelled) return "\u{274C}";
+  if (task?.dates?.start && !task?.dates?.due && !task?.dates?.end) return "\u{1F6EB}";
+  return "\u{1F4C5}";
+}
+
+function replaceTaskLineDate(line, targetDate, marker = "\u{1F4C5}") {
+  const escapedMarker = marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const markerPattern = new RegExp(`(${escapedMarker}\\s*)\\d{4}-\\d{2}-\\d{2}`, "u");
+  if (markerPattern.test(line)) return line.replace(markerPattern, `$1${targetDate}`);
+
+  const anyMarkerPattern = /([\u{1F4C5}\u{1F6EB}\u{23F3}\u{2705}\u{274C}]\s*)\d{4}-\d{2}-\d{2}/u;
+  if (anyMarkerPattern.test(line)) return line.replace(anyMarkerPattern, `$1${targetDate}`);
+
+  const bareDatePattern = /\b\d{4}-\d{2}-\d{2}\b/;
+  if (bareDatePattern.test(line)) return line.replace(bareDatePattern, targetDate);
+
+  return `${line} ${marker} ${targetDate}`;
 }
 
 function bindDateClick(target) {
