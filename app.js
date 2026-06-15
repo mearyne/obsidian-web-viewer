@@ -224,8 +224,10 @@ document.addEventListener("pointerdown", closeSidebarFromOutside);
 document.addEventListener("pointerup", clearCalendarDragIfActive);
 document.addEventListener("pointercancel", clearCalendarDragIfActive);
 window.addEventListener("resize", handleCalendarResize, { passive: true });
-document.addEventListener("pointerdown", requestFullscreenOnce, { once: true });
-document.addEventListener("keydown", requestFullscreenOnce, { once: true });
+if (shouldAutoRequestFullscreen()) {
+  document.addEventListener("pointerdown", requestFullscreenOnce, { once: true });
+  document.addEventListener("keydown", requestFullscreenOnce, { once: true });
+}
 document.addEventListener("fullscreenchange", () => setFullscreenFallback(false));
 document.addEventListener("webkitfullscreenchange", () => setFullscreenFallback(false));
 registerServiceWorker();
@@ -2820,6 +2822,18 @@ function requestFullscreenOnce(event) {
   if (state.fullscreenAttempted || document.fullscreenElement) return;
   state.fullscreenAttempted = true;
   enterFullscreen();
+}
+
+function shouldAutoRequestFullscreen() {
+  return isStandaloneDisplayMode() || isTouchPrimaryDevice();
+}
+
+function isStandaloneDisplayMode() {
+  return window.matchMedia?.("(display-mode: standalone)")?.matches || navigator.standalone === true;
+}
+
+function isTouchPrimaryDevice() {
+  return window.matchMedia?.("(hover: none) and (pointer: coarse)")?.matches;
 }
 
 async function enterFullscreen() {
