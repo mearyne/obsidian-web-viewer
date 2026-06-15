@@ -140,7 +140,7 @@ function readVaultFiles(dir, prefix) {
         path: relative,
         size: stat.size,
         updatedAt: stat.mtimeMs,
-        createdAt: stat.birthtimeMs,
+        createdAt: createdAtFromStat(stat),
       };
 
       if (!isTextVaultFile(entry.name)) {
@@ -149,6 +149,19 @@ function readVaultFiles(dir, prefix) {
 
       return [item];
     });
+}
+
+function createdAtFromStat(stat) {
+  const birth = Number(stat.birthtimeMs);
+  const changed = Number(stat.ctimeMs);
+  const modified = Number(stat.mtimeMs);
+  if (Number.isFinite(birth) && birth > 0) {
+    const birthLooksLikeModified = Number.isFinite(modified) && Math.abs(birth - modified) < 2;
+    const changedLooksUseful = Number.isFinite(changed) && changed > 0 && Math.abs(changed - modified) >= 2;
+    return birthLooksLikeModified && changedLooksUseful ? changed : birth;
+  }
+  if (Number.isFinite(changed) && changed > 0) return changed;
+  return Number.isFinite(modified) ? modified : 0;
 }
 
 function sendVaultFile(requestedPath, res) {
@@ -211,7 +224,7 @@ function writeVaultFile(requestedPath, body, res) {
       path: safePath,
       size: stat.size,
       updatedAt: stat.mtimeMs,
-      createdAt: stat.birthtimeMs,
+      createdAt: createdAtFromStat(stat),
     });
   } catch (error) {
     sendJson(res, 500, { error: error.message || "Write failed" });

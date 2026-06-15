@@ -1386,6 +1386,30 @@ button:disabled {
   white-space: pre;
 }
 
+.markdown-body .task-list-item {
+  list-style: none;
+  margin-left: -1.1em;
+}
+
+.markdown-body .task-list-label {
+  align-items: flex-start;
+  display: inline-flex;
+  gap: 8px;
+}
+
+.markdown-body .task-list-checkbox {
+  accent-color: var(--accent);
+  flex: 0 0 auto;
+  height: 1em;
+  margin-top: 0.28em;
+  width: 1em;
+}
+
+.markdown-body .task-list-item.done .task-list-label span {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
 .markdown-body hr {
   background: var(--line);
   border: 0;

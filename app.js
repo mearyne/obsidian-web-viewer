@@ -46,6 +46,7 @@ const state = {
   calendarDragHandled: false,
   calendarSwipe: null,
   calendarWheelAt: 0,
+  calendarTaskOpenSuppressedUntil: 0,
   fullscreenAttempted: false,
   fullscreenFallback: false,
   fontDeviceKey: "",
@@ -570,7 +571,7 @@ async function walkDirectory(dirHandle, prefix) {
       getDirNode(prefix).children.set(name, dir);
       await walkDirectory(handle, path);
     } else if (isIndexedFile(name)) {
-      const metadata = await readFileMetadata(handle);
+      const metadata = await readFileMetadata(handle, path);
       const fileNode = { name, path, handle, dirHandle, kind: "file", ...metadata };
       state.files.set(path, fileNode);
       getDirNode(prefix).children.set(name, fileNode);
@@ -578,13 +579,44 @@ async function walkDirectory(dirHandle, prefix) {
   }
 }
 
-async function readFileMetadata(handle) {
+function creationMetadataStorageKey() {
+  return `obsidian-web-viewer:file-created:${state.vaultName || "vault"}`;
+}
+
+function readCreationMetadata() {
+  try {
+    return JSON.parse(localStorage.getItem(creationMetadataStorageKey()) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function writeCreationMetadata(metadata) {
+  try {
+    localStorage.setItem(creationMetadataStorageKey(), JSON.stringify(metadata));
+  } catch {
+    // Local metadata is best-effort only.
+  }
+}
+
+function rememberedCreatedAt(path, fallback) {
+  if (!path) return fallback || 0;
+  const metadata = readCreationMetadata();
+  const stored = Number(metadata[path]);
+  if (Number.isFinite(stored) && stored > 0) return stored;
+  metadata[path] = fallback || Date.now();
+  writeCreationMetadata(metadata);
+  return metadata[path];
+}
+
+async function readFileMetadata(handle, path = "") {
   try {
     const file = await handle.getFile();
+    const updatedAt = file.lastModified || 0;
     return {
       size: file.size || 0,
-      updatedAt: file.lastModified || 0,
-      createdAt: file.lastModified || 0,
+      updatedAt,
+      createdAt: rememberedCreatedAt(path, updatedAt),
     };
   } catch {
     return { size: 0, updatedAt: 0, createdAt: 0 };
@@ -1237,7 +1269,8 @@ function renderCurrentDocument() {
       renderCodeDocument(state.currentContent, state.currentPath || "");
       return;
     }
-    els.markdownView.innerHTML = renderMarkdown(state.currentContent);
+    els.markdownView.innerHTML = renderMarkdown(state.currentContent, { path: state.currentPath || "" });
+    bindRenderedTaskCheckboxes(els.markdownView);
     bindWikiLinks(els.markdownView);
     arrangeImageGroups(els.markdownView);
     bindImageLightbox(els.markdownView);
@@ -1642,7 +1675,7 @@ async function writeNodeContent(node, content, { backup = true, previousContent 
   if (node.handle) {
     if (backup) await writeBackupFile(node, previousContent);
     await writeFileHandle(node.handle, content);
-    return readFileMetadata(node.handle);
+    return readFileMetadata(node.handle, node.path);
   }
 
   if (node.serverBacked && state.serverVaultWritable) {
@@ -1986,7 +2019,7 @@ function buildRecentFiles() {
       path: node.path,
       name: node.name,
       updatedAt: node.updatedAt || 0,
-      createdAt: node.createdAt || node.updatedAt || 0,
+      createdAt: node.createdAt || 0,
     }));
 
   return {
@@ -2062,7 +2095,7 @@ function parseTasks(content, path) {
     .replace(/\r\n/g, "\n")
     .split("\n")
     .flatMap((line, index) => {
-      const match = line.match(/^\s*[-*]\s+\[([ xX-])\]\s+(.+)$/);
+      const match = line.match(/^\s*[-*+]\s+\[([ xX-])\]\s*(.*)$/);
       if (!match) return [];
 
       const checked = match[1].toLowerCase() === "x" || match[1] === "-";
@@ -2460,8 +2493,10 @@ function bindCalendarEvents() {
 
   els.calendarView.querySelectorAll(".calendar-task").forEach((button) => {
     if (button.hasAttribute("data-line")) bindTaskLongPress(button);
-    button.addEventListener("click", async () => {
-      if (button.dataset.longPressed === "true") {
+    button.addEventListener("click", async (event) => {
+      if (button.dataset.longPressed === "true" || Date.now() < state.calendarTaskOpenSuppressedUntil) {
+        event.preventDefault();
+        event.stopPropagation();
         button.dataset.longPressed = "";
         return;
       }
@@ -2589,6 +2624,7 @@ function bindTaskLongPress(button) {
     timer = window.setTimeout(async () => {
       timer = null;
       button.dataset.longPressed = "true";
+      state.calendarTaskOpenSuppressedUntil = Date.now() + 1200;
       await toggleCalendarTask(path, line, button);
     }, 650);
   });
@@ -2622,14 +2658,17 @@ async function toggleCalendarTask(path, lineNumber, button) {
     if (!lines[index] || !/^\s*[-*+]\s+\[[ xX-]\]/.test(lines[index])) return;
 
     const taskDate = taskDateFromText(lines[index]) || formatDate(new Date());
-    const nextLine = lines[index].replace(/^(\s*[-*+]\s+\[)([ xX-])(\])(.+)$/, (_, head, checked, tail, rest) => {
+    const nextLine = lines[index].replace(/^(\s*[-*+]\s+\[)([ xX-])(\])(.*)$/, (_, head, checked, tail, rest) => {
       const isDone = checked.toLowerCase() === "x" || checked === "-";
       const cleanRest = rest.replace(/\s*✅\s*\d{4}-\d{2}-\d{2}/gu, "");
       return `${head}${isDone ? " " : "x"}${tail}${cleanRest}${isDone ? "" : ` ✅ ${taskDate}`}`;
     });
     lines[index] = nextLine;
     const nextContent = lines.join("\n");
-    button.classList.toggle("done", /\[[xX-]\]/.test(nextLine));
+    const nextChecked = /\[[xX-]\]/.test(nextLine);
+    if ("checked" in button) button.checked = nextChecked;
+    button.classList.toggle("done", nextChecked);
+    button.closest?.(".task-list-item")?.classList.toggle("done", nextChecked);
     button.disabled = true;
 
     const metadata = await writeNodeContent(node, nextContent, { backup: false, previousContent: content });
@@ -2771,7 +2810,7 @@ async function getOrCreateDailyNote(date) {
 
   ensureDirectoryNodePath(dirPath);
 
-  const metadata = await readFileMetadata(handle);
+  const metadata = await readFileMetadata(handle, path);
   const node = { name: `${date}.md`, path, handle, dirHandle, kind: "file", ...metadata };
   state.files.set(path, node);
   state.directories.get(dirPath).children.set(node.name, node);
@@ -2908,13 +2947,14 @@ function formatMonth(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
 
-function renderMarkdown(source) {
+function renderMarkdown(source, context = {}) {
   const { frontmatter, body } = extractFrontmatter(source);
   const lines = body.replace(/\r\n/g, "\n").split("\n");
   const html = [];
   let i = 0;
   let currentDepth = 0;
   const openHeadings = [];
+  const documentPath = context.path || "";
 
   if (frontmatter) html.push(renderFrontmatter(frontmatter));
 
@@ -2966,7 +3006,7 @@ function renderMarkdown(source) {
         bodyLines.push(lines[i].replace(/^>\s?/, ""));
         i += 1;
       }
-      html.push(`<div class="callout${depthClass(currentDepth, true)}"><div class="callout-title">${escapeHtml(title.trim())}</div>${renderBlocks(bodyLines)}</div>`);
+      html.push(`<div class="callout${depthClass(currentDepth, true)}"><div class="callout-title">${escapeHtml(title.trim())}</div>${renderBlocks(bodyLines, context)}</div>`);
       continue;
     }
 
@@ -2976,17 +3016,17 @@ function renderMarkdown(source) {
         quote.push(lines[i].replace(/^>\s?/, ""));
         i += 1;
       }
-      html.push(`<blockquote${depthAttribute(currentDepth)}>${renderBlocks(quote)}</blockquote>`);
+      html.push(`<blockquote${depthAttribute(currentDepth)}>${renderBlocks(quote, context)}</blockquote>`);
       continue;
     }
 
     if (/^\s*[-*+]\s+/.test(line)) {
       const items = [];
       while (i < lines.length && /^\s*[-*+]\s+/.test(lines[i])) {
-        items.push(lines[i].replace(/^\s*[-*+]\s+/, ""));
+        items.push({ text: lines[i].replace(/^\s*[-*+]\s+/, ""), line: i + 1 });
         i += 1;
       }
-      html.push(`<ul${depthAttribute(currentDepth)}>${items.map((item) => `<li>${renderInline(item)}</li>`).join("")}</ul>`);
+      html.push(`<ul${depthAttribute(currentDepth)}>${items.map((item) => renderListItem(item, documentPath)).join("")}</ul>`);
       continue;
     }
 
@@ -3040,6 +3080,36 @@ function renderMarkdown(source) {
   }
 
   return html.join("\n");
+}
+
+function renderListItem(item, path) {
+  const task = item.text.match(/^\[([ xX-])\]\s*(.*)$/);
+  if (!task) return `<li>${renderInline(item.text)}</li>`;
+
+  const checked = task[1].toLowerCase() === "x" || task[1] === "-";
+  const disabled = path ? "" : " disabled";
+  const data = path ? ` data-task-path="${escapeAttribute(path)}" data-task-line="${item.line}"` : "";
+  return `
+    <li class="task-list-item${checked ? " done" : ""}">
+      <label class="task-list-label">
+        <input class="task-list-checkbox" type="checkbox"${checked ? " checked" : ""}${disabled}${data}>
+        <span>${renderInline(task[2])}</span>
+      </label>
+    </li>
+  `;
+}
+
+function bindRenderedTaskCheckboxes(root) {
+  root.querySelectorAll(".task-list-checkbox[data-task-path][data-task-line]").forEach((checkbox) => {
+    checkbox.addEventListener("click", (event) => {
+      event.stopPropagation();
+    });
+    checkbox.addEventListener("change", async () => {
+      const path = checkbox.getAttribute("data-task-path");
+      const line = Number(checkbox.getAttribute("data-task-line"));
+      await toggleCalendarTask(path, line, checkbox);
+    });
+  });
 }
 
 function renderCodeBlock(code, language, depth) {
@@ -3102,8 +3172,8 @@ function highlightCode(code, language) {
   return highlighted.replace(/\u0000(\d+)\u0000/g, (_, index) => tokens[Number(index)] || "");
 }
 
-function renderBlocks(lines) {
-  return renderMarkdown(lines.join("\n"));
+function renderBlocks(lines, context = {}) {
+  return renderMarkdown(lines.join("\n"), context);
 }
 
 function depthClass(level, includeLeadingSpace = false) {
@@ -3244,7 +3314,7 @@ function renderWikiLink(rawTarget) {
 function renderEmbeddedDocumentContent(path, content) {
   if (isExcalidrawDocument(path) && !EXCALIDRAW_PREVIEW_ENABLED) return renderDisabledExcalidrawEmbed(path);
   if (isExcalidrawDocument(path)) return renderExcalidrawPreview(content, path, { embedded: true });
-  return renderMarkdown(content);
+  return renderMarkdown(content, { path });
 }
 
 function renderDisabledExcalidrawEmbed(path) {
@@ -3271,6 +3341,7 @@ async function hydrateEmbeddedDocuments(root) {
       embed.removeAttribute("data-embed-path");
       embed.innerHTML = renderEmbeddedDocumentContent(path, content);
       bindWikiLinks(embed);
+      bindRenderedTaskCheckboxes(embed);
       hydrateVaultImages(embed);
       hydrateEmbeddedDocuments(embed);
       if (EXCALIDRAW_PREVIEW_ENABLED) hydrateExcalidrawPackagePreviews(embed);
@@ -3340,7 +3411,7 @@ function renderExcalidrawPreview(content, path, { embedded = false } = {}) {
   const title = displayDocumentTitle(path.split("/").pop() || path);
   const openHref = obsidianOpenHref(path);
   const scene = extractExcalidrawScene(content);
-  const body = scene ? renderExcalidrawScene(scene, content) : renderMarkdown(content);
+  const body = scene ? renderExcalidrawScene(scene, content) : renderMarkdown(content, { path });
   return `
     <div class="${embedded ? "excalidraw-preview embedded" : "excalidraw-preview"}">
       <div class="excalidraw-preview-header">
