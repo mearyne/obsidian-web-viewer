@@ -246,7 +246,7 @@ button:disabled {
 .tree-actions {
   display: grid;
   gap: 6px;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   padding: 0 10px 10px;
 }
 
@@ -256,7 +256,10 @@ button:disabled {
   color: var(--muted);
   font-size: 12px;
   min-height: 30px;
-  padding: 0 8px;
+  overflow: hidden;
+  padding: 0 6px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .file-tree {
@@ -661,7 +664,7 @@ button:disabled {
   display: grid;
   gap: 10px;
   margin: 0 auto;
-  max-width: min(980px, calc(100vw - 48px));
+  max-width: min(1280px, calc(100vw - 48px));
   min-height: calc(100vh - 126px);
   padding: 18px 0 60px;
 }
@@ -696,9 +699,17 @@ button:disabled {
   flex: 0 0 auto;
 }
 
+.editor-split {
+  display: grid;
+  gap: 22px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  min-height: calc(100vh - 184px);
+}
+
 .markdown-editor {
   background: var(--surface);
   border: 0;
+  border-right: 1px solid var(--line);
   caret-color: var(--accent);
   color: var(--text);
   display: block;
@@ -707,9 +718,16 @@ button:disabled {
   line-height: 1.65;
   min-height: calc(100vh - 184px);
   outline: 0;
-  padding: 0;
+  padding: 0 18px 0 0;
   resize: none;
   width: 100%;
+}
+
+.editor-preview {
+  margin: 0;
+  max-width: none;
+  min-height: calc(100vh - 184px);
+  padding: 0 0 60px;
 }
 
 .markdown-body h1,
@@ -1031,21 +1049,25 @@ button:disabled {
 
 .calendar-toolbar {
   align-items: center;
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: auto minmax(12ch, auto) auto auto auto auto minmax(0, 1fr);
   gap: 8px;
   min-height: 36px;
+  overflow-x: auto;
 }
 
 .calendar-toolbar strong {
   font-size: 18px;
   margin: 0 6px;
+  text-align: center;
+  white-space: nowrap;
 }
 
 .calendar-toolbar span {
   color: var(--muted);
   font-size: 13px;
   margin-left: auto;
+  white-space: nowrap;
 }
 
 .calendar-mode-switch {
@@ -1053,6 +1075,7 @@ button:disabled {
   border-radius: 7px;
   display: inline-flex;
   overflow: hidden;
+  white-space: nowrap;
 }
 
 .calendar-mode-switch button {
@@ -1285,6 +1308,7 @@ button:disabled {
 
   .calendar-toolbar {
     gap: 5px;
+    grid-template-columns: auto minmax(10ch, auto) auto auto auto auto minmax(64px, 1fr);
   }
 
   .calendar-toolbar strong {
@@ -1293,8 +1317,24 @@ button:disabled {
   }
 
   .calendar-toolbar span {
-    flex-basis: 100%;
     margin-left: 0;
+  }
+
+  .editor-split {
+    gap: 18px;
+    grid-template-columns: 1fr;
+  }
+
+  .markdown-editor {
+    border-bottom: 1px solid var(--line);
+    border-right: 0;
+    min-height: 46vh;
+    padding: 0 0 18px;
+  }
+
+  .editor-preview {
+    min-height: 40vh;
+    padding-bottom: 36px;
   }
 
   .calendar-mobile-mode {

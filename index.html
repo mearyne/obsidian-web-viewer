@@ -116,7 +116,10 @@
               <span id="editorStatus">편집 중</span>
               <button id="saveEditButton" type="button">저장</button>
             </div>
-            <textarea id="markdownEditor" class="markdown-editor" spellcheck="false"></textarea>
+            <div class="editor-split">
+              <textarea id="markdownEditor" class="markdown-editor" spellcheck="false"></textarea>
+              <article id="editorPreview" class="markdown-body editor-preview" aria-label="Markdown 미리보기"></article>
+            </div>
           </section>
           <article id="calendarView" class="calendar-view" hidden></article>
         </section>
@@ -155,6 +158,10 @@
           <label class="option-field">
             <span>캘린더 경로</span>
             <textarea id="calendarPathInput" rows="4" placeholder="Tasks/Work&#10;Daily"></textarea>
+          </label>
+          <label class="option-field">
+            <span>Daily 노트 위치</span>
+            <input id="dailyNotePathInput" type="text" placeholder="1. Daily" />
           </label>
           <p class="option-help">여러 경로를 줄바꿈 또는 쉼표로 지정하면 해당 경로의 Markdown task만 캘린더에 표시합니다.</p>
         </div>

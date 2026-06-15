@@ -16,6 +16,7 @@ const state = {
   calendarMode: "month",
   calendarRefreshInFlight: false,
   mobileCalendarMode: "agenda",
+  dailyNotePath: "1. Daily",
   sidebarResize: null,
   lightboxImages: [],
   lightboxIndex: -1,
@@ -43,6 +44,7 @@ const els = {
   collapseTreeButton: document.querySelector("#collapseTreeButton"),
   folderPathInput: document.querySelector("#folderPathInput"),
   calendarPathInput: document.querySelector("#calendarPathInput"),
+  dailyNotePathInput: document.querySelector("#dailyNotePathInput"),
   vaultStatus: document.querySelector("#vaultStatus"),
   notePath: document.querySelector("#notePath"),
   noteTitle: document.querySelector("#noteTitle"),
@@ -50,6 +52,7 @@ const els = {
   markdownView: document.querySelector("#markdownView"),
   editorShell: document.querySelector("#editorShell"),
   markdownEditor: document.querySelector("#markdownEditor"),
+  editorPreview: document.querySelector("#editorPreview"),
   editorStatus: document.querySelector("#editorStatus"),
   calendarView: document.querySelector("#calendarView"),
   loadingOverlay: document.querySelector("#loadingOverlay"),
@@ -132,6 +135,7 @@ els.expandTreeButton.addEventListener("click", expandAllTree);
 els.revealCurrentButton.addEventListener("click", revealCurrentFileInTree);
 els.collapseTreeButton.addEventListener("click", collapseAllTree);
 els.folderPathInput?.addEventListener("input", renderTree);
+els.dailyNotePathInput?.addEventListener("input", updateDailyNotePath);
 els.viewerWrap.addEventListener("scroll", handleViewerScroll, { passive: true });
 els.viewerWrap.addEventListener("click", closeSidebarFromMain);
 els.markdownToggleButton.addEventListener("click", toggleMarkdownMode);
@@ -171,6 +175,7 @@ function handleGlobalKeydown(event) {
 }
 
 initTheme();
+initOptions();
 updateMarkdownToggleButton();
 updateTreeSortDirectionButton();
 initSidebarWidth();
@@ -809,6 +814,18 @@ function setTheme(theme) {
   els.themeButton.textContent = theme === "dark" ? "Light" : "Dark";
 }
 
+function initOptions() {
+  const savedDailyPath = normalizeDailyNotePath(localStorage.getItem("obsidian-web-viewer-daily-note-path") || state.dailyNotePath);
+  state.dailyNotePath = savedDailyPath;
+  if (els.dailyNotePathInput) els.dailyNotePathInput.value = savedDailyPath;
+}
+
+function updateDailyNotePath() {
+  const nextPath = normalizeDailyNotePath(els.dailyNotePathInput?.value || state.dailyNotePath);
+  state.dailyNotePath = nextPath;
+  localStorage.setItem("obsidian-web-viewer-daily-note-path", nextPath);
+}
+
 function toggleMarkdownMode() {
   state.markdownEnabled = !state.markdownEnabled;
   updateMarkdownToggleButton();
@@ -868,6 +885,7 @@ async function enterEditMode() {
   state.editMode = true;
   state.editorDirty = false;
   setEditorValue(state.currentContent);
+  renderEditorPreview();
   els.markdownView.hidden = true;
   els.calendarView.hidden = true;
   els.editorShell.hidden = false;
@@ -932,6 +950,7 @@ function handleEditorKeydown(event) {
 
 function handleEditorInput() {
   markEditorDirty();
+  renderEditorPreview();
 }
 
 function editorValue() {
@@ -940,6 +959,25 @@ function editorValue() {
 
 function setEditorValue(value) {
   els.markdownEditor.value = value;
+  renderEditorPreview();
+}
+
+function renderEditorPreview() {
+  if (!els.editorPreview) return;
+  const value = editorValue();
+  els.editorPreview.classList.remove("empty-state", "plain-text-mode");
+  if (!value.trim()) {
+    els.editorPreview.classList.add("empty-state");
+    els.editorPreview.innerHTML = "<p>미리보기</p>";
+    return;
+  }
+
+  els.editorPreview.innerHTML = renderMarkdown(value);
+  bindWikiLinks(els.editorPreview);
+  arrangeImageGroups(els.editorPreview);
+  bindImageLightbox(els.editorPreview);
+  hydrateVaultImages(els.editorPreview);
+  hydrateEmbeddedDocuments(els.editorPreview);
 }
 
 function focusEditor() {
@@ -1527,7 +1565,7 @@ function bindCalendarEvents() {
   });
 
   els.calendarView.querySelectorAll("[data-calendar-date]").forEach((target) => {
-    bindDateLongPress(target);
+    bindDateClick(target);
   });
 }
 
@@ -1607,24 +1645,12 @@ async function toggleCalendarTask(path, lineNumber, button) {
   }
 }
 
-function bindDateLongPress(target) {
-  let timer = null;
-  const clear = () => {
-    if (timer) window.clearTimeout(timer);
-    timer = null;
-  };
-
-  target.addEventListener("pointerdown", (event) => {
+function bindDateClick(target) {
+  target.addEventListener("click", async (event) => {
     if (event.target.closest(".calendar-task")) return;
     const date = target.getAttribute("data-calendar-date");
-    timer = window.setTimeout(() => {
-      timer = null;
-      openDateEditor(date);
-    }, 650);
+    await openDateEditor(date);
   });
-  target.addEventListener("pointerup", clear);
-  target.addEventListener("pointerleave", clear);
-  target.addEventListener("pointercancel", clear);
 }
 
 async function openDateEditor(date) {
@@ -1639,21 +1665,19 @@ async function openDateEditor(date) {
 }
 
 async function getOrCreateDailyNote(date) {
-  const dirPath = "1. Daily";
+  const dirPath = normalizeDailyNotePath(els.dailyNotePathInput?.value || state.dailyNotePath);
+  state.dailyNotePath = dirPath;
+  localStorage.setItem("obsidian-web-viewer-daily-note-path", dirPath);
   const path = `${dirPath}/${date}.md`;
   const existing = state.files.get(path);
   if (existing) return existing;
 
-  const dirHandle = await state.rootHandle.getDirectoryHandle(dirPath, { create: true });
+  const dirHandle = await getOrCreateDirectoryHandle(dirPath);
   const handle = await dirHandle.getFileHandle(`${date}.md`, { create: true });
   const initialContent = `# ${date}\n\n`;
   await writeFileHandle(handle, initialContent);
 
-  if (!state.directories.has(dirPath)) {
-    const dir = makeDirNode(dirPath, dirPath);
-    state.directories.set(dirPath, dir);
-    state.root.children.set(dirPath, dir);
-  }
+  ensureDirectoryNodePath(dirPath);
 
   const metadata = await readFileMetadata(handle);
   const node = { name: `${date}.md`, path, handle, dirHandle, kind: "file", ...metadata };
@@ -1662,6 +1686,30 @@ async function getOrCreateDailyNote(date) {
   refreshDirectoryMetadata();
   renderTree();
   return node;
+}
+
+async function getOrCreateDirectoryHandle(dirPath) {
+  let current = state.rootHandle;
+  for (const part of dirPath.split("/").filter(Boolean)) {
+    current = await current.getDirectoryHandle(part, { create: true });
+  }
+  return current;
+}
+
+function ensureDirectoryNodePath(dirPath) {
+  let currentPath = "";
+  let parent = state.root;
+
+  dirPath.split("/").filter(Boolean).forEach((part) => {
+    const nextPath = currentPath ? `${currentPath}/${part}` : part;
+    if (!state.directories.has(nextPath)) {
+      const dir = makeDirNode(part, nextPath);
+      state.directories.set(nextPath, dir);
+      parent.children.set(part, dir);
+    }
+    parent = state.directories.get(nextPath);
+    currentPath = nextPath;
+  });
 }
 
 function appendTaskTemplate(date) {
@@ -1715,6 +1763,15 @@ function taskTypeIcon(type) {
 
 function normalizeVaultPath(path) {
   return path.trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+}
+
+function normalizeDailyNotePath(path) {
+  const normalized = normalizeVaultPath(path || "1. Daily")
+    .split("/")
+    .map((part) => part.trim())
+    .filter((part) => part && part !== "." && part !== "..")
+    .join("/");
+  return normalized || "1. Daily";
 }
 
 function startOfMonth(date) {
