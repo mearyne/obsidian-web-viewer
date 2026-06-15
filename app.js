@@ -2406,7 +2406,8 @@ function renderCalendar() {
   const monthKey = formatMonth(month);
   const todayKey = formatDate(new Date());
   const firstGridDate = startOfWeek(month, 0);
-  const tasksByDate = groupTasksByDate(state.tasks);
+  const visibleTasks = calendarPreviewTasks();
+  const tasksByDate = groupTasksByDate(visibleTasks);
   const recentField = state.calendarKind === "created" ? "createdAt" : "updatedAt";
   const recentByDate = groupRecentFilesByDate(state.recentFiles[state.calendarKind] || [], recentField);
   const rowLimit = state.calendarRowLimit || 5;
@@ -2471,6 +2472,7 @@ function renderCalendar() {
   `;
 
   bindCalendarEvents();
+  highlightCalendarTaskDropTarget();
   updateSyncStatus();
   ensureVisibleHolidays();
   requestAnimationFrame(syncCalendarRowLimit);
@@ -2682,7 +2684,7 @@ function renderCalendarTask(task, dateKey = task.date) {
   const colorClass = range ? `range-color-${rangeColorIndex(task)}` : "";
   const icon = range && range !== "start" ? taskContinuationIcon(range) : taskTypeIcon(task.type);
   return `
-    <button class="calendar-task ${task.checked ? "done" : ""} ${task.type} ${range ? `range-task ${colorClass}` : ""}" type="button" data-path="${escapeAttribute(task.path)}" data-line="${task.line}" data-date="${escapeAttribute(dateKey)}" title="${escapeAttribute(title)}">
+    <button class="calendar-task ${task.checked ? "done" : ""} ${task.type} ${range ? `range-task ${colorClass}` : ""} ${task.draggingPreview ? "drag-preview" : ""}" type="button" data-path="${escapeAttribute(task.path)}" data-line="${task.line}" data-date="${escapeAttribute(dateKey)}" title="${escapeAttribute(title)}">
       <span>${icon}</span>
       <span>${escapeHtml(task.text)}</span>
     </button>
@@ -2895,12 +2897,14 @@ function bindTaskDrag(button) {
       path: button.getAttribute("data-path") || "",
       line: Number(button.getAttribute("data-line")),
       sourceDate: button.getAttribute("data-date") || "",
+      previewDate: "",
       x: event.clientX,
       y: event.clientY,
       active: false,
       button,
     };
     button.setPointerCapture?.(event.pointerId);
+    startCalendarTaskDragListeners();
   });
 
   button.addEventListener("pointermove", (event) => {
@@ -2915,7 +2919,7 @@ function bindTaskDrag(button) {
       state.calendarTaskOpenSuppressedUntil = Date.now() + 1200;
     }
     event.preventDefault();
-    updateCalendarTaskDropTarget(event.clientX, event.clientY);
+    updateCalendarTaskDragPreview(event.clientX, event.clientY);
   });
 
   button.addEventListener("pointerup", async (event) => {
@@ -2923,14 +2927,17 @@ function bindTaskDrag(button) {
     if (!drag || drag.pointerId !== event.pointerId) return;
     button.releasePointerCapture?.(event.pointerId);
     clearCalendarTaskDropTarget();
+    const targetDate = drag.previewDate || calendarDateFromPoint(event.clientX, event.clientY);
     state.calendarTaskDrag = null;
+    stopCalendarTaskDragListeners();
     button.classList.remove("dragging");
     if (!drag.active) return;
     event.preventDefault();
     event.stopPropagation();
-    const targetDate = calendarDateFromPoint(event.clientX, event.clientY);
     if (targetDate && targetDate !== drag.sourceDate) {
       await moveCalendarTaskDate(drag.path, drag.line, targetDate, drag.sourceDate);
+    } else if (state.activeView === "calendar" && state.calendarKind === "tasks") {
+      renderCalendar();
     }
     window.setTimeout(() => {
       button.dataset.dragged = "";
@@ -2941,24 +2948,92 @@ function bindTaskDrag(button) {
     button.classList.remove("dragging");
     clearCalendarTaskDropTarget();
     state.calendarTaskDrag = null;
+    stopCalendarTaskDragListeners();
+    if (state.activeView === "calendar" && state.calendarKind === "tasks") renderCalendar();
     window.setTimeout(() => {
       button.dataset.dragged = "";
     }, 0);
   });
 }
 
-function updateCalendarTaskDropTarget(x, y) {
+function startCalendarTaskDragListeners() {
+  window.addEventListener("pointermove", handleWindowCalendarTaskDragMove, true);
+  window.addEventListener("pointerup", handleWindowCalendarTaskDragEnd, true);
+  window.addEventListener("pointercancel", handleWindowCalendarTaskDragCancel, true);
+}
+
+function stopCalendarTaskDragListeners() {
+  window.removeEventListener("pointermove", handleWindowCalendarTaskDragMove, true);
+  window.removeEventListener("pointerup", handleWindowCalendarTaskDragEnd, true);
+  window.removeEventListener("pointercancel", handleWindowCalendarTaskDragCancel, true);
+}
+
+function handleWindowCalendarTaskDragMove(event) {
+  const drag = state.calendarTaskDrag;
+  if (!drag || drag.pointerId !== event.pointerId) return;
+  const distance = Math.hypot(event.clientX - drag.x, event.clientY - drag.y);
+  if (!drag.active && distance < 10) return;
+  if (!drag.active) {
+    drag.active = true;
+    drag.button?.classList.add("dragging");
+    if (drag.button) drag.button.dataset.dragged = "true";
+    state.calendarTaskOpenSuppressedUntil = Date.now() + 1200;
+  }
+  event.preventDefault();
+  updateCalendarTaskDragPreview(event.clientX, event.clientY);
+}
+
+async function handleWindowCalendarTaskDragEnd(event) {
+  const drag = state.calendarTaskDrag;
+  if (!drag || drag.pointerId !== event.pointerId) return;
   clearCalendarTaskDropTarget();
+  const targetDate = drag.previewDate || calendarDateFromPoint(event.clientX, event.clientY);
+  state.calendarTaskDrag = null;
+  stopCalendarTaskDragListeners();
+  drag.button?.classList.remove("dragging");
+  if (!drag.active) return;
+  event.preventDefault();
+  event.stopPropagation();
+  if (targetDate && targetDate !== drag.sourceDate) {
+    await moveCalendarTaskDate(drag.path, drag.line, targetDate, drag.sourceDate);
+  } else if (state.activeView === "calendar" && state.calendarKind === "tasks") {
+    renderCalendar();
+  }
+  window.setTimeout(() => {
+    if (drag.button) drag.button.dataset.dragged = "";
+  }, 0);
+}
+
+function handleWindowCalendarTaskDragCancel(event) {
+  const drag = state.calendarTaskDrag;
+  if (!drag || drag.pointerId !== event.pointerId) return;
+  drag.button?.classList.remove("dragging");
+  clearCalendarTaskDropTarget();
+  state.calendarTaskDrag = null;
+  stopCalendarTaskDragListeners();
+  if (state.activeView === "calendar" && state.calendarKind === "tasks") renderCalendar();
+}
+
+function updateCalendarTaskDragPreview(x, y) {
+  const drag = state.calendarTaskDrag;
+  if (!drag) return;
   const date = calendarDateFromPoint(x, y);
-  if (!date) return;
-  els.calendarView.querySelectorAll(`[data-calendar-date="${date}"]`).forEach((cell) => {
-    cell.classList.add("task-drop-target");
-  });
+  if (date === drag.previewDate) return;
+  drag.previewDate = date;
+  if (state.activeView === "calendar" && state.calendarKind === "tasks") renderCalendar();
 }
 
 function clearCalendarTaskDropTarget() {
   els.calendarView.querySelectorAll(".task-drop-target").forEach((cell) => {
     cell.classList.remove("task-drop-target");
+  });
+}
+
+function highlightCalendarTaskDropTarget() {
+  const date = state.calendarTaskDrag?.previewDate || "";
+  if (!date) return;
+  els.calendarView.querySelectorAll(`[data-calendar-date="${date}"]`).forEach((cell) => {
+    cell.classList.add("task-drop-target");
   });
 }
 
@@ -3318,6 +3393,36 @@ function groupTasksByDate(tasks) {
     items.sort((a, b) => Number(a.checked) - Number(b.checked) || taskTypeRank(a.type) - taskTypeRank(b.type) || a.text.localeCompare(b.text, "ko"));
   });
   return map;
+}
+
+function calendarPreviewTasks() {
+  const drag = state.calendarTaskDrag;
+  if (!drag?.active || !drag.previewDate) return state.tasks;
+  return state.tasks.map((task) => {
+    if (task.path !== drag.path || task.line !== drag.line) return task;
+    const dates = { ...(task.dates || {}) };
+    const marker = taskDateMarkerForMove(task, drag.sourceDate);
+    if (marker === "\u{1F6EB}") {
+      dates.start = drag.previewDate;
+    } else if (marker === "\u{23F3}") {
+      dates.scheduled = drag.previewDate;
+    } else if (marker === "\u{2705}") {
+      dates.done = drag.previewDate;
+    } else if (marker === "\u{274C}") {
+      dates.cancelled = drag.previewDate;
+    } else {
+      dates.due = drag.previewDate;
+      dates.end = drag.previewDate;
+    }
+    const date = dates.due || dates.end || dates.scheduled || dates.start || dates.done || dates.cancelled || drag.previewDate;
+    return {
+      ...task,
+      date,
+      dates,
+      draggingPreview: true,
+      type: dates.due || dates.end ? "due" : dates.scheduled ? "scheduled" : dates.start ? "start" : dates.done ? "done" : "cancelled",
+    };
+  });
 }
 
 function taskCalendarDates(task) {
