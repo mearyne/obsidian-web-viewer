@@ -2184,12 +2184,17 @@ function renderCalendarTask(task, dateKey = task.date) {
   const title = `${task.path}: ${task.text}`;
   const range = taskRangePosition(task, dateKey);
   const colorClass = range ? `range-color-${rangeColorIndex(task)}` : "";
+  const icon = range && range !== "start" ? taskContinuationIcon(range) : taskTypeIcon(task.type);
   return `
     <button class="calendar-task ${task.checked ? "done" : ""} ${task.type} ${range ? `range-task ${colorClass}` : ""}" type="button" data-path="${escapeAttribute(task.path)}" data-line="${task.line}" title="${escapeAttribute(title)}">
-      <span>${taskTypeIcon(task.type)}</span>
+      <span>${icon}</span>
       <span>${escapeHtml(task.text)}</span>
     </button>
   `;
+}
+
+function taskContinuationIcon(range) {
+  return range === "end" ? "↳" : "↔";
 }
 
 function taskRangePosition(task, dateKey) {
@@ -2324,7 +2329,6 @@ async function toggleCalendarTask(path, lineNumber, button) {
     return;
   }
 
-  showLoading("작업 상태 변경 중...");
   try {
     const content = await readFileNode(node);
     const lines = content.replace(/\r\n/g, "\n").split("\n");
@@ -2339,11 +2343,14 @@ async function toggleCalendarTask(path, lineNumber, button) {
     });
     lines[index] = nextLine;
     const nextContent = lines.join("\n");
+    button.classList.toggle("done", /\[[xX-]\]/.test(nextLine));
+    button.disabled = true;
 
-    const metadata = await writeNodeContent(node, nextContent, { backup: true, previousContent: content });
+    const metadata = await writeNodeContent(node, nextContent, { backup: false, previousContent: content });
     Object.assign(node, metadata);
     refreshDirectoryMetadata();
     if (typeof node.content === "string") node.content = nextContent;
+    updateTasksForFile(path, nextContent);
 
     if (state.currentPath === path) {
       state.currentContent = nextContent;
@@ -2355,10 +2362,9 @@ async function toggleCalendarTask(path, lineNumber, button) {
       }
     }
 
-    button.classList.toggle("done", /\[[xX-]\]/.test(nextLine));
-    await refreshCalendarTasks({ showLoading: false });
+    if (state.activeView === "calendar" && state.calendarKind === "tasks") renderCalendar();
   } finally {
-    hideLoading();
+    button.disabled = false;
   }
 }
 
@@ -2712,6 +2718,12 @@ function renderMarkdown(source) {
       continue;
     }
 
+    if (/^\s*---+\s*$/.test(line)) {
+      html.push(`<hr${depthAttribute(currentDepth)}>`);
+      i += 1;
+      continue;
+    }
+
     const paragraph = [];
     while (
       i < lines.length &&
@@ -2719,6 +2731,7 @@ function renderMarkdown(source) {
       !/^(#{1,6})\s+/.test(lines[i]) &&
       !lines[i].startsWith(">") &&
       !lines[i].startsWith("```") &&
+      !/^\s*---+\s*$/.test(lines[i]) &&
       !/^\s*[-*+]\s+/.test(lines[i]) &&
       !/^\s*\d+\.\s+/.test(lines[i])
     ) {
