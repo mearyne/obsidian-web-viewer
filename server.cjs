@@ -3,6 +3,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const crypto = require("crypto");
+const sharp = require("sharp");
 
 const root = __dirname;
 const bundledSampleRoot = path.join(root, "sample-vault");
@@ -63,6 +64,11 @@ const server = http.createServer((req, res) => {
     }
 
     sendVaultFile(url.searchParams.get("path"), res);
+    return;
+  }
+
+  if (requestPath === "/api/vault-image-thumb") {
+    sendVaultImageThumbnail(url.searchParams.get("path"), url.searchParams.get("width"), res);
     return;
   }
 
@@ -373,7 +379,7 @@ function normalizeCalendarCacheFiles(files) {
 function sendSettings(res) {
   fs.readFile(settingsFilePath(), "utf8", (error, data) => {
     if (error) {
-      sendJson(res, 200, { version: 1, calendarPaths: "" });
+      sendJson(res, 200, normalizeSettings({}));
       return;
     }
 
@@ -381,9 +387,40 @@ function sendSettings(res) {
       const settings = JSON.parse(data);
       sendJson(res, 200, normalizeSettings(settings));
     } catch {
-      sendJson(res, 200, { version: 1, calendarPaths: "" });
+      sendJson(res, 200, normalizeSettings({}));
     }
   });
+}
+
+async function sendVaultImageThumbnail(requestedPath, widthValue, res) {
+  const safePath = normalizeVaultPath(requestedPath || "");
+  const filePath = resolveVaultFilePath(safePath);
+  if (!filePath || !isRasterThumbnailFile(safePath)) {
+    sendJson(res, 403, { error: "Invalid image path" });
+    return;
+  }
+
+  const width = Math.max(80, Math.min(640, Number(widthValue) || 320));
+  try {
+    const stat = fs.statSync(filePath);
+    const cachePath = thumbnailCacheFilePath(safePath, stat, width);
+    if (!fs.existsSync(cachePath)) {
+      fs.mkdirSync(path.dirname(cachePath), { recursive: true });
+      await sharp(filePath)
+        .rotate()
+        .resize({ width, withoutEnlargement: true })
+        .webp({ quality: 32, effort: 4 })
+        .toFile(cachePath);
+    }
+
+    res.writeHead(200, {
+      "Content-Type": "image/webp",
+      "Cache-Control": "private, max-age=86400",
+    });
+    fs.createReadStream(cachePath).pipe(res);
+  } catch (error) {
+    sendVaultFile(safePath, res);
+  }
 }
 
 function writeSettings(body, res) {
@@ -409,6 +446,7 @@ function normalizeSettings(settings) {
   return {
     version: 1,
     calendarPaths: typeof settings?.calendarPaths === "string" ? settings.calendarPaths.slice(0, 4096) : "",
+    randomPaths: typeof settings?.randomPaths === "string" ? settings.randomPaths.slice(0, 4096) : "",
   };
 }
 
@@ -527,6 +565,12 @@ function holidayCacheFilePath(year) {
   return path.join(calendarCacheRoot, `holidays-${year}.json`);
 }
 
+function thumbnailCacheFilePath(relativePath, stat, width) {
+  const key = `${relativePath}:${stat.mtimeMs}:${stat.size}:${width}`;
+  const hash = crypto.createHash("sha256").update(key).digest("hex");
+  return path.join(calendarCacheRoot, "thumbnails", `${hash}.webp`);
+}
+
 function calendarCacheFilePath(key) {
   if (!key || typeof key !== "string" || key.length > 512) return "";
   const hash = crypto.createHash("sha256").update(key).digest("hex");
@@ -564,6 +608,10 @@ function isIndexedFile(name) {
 
 function isTextVaultFile(name) {
   return /\.(md|excalidraw|txt|py|bat|cmd|sh|js|ts|json|yaml|yml|css|html|xml|csv|log|ahk|java)$/i.test(name);
+}
+
+function isRasterThumbnailFile(name) {
+  return /\.(png|jpe?g|webp|bmp)$/i.test(name);
 }
 
 function sendJson(res, status, value) {

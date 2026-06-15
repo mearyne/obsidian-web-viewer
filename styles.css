@@ -1390,6 +1390,10 @@ button:disabled {
   word-break: keep-all;
 }
 
+.markdown-body img.thumbnail-loaded {
+  image-rendering: auto;
+}
+
 .markdown-body .heading-level code {
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;

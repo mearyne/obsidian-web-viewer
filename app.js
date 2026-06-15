@@ -83,6 +83,7 @@ const els = {
   collapseTreeButton: document.querySelector("#collapseTreeButton"),
   folderPathInput: document.querySelector("#folderPathInput"),
   calendarPathInput: document.querySelector("#calendarPathInput"),
+  randomPathInput: document.querySelector("#randomPathInput"),
   dailyNotePathInput: document.querySelector("#dailyNotePathInput"),
   fontSelect: document.querySelector("#fontSelect"),
   fontResetButton: document.querySelector("#fontResetButton"),
@@ -190,6 +191,7 @@ els.revealCurrentButton.addEventListener("click", revealCurrentFileInTree);
 els.collapseTreeButton.addEventListener("click", collapseAllTree);
 els.folderPathInput?.addEventListener("input", renderTree);
 els.calendarPathInput?.addEventListener("input", handleCalendarFilterInput);
+els.randomPathInput?.addEventListener("input", handleRandomPathInput);
 els.dailyNotePathInput?.addEventListener("input", updateDailyNotePath);
 els.fontSelect?.addEventListener("change", updateAppFont);
 els.fontResetButton?.addEventListener("click", resetFontOptions);
@@ -430,7 +432,11 @@ function setSidebarWidth(width) {
 }
 
 async function openRandomMarkdown() {
-  const files = [...state.files.keys()].filter((path) => path.toLowerCase().endsWith(".md"));
+  const randomPrefixes = parsePathList(els.randomPathInput?.value || "");
+  const files = [...state.files.keys()].filter((path) => {
+    if (!path.toLowerCase().endsWith(".md")) return false;
+    return !randomPrefixes.length || randomPrefixes.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
+  });
   if (!files.length) return;
 
   const candidates = files.length > 1 && state.currentPath ? files.filter((path) => path !== state.currentPath) : files;
@@ -1280,6 +1286,8 @@ function setTheme(theme) {
 function initOptions() {
   const savedCalendarPath = localStorage.getItem("obsidian-web-viewer-calendar-paths") || "";
   if (els.calendarPathInput) els.calendarPathInput.value = savedCalendarPath;
+  const savedRandomPath = localStorage.getItem("obsidian-web-viewer-random-paths") || "";
+  if (els.randomPathInput) els.randomPathInput.value = savedRandomPath;
   const savedDailyPath = normalizeDailyNotePath(localStorage.getItem("obsidian-web-viewer-daily-note-path") || state.dailyNotePath);
   state.dailyNotePath = savedDailyPath;
   if (els.dailyNotePathInput) els.dailyNotePathInput.value = savedDailyPath;
@@ -1298,6 +1306,10 @@ async function loadServerSettings() {
       els.calendarPathInput.value = settings.calendarPaths;
       localStorage.setItem("obsidian-web-viewer-calendar-paths", settings.calendarPaths);
       refreshCalendarForFilterChange();
+    }
+    if (typeof settings.randomPaths === "string" && els.randomPathInput && settings.randomPaths !== els.randomPathInput.value) {
+      els.randomPathInput.value = settings.randomPaths;
+      localStorage.setItem("obsidian-web-viewer-random-paths", settings.randomPaths);
     }
   } catch {
     // Local storage remains the fallback for file:// or unavailable server settings.
@@ -1405,13 +1417,19 @@ function setContentAlign(align, { persist }) {
 function handleCalendarFilterInput() {
   const value = els.calendarPathInput?.value || "";
   localStorage.setItem("obsidian-web-viewer-calendar-paths", value);
-  scheduleSettingsSave(value);
+  scheduleSettingsSave();
   if (state.activeView !== "calendar") return;
   window.clearTimeout(state.calendarFilterTimer);
   state.calendarFilterTimer = window.setTimeout(() => {
     state.calendarFilterTimer = null;
     refreshCalendarForFilterChange();
   }, 700);
+}
+
+function handleRandomPathInput() {
+  const value = els.randomPathInput?.value || "";
+  localStorage.setItem("obsidian-web-viewer-random-paths", value);
+  scheduleSettingsSave();
 }
 
 function refreshCalendarForFilterChange() {
@@ -1423,20 +1441,23 @@ function refreshCalendarForFilterChange() {
   loadCalendarCache().finally(() => scheduleCalendarRefreshIfStale(250));
 }
 
-function scheduleSettingsSave(calendarPaths) {
+function scheduleSettingsSave() {
   window.clearTimeout(state.settingsSaveTimer);
   state.settingsSaveTimer = window.setTimeout(() => {
     state.settingsSaveTimer = null;
-    saveServerSettings(calendarPaths);
+    saveServerSettings();
   }, 700);
 }
 
-async function saveServerSettings(calendarPaths) {
+async function saveServerSettings() {
   try {
     await fetch("/api/settings", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ calendarPaths }),
+      body: JSON.stringify({
+        calendarPaths: els.calendarPathInput?.value || "",
+        randomPaths: els.randomPathInput?.value || "",
+      }),
     });
   } catch {
     // Server settings are best-effort; localStorage already has the same value.
@@ -2004,15 +2025,15 @@ async function confirmDiscardEdit() {
   return ok;
 }
 
-function openImageLightbox(image) {
+async function openImageLightbox(image) {
   const images = [...els.markdownView.querySelectorAll("img")].filter((item) => imageSource(item));
   state.lightboxImages = images;
   state.lightboxIndex = Math.max(0, images.indexOf(image));
-  showLightboxImage(image);
+  await showLightboxImage(image);
 }
 
-function showLightboxImage(image) {
-  const src = imageSource(image);
+async function showLightboxImage(image) {
+  const src = await fullImageSource(image);
   if (!src) return;
   els.imageLightboxImg.src = src;
   els.imageLightboxImg.alt = image.alt || "";
@@ -2023,11 +2044,17 @@ function showAdjacentLightboxImage(direction) {
   if (els.imageLightbox.hidden || !state.lightboxImages.length) return;
   const count = state.lightboxImages.length;
   state.lightboxIndex = (state.lightboxIndex + direction + count) % count;
-  showLightboxImage(state.lightboxImages[state.lightboxIndex]);
+  void showLightboxImage(state.lightboxImages[state.lightboxIndex]);
 }
 
 function imageSource(image) {
   return image.currentSrc || image.src || image.getAttribute("data-vault-src") || "";
+}
+
+async function fullImageSource(image) {
+  const fullPath = image.getAttribute("data-full-vault-src") || image.getAttribute("data-vault-src") || "";
+  if (fullPath) return getOrCreateFileUrl(fullPath);
+  return image.currentSrc || image.src || "";
 }
 
 function closeImageLightbox(event) {
@@ -3042,7 +3069,7 @@ function bindTaskDrag(button) {
       drag.active = true;
       button.dataset.dragged = "true";
       button.classList.add("dragging");
-      state.calendarTaskOpenSuppressedUntil = Date.now() + 1200;
+      suppressCalendarRowOpen();
     }
     event.preventDefault();
     updateCalendarTaskDragPreview(event.clientX, event.clientY);
@@ -3065,6 +3092,7 @@ function bindTaskDrag(button) {
     } else if (state.activeView === "calendar" && state.calendarKind === "tasks") {
       renderCalendar();
     }
+    suppressCalendarRowOpen();
     window.setTimeout(() => {
       button.dataset.dragged = "";
     }, 0);
@@ -3097,16 +3125,23 @@ function bindCalendarRowLongPressGuard(button) {
     timer = window.setTimeout(() => {
       timer = null;
       button.dataset.longPressed = "true";
-      state.calendarTaskOpenSuppressedUntil = Date.now() + 1200;
+      suppressCalendarRowOpen();
     }, 520);
   });
   button.addEventListener("pointermove", (event) => {
     if (!timer) return;
     if (Math.hypot(event.clientX - startX, event.clientY - startY) > 10) clear();
   });
-  button.addEventListener("pointerup", clear);
+  button.addEventListener("pointerup", () => {
+    if (button.dataset.longPressed === "true") suppressCalendarRowOpen();
+    clear();
+  });
   button.addEventListener("pointerleave", clear);
   button.addEventListener("pointercancel", clear);
+}
+
+function suppressCalendarRowOpen(duration = 2500) {
+  state.calendarTaskOpenSuppressedUntil = Math.max(state.calendarTaskOpenSuppressedUntil, Date.now() + duration);
 }
 
 function startCalendarTaskDragListeners() {
@@ -3130,7 +3165,7 @@ function handleWindowCalendarTaskDragMove(event) {
     drag.active = true;
     drag.button?.classList.add("dragging");
     if (drag.button) drag.button.dataset.dragged = "true";
-    state.calendarTaskOpenSuppressedUntil = Date.now() + 1200;
+    suppressCalendarRowOpen();
   }
   event.preventDefault();
   updateCalendarTaskDragPreview(event.clientX, event.clientY);
@@ -3152,6 +3187,7 @@ async function handleWindowCalendarTaskDragEnd(event) {
   } else if (state.activeView === "calendar" && state.calendarKind === "tasks") {
     renderCalendar();
   }
+  suppressCalendarRowOpen();
   window.setTimeout(() => {
     if (drag.button) drag.button.dataset.dragged = "";
   }, 0);
@@ -3211,7 +3247,7 @@ function bindTaskLongPress(button) {
     timer = window.setTimeout(async () => {
       timer = null;
       button.dataset.longPressed = "true";
-      state.calendarTaskOpenSuppressedUntil = Date.now() + 1200;
+      suppressCalendarRowOpen();
       await toggleCalendarTask(path, line, button);
     }, 650);
   });
@@ -3220,7 +3256,10 @@ function bindTaskLongPress(button) {
     const distance = Math.hypot(event.clientX - startX, event.clientY - startY);
     if (distance > 10) clear();
   });
-  button.addEventListener("pointerup", clear);
+  button.addEventListener("pointerup", () => {
+    if (button.dataset.longPressed === "true") suppressCalendarRowOpen();
+    clear();
+  });
   button.addEventListener("pointerleave", clear);
   button.addEventListener("pointercancel", clear);
 }
@@ -4016,8 +4055,11 @@ function renderInline(input) {
 
   text = text.replace(/!\[\[([^\]]+)\]\]/g, (_, target) => renderEmbed(target));
   text = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, src) => {
-    const resolvedSrc = resolveMarkdownImageSrc(src);
-    return `<img src="${escapeAttribute(resolvedSrc)}" alt="${escapeAttribute(alt)}" loading="lazy">`;
+    const image = resolveMarkdownImage(src);
+    if (image.path) {
+      return `<img src="${escapeAttribute(image.src)}" data-full-vault-src="${escapeAttribute(image.path)}" alt="${escapeAttribute(alt)}" loading="lazy">`;
+    }
+    return `<img src="${escapeAttribute(image.src)}" alt="${escapeAttribute(alt)}" loading="lazy">`;
   });
   text = text.replace(/\[\[([^\]]+)\]\]/g, (_, target) => renderWikiLink(target));
   text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, href) => `<a href="${escapeAttribute(href)}" target="_blank" rel="noreferrer">${label}</a>`);
@@ -4034,8 +4076,9 @@ function renderEmbed(rawTarget) {
   if (!path) return `<span class="wiki-link missing">![[${escapeHtml(rawTarget)}]]</span>`;
 
   if (isImageDocument(path)) {
-    const cached = getFileUrl(path);
-    const src = cached ? `src="${escapeAttribute(cached)}"` : `data-vault-src="${escapeAttribute(path)}"`;
+    const thumb = getThumbnailUrl(path);
+    const cached = thumb || getFileUrl(path);
+    const src = cached ? `src="${escapeAttribute(cached)}" data-full-vault-src="${escapeAttribute(path)}"` : `data-vault-src="${escapeAttribute(path)}"`;
     return `<img ${src} alt="${escapeAttribute(target)}" loading="lazy">`;
   }
 
@@ -4050,9 +4093,9 @@ function renderEmbed(rawTarget) {
   return `<a class="wiki-link" href="#" data-wiki="${escapeAttribute(path)}">${escapeHtml(target)}</a>`;
 }
 
-function resolveMarkdownImageSrc(src) {
+function resolveMarkdownImage(src) {
   const cleanSrc = decodeURIComponent(src.trim().replace(/^<|>$/g, "")).split("#")[0];
-  if (!cleanSrc || /^(https?:|data:|blob:|\/)/i.test(cleanSrc)) return src;
+  if (!cleanSrc || /^(https?:|data:|blob:|\/)/i.test(cleanSrc)) return { src, path: "" };
 
   const currentDir = state.currentPath?.includes("/") ? state.currentPath.split("/").slice(0, -1).join("/") : "";
   const candidates = [cleanSrc];
@@ -4061,10 +4104,10 @@ function resolveMarkdownImageSrc(src) {
   for (const candidate of candidates) {
     const path = resolveVaultPath(normalizeVaultPath(candidate));
     if (!path || !isImageDocument(path)) continue;
-    return getFileUrl(path) || src;
+    return { src: getThumbnailUrl(path) || getFileUrl(path) || src, path };
   }
 
-  return src;
+  return { src, path: "" };
 }
 
 function renderWikiLink(rawTarget) {
@@ -4399,15 +4442,29 @@ function getFileUrl(path) {
 
 async function hydrateVaultImages(root) {
   const images = [...root.querySelectorAll("img[data-vault-src]")];
-  await Promise.all(
-    images.map(async (image) => {
-      const path = image.getAttribute("data-vault-src");
-      const url = await getOrCreateFileUrl(path);
-      if (!url) return;
-      image.src = url;
+  images.forEach((image) => {
+    const path = image.getAttribute("data-vault-src");
+    const thumb = getThumbnailUrl(path);
+    if (thumb) {
+      image.src = thumb;
+      image.setAttribute("data-full-vault-src", path);
       image.removeAttribute("data-vault-src");
-    }),
-  );
+      image.classList.add("thumbnail-loaded");
+    } else {
+      getOrCreateFileUrl(path).then((url) => {
+        if (!url) return;
+        image.src = url;
+        image.removeAttribute("data-vault-src");
+      });
+    }
+  });
+}
+
+function getThumbnailUrl(path) {
+  const node = state.files.get(path);
+  if (!node || !isImageDocument(node.name || path)) return "";
+  if (!node.serverBacked && !node.url) return "";
+  return `/api/vault-image-thumb?path=${encodeURIComponent(path)}&width=360`;
 }
 
 async function getOrCreateFileUrl(path) {
