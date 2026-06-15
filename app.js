@@ -2113,18 +2113,18 @@ function showCalendarView() {
 
 function updateCalendarKindButton() {
   if (!els.calendarButton) return;
-  if (state.activeView === "calendar" && state.calendarKind === "created") {
-    els.calendarButton.textContent = "✏️";
-    els.calendarButton.title = "최근 수정 파일";
-    els.calendarButton.setAttribute("aria-label", "최근 수정 파일 캘린더");
-  } else if (state.activeView === "calendar" && state.calendarKind === "updated") {
+  if (state.activeView !== "calendar" || state.calendarKind === "tasks") {
     els.calendarButton.textContent = "📅";
     els.calendarButton.title = "Task 캘린더";
     els.calendarButton.setAttribute("aria-label", "Task 캘린더");
+  } else if (state.calendarKind === "created") {
+    els.calendarButton.textContent = "➕";
+    els.calendarButton.title = "최근 생성 파일";
+    els.calendarButton.setAttribute("aria-label", "최근 생성 파일 캘린더");
   } else {
-    els.calendarButton.textContent = state.activeView === "calendar" ? "➕" : "📅";
-    els.calendarButton.title = state.activeView === "calendar" ? "최근 생성 파일" : "Task 캘린더";
-    els.calendarButton.setAttribute("aria-label", state.activeView === "calendar" ? "최근 생성 파일 캘린더" : "Task 캘린더");
+    els.calendarButton.textContent = "✏️";
+    els.calendarButton.title = "최근 수정 파일";
+    els.calendarButton.setAttribute("aria-label", "최근 수정 파일 캘린더");
   }
 }
 
