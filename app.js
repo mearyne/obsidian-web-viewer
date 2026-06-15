@@ -2585,6 +2585,7 @@ function handleCalendarWheel(event) {
 
 function handleCalendarSwipeStart(event) {
   if (state.activeView !== "calendar" || event.pointerType === "mouse") return;
+  if (event.target.closest("[data-calendar-date]")) return;
   state.calendarSwipe = { x: event.clientX, y: event.clientY, time: Date.now() };
 }
 
@@ -2592,6 +2593,7 @@ function handleCalendarSwipeEnd(event) {
   const swipe = state.calendarSwipe;
   state.calendarSwipe = null;
   if (!swipe || state.activeView !== "calendar") return;
+  if (state.calendarDragStartDate) return;
   const dx = event.clientX - swipe.x;
   const dy = event.clientY - swipe.y;
   if (Math.abs(dx) < 64 || Math.abs(dx) < Math.abs(dy) * 1.35 || Date.now() - swipe.time > 900) return;
@@ -2746,21 +2748,27 @@ function bindDateClick(target) {
   target.addEventListener("pointerdown", (event) => {
     if (event.target.closest(".calendar-task, .calendar-more")) return;
     event.preventDefault();
+    target.setPointerCapture?.(event.pointerId);
     state.calendarDragStartDate = target.getAttribute("data-calendar-date") || "";
     state.calendarDragCurrentDate = state.calendarDragStartDate;
     updateCalendarDragHighlight();
   });
 
-  target.addEventListener("pointerenter", () => {
+  target.addEventListener("pointermove", (event) => {
     if (!state.calendarDragStartDate) return;
-    state.calendarDragCurrentDate = target.getAttribute("data-calendar-date") || "";
+    event.preventDefault();
+    const cell = document.elementFromPoint(event.clientX, event.clientY)?.closest?.("[data-calendar-date]");
+    const date = cell?.getAttribute("data-calendar-date") || "";
+    if (!date || date === state.calendarDragCurrentDate) return;
+    state.calendarDragCurrentDate = date;
     updateCalendarDragHighlight();
   });
 
   target.addEventListener("pointerup", async (event) => {
     if (event.target.closest(".calendar-task, .calendar-more")) return;
+    target.releasePointerCapture?.(event.pointerId);
     const startDate = state.calendarDragStartDate;
-    const endDate = target.getAttribute("data-calendar-date") || "";
+    const endDate = state.calendarDragCurrentDate || target.getAttribute("data-calendar-date") || "";
     state.calendarDragStartDate = "";
     state.calendarDragCurrentDate = "";
     clearCalendarDragHighlight();
@@ -2771,6 +2779,10 @@ function bindDateClick(target) {
         state.calendarDragHandled = false;
       }, 0);
     }
+  });
+
+  target.addEventListener("pointercancel", (event) => {
+    target.releasePointerCapture?.(event.pointerId);
   });
 
   target.addEventListener("click", async (event) => {

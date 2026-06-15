@@ -1697,6 +1697,7 @@ button:disabled {
   overflow: hidden;
   padding: 7px;
   position: relative;
+  touch-action: none;
   user-select: none;
 }
 
@@ -1731,6 +1732,7 @@ button:disabled {
 }
 
 .calendar-agenda-day {
+  touch-action: none;
   user-select: none;
 }
 
