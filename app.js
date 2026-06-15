@@ -22,6 +22,9 @@ const state = {
   calendarRefreshing: false,
   calendarCacheState: "empty",
   calendarSyncedAt: 0,
+  holidays: new Map(),
+  holidayYearsLoaded: new Set(),
+  holidayYearsLoading: new Set(),
   metadataSyncedAt: 0,
   recentFiles: { updated: [], created: [] },
   calendarKind: "tasks",
@@ -2272,9 +2275,10 @@ function renderCalendar() {
   const cells = [];
   const agendaItems = calendarAgendaDates(month).map((date) => {
     const dateKey = formatDate(date);
+    const holidays = state.holidays.get(dateKey) || [];
     return showingTasks
-      ? renderAgendaDay(date, tasksByDate.get(dateKey) || [], dateKey === todayKey)
-      : renderRecentAgendaDay(date, recentByDate.get(dateKey) || [], dateKey === todayKey, recentField);
+      ? renderAgendaDay(date, tasksByDate.get(dateKey) || [], dateKey === todayKey, holidays)
+      : renderRecentAgendaDay(date, recentByDate.get(dateKey) || [], dateKey === todayKey, recentField, holidays);
   });
 
   for (let offset = 0; offset < 42; offset += 1) {
@@ -2282,12 +2286,14 @@ function renderCalendar() {
     const dateKey = formatDate(date);
     const dayTasks = tasksByDate.get(dateKey) || [];
     const dayFiles = recentByDate.get(dateKey) || [];
+    const holidays = state.holidays.get(dateKey) || [];
     const classes = ["calendar-cell"];
     if (formatMonth(date) !== monthKey) classes.push("outside-month");
     if (dateKey === todayKey) classes.push("today");
+    if (holidays.length) classes.push("holiday");
     cells.push(`
       <div class="${classes.join(" ")}" data-calendar-date="${dateKey}">
-        <div class="calendar-day">${date.getDate()}</div>
+        <div class="calendar-day"><span>${date.getDate()}</span>${renderHolidayBadges(holidays, true)}</div>
         <div class="calendar-tasks">
           ${
             showingTasks
@@ -2327,6 +2333,7 @@ function renderCalendar() {
 
   bindCalendarEvents();
   updateSyncStatus();
+  ensureVisibleHolidays();
   requestAnimationFrame(syncCalendarRowLimit);
 }
 
@@ -2432,14 +2439,16 @@ function calendarTitle() {
   return `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, "0")}`;
 }
 
-function renderAgendaDay(date, tasks, isToday) {
+function renderAgendaDay(date, tasks, isToday, holidays = []) {
   const classes = ["calendar-agenda-day"];
   if (isToday) classes.push("today");
+  if (holidays.length) classes.push("holiday");
   return `
     <section class="${classes.join(" ")}" data-calendar-date="${formatDate(date)}">
       <div class="calendar-agenda-date">
         <strong>${date.getDate()}</strong>
         <span>${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][date.getDay()]}</span>
+        ${renderHolidayBadges(holidays)}
       </div>
       <div class="calendar-agenda-tasks">
         ${tasks.length ? tasks.map((task) => renderCalendarTask(task, formatDate(date))).join("") : '<div class="calendar-empty">No tasks</div>'}
@@ -2448,20 +2457,70 @@ function renderAgendaDay(date, tasks, isToday) {
   `;
 }
 
-function renderRecentAgendaDay(date, files, isToday, field) {
+function renderRecentAgendaDay(date, files, isToday, field, holidays = []) {
   const classes = ["calendar-agenda-day"];
   if (isToday) classes.push("today");
+  if (holidays.length) classes.push("holiday");
   return `
     <section class="${classes.join(" ")}" data-calendar-date="${formatDate(date)}">
       <div class="calendar-agenda-date">
         <strong>${date.getDate()}</strong>
         <span>${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][date.getDay()]}</span>
+        ${renderHolidayBadges(holidays)}
       </div>
       <div class="calendar-agenda-tasks">
         ${files.length ? files.map((file) => renderCalendarFile(file, field)).join("") : '<div class="calendar-empty">No files</div>'}
       </div>
     </section>
   `;
+}
+
+function renderHolidayBadges(holidays, compact = false) {
+  if (!holidays.length) return "";
+  const label = holidays.map((holiday) => holiday.name).join(", ");
+  return `<span class="${compact ? "calendar-holiday compact" : "calendar-holiday"}" title="${escapeAttribute(label)}">${compact ? "휴" : escapeHtml(label)}</span>`;
+}
+
+function ensureVisibleHolidays() {
+  if (state.activeView !== "calendar") return;
+  visibleCalendarYears().forEach((year) => {
+    if (state.holidayYearsLoaded.has(year) || state.holidayYearsLoading.has(year)) return;
+    loadHolidaysForYear(year);
+  });
+}
+
+function visibleCalendarYears() {
+  const years = new Set();
+  const month = startOfMonth(state.calendarDate);
+  const firstGridDate = startOfWeek(month, 0);
+  if (state.calendarMode === "month") {
+    for (let offset = 0; offset < 42; offset += 1) years.add(addDays(firstGridDate, offset).getFullYear());
+  } else {
+    calendarAgendaDates(month).forEach((date) => years.add(date.getFullYear()));
+  }
+  return years;
+}
+
+async function loadHolidaysForYear(year) {
+  state.holidayYearsLoading.add(year);
+  try {
+    const response = await fetch(`/api/holidays?year=${year}`, { cache: "no-store" });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || "Holiday API failed");
+    if (Array.isArray(payload.holidays)) {
+      payload.holidays.forEach((holiday) => {
+        if (!holiday?.date || !holiday?.name) return;
+        const list = state.holidays.get(holiday.date) || [];
+        state.holidays.set(holiday.date, list.filter((item) => item.name !== holiday.name).concat(holiday));
+      });
+    }
+    state.holidayYearsLoaded.add(year);
+    if (state.activeView === "calendar") renderCalendar();
+  } catch {
+    state.holidayYearsLoaded.add(year);
+  } finally {
+    state.holidayYearsLoading.delete(year);
+  }
 }
 
 function renderCalendarTask(task, dateKey = task.date) {

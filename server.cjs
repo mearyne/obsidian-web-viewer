@@ -12,6 +12,7 @@ const vaultRoot = resolvedVaultRoot || (fs.existsSync("/vault") ? "/vault" : bun
 const vaultName = process.env.VAULT_NAME || path.basename(vaultRoot) || "vault";
 const readOnly = process.env.VAULT_READ_ONLY === "true";
 const calendarCacheRoot = path.resolve(process.env.CALENDAR_CACHE_DIR || "/cache");
+const holidayApiKey = process.env.HOLIDAY_API_KEY || "";
 const port = Number(process.env.PORT || 8088);
 const host = process.env.HOST || "0.0.0.0";
 
@@ -73,6 +74,11 @@ const server = http.createServer((req, res) => {
     }
 
     sendCalendarCache(url.searchParams.get("key"), res);
+    return;
+  }
+
+  if (requestPath === "/api/holidays") {
+    sendHolidays(url.searchParams.get("year"), res);
     return;
   }
 
@@ -291,6 +297,95 @@ function writeCalendarCache(key, body, res) {
   } catch (error) {
     sendJson(res, 500, { error: error.message || "Calendar cache write failed" });
   }
+}
+
+async function sendHolidays(yearValue, res) {
+  const year = Number(yearValue);
+  if (!Number.isInteger(year) || year < 1900 || year > 2100) {
+    sendJson(res, 400, { error: "Invalid year" });
+    return;
+  }
+
+  const cached = readHolidayCache(year);
+  if (!holidayApiKey) {
+    sendJson(res, 200, { year, holidays: cached?.holidays || [], disabled: true, cached: Boolean(cached) });
+    return;
+  }
+
+  try {
+    const holidays = await fetchKoreanHolidays(year);
+    writeHolidayCache(year, holidays);
+    sendJson(res, 200, { year, holidays, syncedAt: Date.now(), cached: false });
+  } catch (error) {
+    if (cached) {
+      sendJson(res, 200, { year, holidays: cached.holidays, syncedAt: cached.syncedAt, cached: true, error: error.message || "Holiday API failed" });
+      return;
+    }
+    sendJson(res, 502, { year, holidays: [], error: error.message || "Holiday API failed" });
+  }
+}
+
+async function fetchKoreanHolidays(year) {
+  const url = `http://apis.data.go.kr/B090041/openapi/service/SpcdeInfoService/getHoliDeInfo?ServiceKey=${serviceKeyQueryValue(holidayApiKey)}&solYear=${year}&numOfRows=100&pageNo=1`;
+  const response = await fetch(url);
+  const body = await response.text();
+  if (!response.ok) throw new Error(`Holiday API HTTP ${response.status}`);
+  const resultCode = xmlValue(body, "resultCode");
+  if (resultCode && resultCode !== "00") throw new Error(xmlValue(body, "resultMsg") || `Holiday API result ${resultCode}`);
+  return parseHolidayItems(body);
+}
+
+function serviceKeyQueryValue(key) {
+  return /%[0-9a-f]{2}/i.test(key) ? key : encodeURIComponent(key);
+}
+
+function parseHolidayItems(xml) {
+  return [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)]
+    .map((match) => ({
+      date: formatHolidayDate(xmlValue(match[1], "locdate")),
+      name: xmlValue(match[1], "dateName"),
+      isHoliday: xmlValue(match[1], "isHoliday") === "Y",
+    }))
+    .filter((item) => item.date && item.name && item.isHoliday);
+}
+
+function xmlValue(xml, tagName) {
+  const match = xml.match(new RegExp(`<${tagName}>([\\s\\S]*?)<\\/${tagName}>`));
+  return match ? decodeXml(match[1].trim()) : "";
+}
+
+function decodeXml(value) {
+  return value
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, "&");
+}
+
+function formatHolidayDate(value) {
+  const text = String(value || "");
+  if (!/^\d{8}$/.test(text)) return "";
+  return `${text.slice(0, 4)}-${text.slice(4, 6)}-${text.slice(6, 8)}`;
+}
+
+function readHolidayCache(year) {
+  const filePath = holidayCacheFilePath(year);
+  try {
+    return JSON.parse(fs.readFileSync(filePath, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function writeHolidayCache(year, holidays) {
+  const filePath = holidayCacheFilePath(year);
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, JSON.stringify({ version: 1, year, syncedAt: Date.now(), holidays }), "utf8");
+}
+
+function holidayCacheFilePath(year) {
+  return path.join(calendarCacheRoot, `holidays-${year}.json`);
 }
 
 function calendarCacheFilePath(key) {
