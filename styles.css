@@ -80,6 +80,7 @@ button:disabled {
 
 .app-shell {
   display: block;
+  height: 100vh;
   min-height: 100vh;
 }
 
@@ -383,6 +384,7 @@ button:disabled {
   background: var(--surface);
   display: grid;
   grid-template-rows: auto 1fr;
+  height: 100vh;
   min-height: 100vh;
   min-width: 0;
 }
@@ -467,6 +469,10 @@ button:disabled {
   }
 }
 
+.header-left > div {
+  min-width: 0;
+}
+
 .icon-button {
   align-items: center;
   display: inline-flex;
@@ -492,14 +498,18 @@ button:disabled {
   font-weight: 650;
   line-height: 1.25;
   margin: 2px 0 0;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .note-path {
   color: var(--muted);
   font-size: 12px;
   margin: 0;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .view-controls {
@@ -518,7 +528,6 @@ button:disabled {
   border-top: 1px solid var(--line);
   display: grid;
   gap: 8px;
-  grid-template-columns: 1fr 1fr;
   margin-top: auto;
   padding: 10px;
   position: relative;
@@ -534,6 +543,10 @@ button:disabled {
 .sidebar-options > button.active {
   background: var(--accent);
   color: white;
+}
+
+.sidebar-theme-button {
+  text-align: center;
 }
 
 .options-backdrop {
@@ -688,6 +701,7 @@ button:disabled {
 .viewer-wrap {
   min-height: 0;
   overflow: auto;
+  overscroll-behavior: contain;
   padding: 28px 24px 56px;
   position: relative;
 }
@@ -1237,15 +1251,15 @@ button:disabled {
 .calendar-toolbar {
   align-items: center;
   display: grid;
-  grid-template-columns: 34px 230px 34px 64px 174px auto minmax(0, 1fr);
-  gap: 8px;
+  grid-template-columns: 34px 108px 34px 64px 174px auto minmax(0, 1fr);
+  gap: 4px;
   min-height: 36px;
   overflow-x: auto;
 }
 
 .calendar-toolbar strong {
   font-size: 18px;
-  margin: 0 6px;
+  margin: 0;
   overflow: hidden;
   text-align: center;
   text-overflow: ellipsis;
@@ -1355,6 +1369,7 @@ button:disabled {
   overflow: hidden;
   padding: 4px 6px;
   text-align: left;
+  touch-action: pan-y;
   width: 100%;
 }
 
@@ -1513,12 +1528,12 @@ button.calendar-more {
 
   .calendar-toolbar {
     gap: 5px;
-    grid-template-columns: 32px 126px 32px 56px 138px minmax(52px, 1fr);
+    grid-template-columns: 32px 82px 32px 56px 138px auto minmax(64px, 1fr);
   }
 
   .calendar-toolbar strong {
     font-size: 14px;
-    margin: 0 2px;
+    margin: 0;
   }
 
   .calendar-toolbar span {

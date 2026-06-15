@@ -44,6 +44,8 @@ const state = {
   calendarDragHandled: false,
 };
 
+const EXCALIDRAW_PREVIEW_ENABLED = false;
+
 const els = {
   sidebarPanel: document.querySelector("#sidebarPanel"),
   sidebarResizeHandle: document.querySelector("#sidebarResizeHandle"),
@@ -228,6 +230,10 @@ function handleGlobalKeydown(event) {
     event.preventDefault();
     event.stopPropagation();
     saveCurrentEdit();
+  } else if (!event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && (event.code === "KeyR" || event.key.toLowerCase() === "r")) {
+    event.preventDefault();
+    event.stopPropagation();
+    void openRandomMarkdown();
   } else if (event.key === "Escape") {
     closeOptionsMenu();
     closeImageLightbox();
@@ -1057,6 +1063,10 @@ function renderCurrentDocument() {
   els.markdownView.hidden = false;
 
   if (isExcalidrawDocument(state.currentPath || "")) {
+    if (!EXCALIDRAW_PREVIEW_ENABLED) {
+      renderPlainTextDocument(state.currentContent);
+      return;
+    }
     els.markdownView.innerHTML = renderExcalidrawPreview(state.currentContent, state.currentPath);
     bindWikiLinks(els.markdownView);
     hydrateVaultImages(els.markdownView);
@@ -1076,9 +1086,13 @@ function renderCurrentDocument() {
     return;
   }
 
+  renderPlainTextDocument(state.currentContent);
+}
+
+function renderPlainTextDocument(content) {
   els.markdownView.classList.add("plain-text-mode");
   const pre = document.createElement("pre");
-  pre.textContent = state.currentContent;
+  pre.textContent = content;
   els.markdownView.replaceChildren(pre);
 }
 
@@ -2139,12 +2153,16 @@ function parseDateKey(value) {
 
 function bindTaskLongPress(button) {
   let timer = null;
+  let startX = 0;
+  let startY = 0;
   const clear = () => {
     if (timer) window.clearTimeout(timer);
     timer = null;
   };
 
-  button.addEventListener("pointerdown", () => {
+  button.addEventListener("pointerdown", (event) => {
+    startX = event.clientX;
+    startY = event.clientY;
     const path = button.getAttribute("data-path");
     const line = Number(button.getAttribute("data-line"));
     timer = window.setTimeout(async () => {
@@ -2152,6 +2170,11 @@ function bindTaskLongPress(button) {
       button.dataset.longPressed = "true";
       await toggleCalendarTask(path, line, button);
     }, 650);
+  });
+  button.addEventListener("pointermove", (event) => {
+    if (!timer) return;
+    const distance = Math.hypot(event.clientX - startX, event.clientY - startY);
+    if (distance > 10) clear();
   });
   button.addEventListener("pointerup", clear);
   button.addEventListener("pointerleave", clear);
@@ -2645,8 +2668,21 @@ function renderWikiLink(rawTarget) {
 }
 
 function renderEmbeddedDocumentContent(path, content) {
+  if (isExcalidrawDocument(path) && !EXCALIDRAW_PREVIEW_ENABLED) return renderDisabledExcalidrawEmbed(path);
   if (isExcalidrawDocument(path)) return renderExcalidrawPreview(content, path, { embedded: true });
   return renderMarkdown(content);
+}
+
+function renderDisabledExcalidrawEmbed(path) {
+  const title = displayDocumentTitle(path.split("/").pop() || path);
+  return `
+    <div class="excalidraw-preview embedded">
+      <div class="excalidraw-preview-header">
+        <strong>${escapeHtml(title)}</strong>
+        <span>Excalidraw preview disabled</span>
+      </div>
+    </div>
+  `;
 }
 
 async function hydrateEmbeddedDocuments(root) {
