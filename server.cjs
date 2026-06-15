@@ -6,8 +6,9 @@ const crypto = require("crypto");
 
 const root = __dirname;
 const bundledSampleRoot = path.join(root, "sample-vault");
-const configuredVaultRoot = process.env.VAULT_PATH ? path.resolve(process.env.VAULT_PATH) : "";
-const vaultRoot = configuredVaultRoot || (fs.existsSync("/vault") ? "/vault" : bundledSampleRoot);
+const configuredVaultRoot = process.env.VAULT_PATH || process.env.OBSIDIAN_VAULT_PATH || process.env.OBSIDIAN_VALUT_PATH;
+const resolvedVaultRoot = configuredVaultRoot ? path.resolve(configuredVaultRoot) : "";
+const vaultRoot = resolvedVaultRoot || (fs.existsSync("/vault") ? "/vault" : bundledSampleRoot);
 const vaultName = process.env.VAULT_NAME || path.basename(vaultRoot) || "vault";
 const readOnly = process.env.VAULT_READ_ONLY === "true";
 const calendarCacheRoot = path.resolve(process.env.CALENDAR_CACHE_DIR || "/cache");

@@ -564,7 +564,11 @@ async function readFileMetadata(handle) {
 async function loadSampleVault() {
   try {
     const response = await fetch("/api/vault", { cache: "no-store" });
-    if (!response.ok) throw new Error("Vault API failed");
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      hydrateUnavailableVault(payload.error || "Vault API failed");
+      return;
+    }
     const vault = await response.json();
     hydrateServerVault(vault.name || "vault", vault.files || [], Boolean(vault.writable));
   } catch {
@@ -578,6 +582,21 @@ async function loadSampleVault() {
       hydrateServerVault("Sample vault", files, false);
     }
   }
+}
+
+function hydrateUnavailableVault(message) {
+  resetVault();
+  state.root = makeDirNode("Vault unavailable", "");
+  state.directories.set("", state.root);
+  els.vaultStatus.textContent = "Vault unavailable";
+  els.markdownView.classList.add("empty-state");
+  els.markdownView.hidden = false;
+  els.editorShell.hidden = true;
+  els.calendarView.hidden = true;
+  els.notePath.textContent = "server vault";
+  els.noteTitle.textContent = "Vault unavailable";
+  els.markdownView.innerHTML = `<h3>Vault unavailable</h3><p>${escapeHtml(message)}</p>`;
+  renderTree();
 }
 
 function hydrateServerVault(vaultName, files, writable = false) {
