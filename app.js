@@ -44,6 +44,9 @@ const state = {
   calendarDragStartDate: "",
   calendarDragCurrentDate: "",
   calendarDragHandled: false,
+  calendarSwipe: null,
+  calendarWheelAt: 0,
+  fullscreenAttempted: false,
 };
 
 const EXCALIDRAW_PREVIEW_ENABLED = false;
@@ -167,6 +170,10 @@ els.calendarPathInput?.addEventListener("input", handleCalendarFilterInput);
 els.dailyNotePathInput?.addEventListener("input", updateDailyNotePath);
 els.fontSelect?.addEventListener("change", updateAppFont);
 els.viewerWrap.addEventListener("click", closeSidebarFromMain);
+els.calendarView.addEventListener("wheel", handleCalendarWheel, { passive: false });
+els.calendarView.addEventListener("pointerdown", handleCalendarSwipeStart, true);
+els.calendarView.addEventListener("pointerup", handleCalendarSwipeEnd, true);
+els.calendarView.addEventListener("pointercancel", clearCalendarSwipe, true);
 els.historyBackButton.addEventListener("click", navigateHistoryBack);
 els.historyForwardButton.addEventListener("click", navigateHistoryForward);
 els.markdownToggleButton.addEventListener("click", toggleMarkdownMode);
@@ -189,6 +196,8 @@ document.addEventListener("pointerdown", closeSidebarFromOutside);
 document.addEventListener("pointerup", clearCalendarDragIfActive);
 document.addEventListener("pointercancel", clearCalendarDragIfActive);
 window.addEventListener("resize", handleCalendarResize, { passive: true });
+document.addEventListener("pointerdown", requestFullscreenOnce, { once: true });
+document.addEventListener("keydown", requestFullscreenOnce, { once: true });
 
 function handleGlobalKeydown(event) {
   if (event.altKey && !event.ctrlKey && !event.metaKey && event.code === "Digit1") {
@@ -2335,6 +2344,60 @@ function shiftCalendarDate(direction) {
   if (state.calendarMode === "day") return addDays(state.calendarDate, direction);
   if (state.calendarMode === "week") return addDays(state.calendarDate, direction * 7);
   return addMonths(state.calendarDate, direction);
+}
+
+function moveCalendarByScroll(direction) {
+  state.calendarDate = shiftCalendarDate(direction);
+  renderCalendar();
+}
+
+function handleCalendarWheel(event) {
+  if (state.activeView !== "calendar") return;
+  if (Math.abs(event.deltaX) < 28 || Math.abs(event.deltaX) < Math.abs(event.deltaY) * 1.2) return;
+  const now = Date.now();
+  if (now - state.calendarWheelAt < 260) {
+    event.preventDefault();
+    return;
+  }
+  state.calendarWheelAt = now;
+  event.preventDefault();
+  moveCalendarByScroll(event.deltaX > 0 ? 1 : -1);
+}
+
+function handleCalendarSwipeStart(event) {
+  if (state.activeView !== "calendar" || event.pointerType === "mouse") return;
+  state.calendarSwipe = { x: event.clientX, y: event.clientY, time: Date.now() };
+}
+
+function handleCalendarSwipeEnd(event) {
+  const swipe = state.calendarSwipe;
+  state.calendarSwipe = null;
+  if (!swipe || state.activeView !== "calendar") return;
+  const dx = event.clientX - swipe.x;
+  const dy = event.clientY - swipe.y;
+  if (Math.abs(dx) < 64 || Math.abs(dx) < Math.abs(dy) * 1.35 || Date.now() - swipe.time > 900) return;
+  state.calendarDragStartDate = "";
+  state.calendarDragCurrentDate = "";
+  state.calendarDragHandled = true;
+  clearCalendarDragHighlight();
+  event.preventDefault();
+  event.stopPropagation();
+  moveCalendarByScroll(dx < 0 ? 1 : -1);
+  window.setTimeout(() => {
+    state.calendarDragHandled = false;
+  }, 0);
+}
+
+function clearCalendarSwipe() {
+  state.calendarSwipe = null;
+}
+
+function requestFullscreenOnce() {
+  if (state.fullscreenAttempted || document.fullscreenElement) return;
+  state.fullscreenAttempted = true;
+  document.documentElement.requestFullscreen?.().catch(() => {});
+  window.moveTo?.(0, 0);
+  window.resizeTo?.(screen.availWidth || screen.width, screen.availHeight || screen.height);
 }
 
 function parseDateKey(value) {

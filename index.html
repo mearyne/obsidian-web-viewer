@@ -17,14 +17,15 @@
           <button id="sidebarPinButton" class="icon-button" type="button" aria-pressed="false" aria-label="사이드바 고정" title="사이드바 고정">📍</button>
         </div>
 
-        <label class="search-box">
-          <span>검색</span>
-          <input id="searchInput" type="search" placeholder="파일명 검색" autocomplete="off" />
-        </label>
-
-        <div class="search-options" aria-label="검색 옵션">
-          <label><input id="caseSearchToggle" type="checkbox" /> 대소문자 구분</label>
-          <label><input id="regexSearchToggle" type="checkbox" /> 정규식</label>
+        <div class="search-row">
+          <label class="search-box">
+            <span>검색</span>
+            <input id="searchInput" type="search" placeholder="파일명 검색" autocomplete="off" />
+          </label>
+          <div class="search-options" aria-label="검색 옵션">
+            <label title="대소문자 구분"><input id="caseSearchToggle" type="checkbox" /> <span>Aa</span></label>
+            <label title="정규식"><input id="regexSearchToggle" type="checkbox" /> <span>.*</span></label>
+          </div>
         </div>
 
         <div class="tree-sort" aria-label="트리 정렬">

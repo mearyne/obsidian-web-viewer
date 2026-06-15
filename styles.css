@@ -73,7 +73,7 @@ body {
   min-height: 100vh;
   background: var(--bg);
   color: var(--text);
-  font-size: 15px;
+  font-size: 22.5px;
 }
 
 button,
@@ -211,9 +211,18 @@ button:disabled {
   min-height: 32px;
 }
 
+.search-row {
+  align-items: end;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 0 10px 10px;
+}
+
 .search-box {
   display: block;
-  padding: 0 10px 10px;
+  min-width: 0;
+  padding: 0;
 }
 
 .search-box span {
@@ -241,22 +250,36 @@ button:disabled {
   align-items: center;
   color: var(--muted);
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   font-size: 12px;
-  gap: 8px 12px;
-  padding: 0 10px 10px;
+  gap: 4px;
+  padding: 0;
 }
 
 .search-options label {
   align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--muted);
   display: inline-flex;
-  gap: 5px;
-  min-height: 24px;
+  font-weight: 650;
+  justify-content: center;
+  min-height: 32px;
+  min-width: 34px;
+  padding: 0 6px;
   white-space: nowrap;
 }
 
 .search-options input {
-  margin: 0;
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.search-options label:has(input:checked) {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .tree-sort {
@@ -809,7 +832,7 @@ button:disabled {
   border: 0;
   border-radius: 0;
   box-shadow: none;
-  font-size: 16px;
+  font-size: 24px;
   line-height: 1.7;
   margin: 0 auto;
   max-width: var(--line-width);
@@ -832,7 +855,7 @@ button:disabled {
   border-radius: 0;
   color: var(--text);
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  font-size: 14px;
+  font-size: 21px;
   line-height: 1.65;
   margin: 0;
   overflow: visible;
@@ -954,7 +977,7 @@ button:disabled {
   color: var(--text);
   display: block;
   font-family: inherit;
-  font-size: 16px;
+  font-size: 24px;
   line-height: 1.7;
   min-height: calc(100vh - 184px);
   outline: 0;
@@ -1133,25 +1156,25 @@ button:disabled {
 }
 
 .markdown-body h1 {
-  font-size: 30px;
+  font-size: 45px;
 }
 
 .markdown-body h2 {
   border-bottom: 0;
-  font-size: 23px;
+  font-size: 34px;
 }
 
 .markdown-body h3 {
-  font-size: 19px;
+  font-size: 29px;
 }
 
 .markdown-body h4 {
-  font-size: 17px;
+  font-size: 26px;
 }
 
 .markdown-body h5,
 .markdown-body h6 {
-  font-size: 15px;
+  font-size: 23px;
 }
 
 .markdown-body .heading-level-2 {
@@ -1508,13 +1531,14 @@ button:disabled {
   align-items: center;
   display: grid;
   flex: 0 0 auto;
-  grid-template-columns: 24px 76px 24px;
+  grid-template-columns: 28px minmax(126px, auto) 28px;
   justify-items: center;
 }
 
 .calendar-month-nav strong {
   font-size: 18px;
   margin: 0;
+  min-width: 0;
   overflow: hidden;
   text-align: center;
   text-overflow: ellipsis;
@@ -1818,11 +1842,40 @@ button.calendar-more {
 
   .note-header {
     align-items: center;
-    flex-direction: row;
-    padding: 14px 16px;
+    display: grid;
+    gap: 8px;
+    grid-template-columns: auto minmax(0, 1fr);
+    padding: 10px 12px;
+  }
+
+  .note-header .header-left {
+    display: contents;
+  }
+
+  .note-header .header-left > .icon-button {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .note-header .header-left > div {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    min-width: 0;
+  }
+
+  .note-title-row h2,
+  .note-path {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .view-controls {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+    max-width: 100%;
+    overflow-x: auto;
     width: auto;
   }
 
@@ -1863,7 +1916,11 @@ button.calendar-more {
     gap: 6px;
   }
 
-  .calendar-toolbar strong {
+  .calendar-month-nav {
+    grid-template-columns: 24px minmax(104px, 1fr) 24px;
+  }
+
+  .calendar-month-nav strong {
     font-size: 14px;
     margin: 0;
   }
@@ -2019,5 +2076,50 @@ button.calendar-more {
 
   .calendar-more {
     font-size: clamp(6px, 1.65vw, 9px);
+  }
+}
+
+@media (max-width: 520px) {
+  .markdown-body .heading-level {
+    gap: 5px;
+    grid-template-columns: 20px minmax(0, 1fr);
+  }
+
+  .heading-section .heading-section-1,
+  .heading-section-1 > :not(summary),
+  .heading-section .heading-section-2,
+  .heading-section-2 > :not(summary),
+  .heading-section .heading-section-3,
+  .heading-section-3 > :not(summary),
+  .heading-section .heading-section-4,
+  .heading-section-4 > :not(summary),
+  .heading-section .heading-section-5,
+  .heading-section-5 > :not(summary) {
+    margin-left: 8px;
+  }
+
+  .markdown-body .heading-level-2,
+  .markdown-body .markdown-depth-2 {
+    margin-left: 8px;
+  }
+
+  .markdown-body .heading-level-3,
+  .markdown-body .markdown-depth-3 {
+    margin-left: 16px;
+  }
+
+  .markdown-body .heading-level-4,
+  .markdown-body .markdown-depth-4 {
+    margin-left: 24px;
+  }
+
+  .markdown-body .heading-level-5,
+  .markdown-body .markdown-depth-5 {
+    margin-left: 32px;
+  }
+
+  .markdown-body .heading-level-6,
+  .markdown-body .markdown-depth-6 {
+    margin-left: 40px;
   }
 }
