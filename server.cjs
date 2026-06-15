@@ -305,6 +305,7 @@ function writeCalendarCache(key, body, res) {
   };
   if (Array.isArray(payload.updated)) cached.updated = payload.updated;
   if (Array.isArray(payload.created)) cached.created = payload.created;
+  if (Array.isArray(payload.files)) cached.files = normalizeCalendarCacheFiles(payload.files);
 
   try {
     fs.mkdirSync(calendarCacheRoot, { recursive: true });
@@ -313,6 +314,18 @@ function writeCalendarCache(key, body, res) {
   } catch (error) {
     sendJson(res, 500, { error: error.message || "Calendar cache write failed" });
   }
+}
+
+function normalizeCalendarCacheFiles(files) {
+  return files
+    .filter((file) => file && typeof file.path === "string")
+    .slice(0, 20000)
+    .map((file) => ({
+      path: normalizeVaultPath(file.path).slice(0, 1024),
+      updatedAt: Number(file.updatedAt || 0),
+      size: Number(file.size || 0),
+    }))
+    .filter((file) => file.path);
 }
 
 function sendSettings(res) {

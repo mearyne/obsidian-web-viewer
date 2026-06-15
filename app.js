@@ -16,6 +16,7 @@ const state = {
   readFileRequests: new Map(),
   savedVaults: [],
   tasks: [],
+  calendarTaskFiles: new Map(),
   calendarDate: new Date(),
   calendarMode: "month",
   calendarRefreshInFlight: false,
@@ -753,6 +754,7 @@ function resetVault() {
   state.currentNode = null;
   state.editMode = false;
   state.tasks = [];
+  state.calendarTaskFiles.clear();
   state.calendarDate = new Date();
   state.calendarRefreshInFlight = false;
   state.calendarRefreshing = false;
@@ -2016,9 +2018,25 @@ async function refreshCalendarTasks({ showLoading }) {
       return !pathPrefixes.length || pathPrefixes.some((prefix) => node.path === prefix || node.path.startsWith(`${prefix}/`));
     });
 
+    const cacheByPath = new Map();
+    state.tasks.forEach((task) => {
+      if (!cacheByPath.has(task.path)) cacheByPath.set(task.path, []);
+      cacheByPath.get(task.path).push(task);
+    });
+
     const parsed = [];
-    for (let index = 0; index < mdFiles.length; index += 8) {
-      const batch = mdFiles.slice(index, index + 8);
+    const changedFiles = [];
+    mdFiles.forEach((node) => {
+      const cachedFile = state.calendarTaskFiles.get(node.path);
+      if (cachedFile && isSameCalendarTaskFile(node, cachedFile)) {
+        parsed.push(...(cacheByPath.get(node.path) || []));
+        return;
+      }
+      changedFiles.push(node);
+    });
+
+    for (let index = 0; index < changedFiles.length; index += 8) {
+      const batch = changedFiles.slice(index, index + 8);
       await Promise.all(
         batch.map(async (node) => {
           const content = await readFileNode(node);
@@ -2026,13 +2044,14 @@ async function refreshCalendarTasks({ showLoading }) {
         }),
       );
 
-      if (index + 8 < mdFiles.length) {
+      if (index + 8 < changedFiles.length) {
         await waitForBrowser();
       }
     }
 
     if (state.activeView !== "calendar" || state.calendarKind !== "tasks") return;
     state.tasks = parsed;
+    state.calendarTaskFiles = buildCalendarTaskFileMap(mdFiles);
     state.calendarSyncedAt = Date.now();
     state.calendarCacheState = "fresh";
     saveCalendarCache();
@@ -2055,6 +2074,7 @@ async function loadCalendarCache() {
     const response = await fetch(`/api/calendar-cache?key=${encodeURIComponent(calendarCacheKey())}`, { cache: "no-store" });
     if (response.status === 404) {
       state.tasks = [];
+      state.calendarTaskFiles.clear();
       state.calendarCacheState = "refreshing";
       state.calendarSyncedAt = 0;
       if (shouldRender()) renderCalendar();
@@ -2067,11 +2087,13 @@ async function loadCalendarCache() {
     const syncedAt = Number(cached.syncedAt || 0);
     if (state.calendarCacheState === "fresh" && state.calendarSyncedAt > syncedAt) return;
     state.tasks = cached.tasks;
+    state.calendarTaskFiles = calendarTaskFileMapFromCache(cached.files);
     state.calendarSyncedAt = syncedAt;
     state.calendarCacheState = "stale";
     if (shouldRender()) renderCalendar();
   } catch {
     state.tasks = [];
+    state.calendarTaskFiles.clear();
     state.calendarCacheState = "refreshing";
     state.calendarSyncedAt = 0;
     if (shouldRender()) renderCalendar();
@@ -2087,6 +2109,7 @@ async function saveCalendarCache() {
         version: 1,
         syncedAt: state.calendarSyncedAt,
         tasks: state.tasks,
+        files: [...state.calendarTaskFiles.values()],
       }),
     });
   } catch {
@@ -2097,10 +2120,44 @@ async function saveCalendarCache() {
 function updateTasksForFile(path, content) {
   if (!path || !path.toLowerCase().endsWith(".md")) return;
   state.tasks = state.tasks.filter((task) => task.path !== path).concat(parseTasks(content, path));
+  const node = state.files.get(path);
+  if (node) state.calendarTaskFiles.set(path, calendarTaskFileMeta(node));
   state.calendarSyncedAt = Date.now();
   state.calendarCacheState = "fresh";
   saveCalendarCache();
   if (state.activeView === "calendar") renderCalendar();
+}
+
+function calendarTaskFileMapFromCache(files) {
+  const map = new Map();
+  if (!Array.isArray(files)) return map;
+  files.forEach((file) => {
+    if (!file || typeof file.path !== "string") return;
+    map.set(file.path, {
+      path: file.path,
+      updatedAt: Number(file.updatedAt || 0),
+      size: Number(file.size || 0),
+    });
+  });
+  return map;
+}
+
+function buildCalendarTaskFileMap(files) {
+  const map = new Map();
+  files.forEach((node) => map.set(node.path, calendarTaskFileMeta(node)));
+  return map;
+}
+
+function calendarTaskFileMeta(node) {
+  return {
+    path: node.path,
+    updatedAt: Number(node.updatedAt || 0),
+    size: Number(node.size || 0),
+  };
+}
+
+function isSameCalendarTaskFile(node, cachedFile) {
+  return Number(node.updatedAt || 0) === Number(cachedFile.updatedAt || 0) && Number(node.size || 0) === Number(cachedFile.size || 0);
 }
 
 function metadataCacheKey() {
