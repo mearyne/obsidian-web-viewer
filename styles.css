@@ -807,6 +807,7 @@ button:disabled {
 }
 
 .viewer-wrap {
+  background: var(--surface);
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;

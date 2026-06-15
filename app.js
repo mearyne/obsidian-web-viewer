@@ -1381,6 +1381,7 @@ async function enterEditMode() {
     return false;
   }
 
+  holdViewerHeightDuringTransition();
   state.editMode = true;
   state.editorDirty = false;
   setEditorValue(state.currentContent);
@@ -1426,6 +1427,7 @@ async function persistCurrentEdit({ closeEditor }) {
     if (closeEditor) {
       state.editMode = false;
       stopAutoSave();
+      holdViewerHeightDuringTransition();
       renderCurrentDocument();
       showNoteView();
     } else {
@@ -1465,6 +1467,16 @@ function setEditorValue(value) {
 function resizeEditorToContent() {
   els.markdownEditor.style.height = "auto";
   els.markdownEditor.style.height = `${Math.max(els.markdownEditor.scrollHeight, els.viewerWrap.clientHeight - 184)}px`;
+}
+
+function holdViewerHeightDuringTransition() {
+  const height = Math.max(els.viewerWrap.clientHeight, 1);
+  els.viewerWrap.style.minHeight = `${height}px`;
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      els.viewerWrap.style.minHeight = "";
+    });
+  });
 }
 
 function renderEditorPreview() {
