@@ -361,6 +361,7 @@ async function openRandomMarkdown() {
 
   const candidates = files.length > 1 && state.currentPath ? files.filter((path) => path !== state.currentPath) : files;
   const path = candidates[Math.floor(Math.random() * candidates.length)];
+  if (state.activeView === "calendar") showNoteView();
   await openFile(path);
   scrollViewerTop();
 }
@@ -1612,12 +1613,14 @@ function scheduleCalendarRefreshIfStale(delay = 0) {
 async function refreshCalendarTasks({ showLoading }) {
   if (state.calendarRefreshInFlight) return;
   state.calendarRefreshInFlight = true;
+  const refreshView = state.activeView;
   state.calendarRefreshing = true;
   state.calendarCacheState = state.tasks.length ? "stale" : "refreshing";
-  renderCalendar();
+  if (state.activeView === "calendar") renderCalendar();
 
   try {
     const pathPrefixes = parsePathList(els.calendarPathInput.value);
+    if (refreshView !== "calendar" || state.activeView !== "calendar") return;
     if (showLoading) {
       showLoadingOverlay("캘린더 불러오는 중...");
     }
@@ -1642,6 +1645,7 @@ async function refreshCalendarTasks({ showLoading }) {
       }
     }
 
+    if (state.activeView !== "calendar") return;
     state.tasks = parsed;
     state.calendarSyncedAt = Date.now();
     state.calendarCacheState = "fresh";
@@ -1649,7 +1653,7 @@ async function refreshCalendarTasks({ showLoading }) {
   } finally {
     state.calendarRefreshInFlight = false;
     state.calendarRefreshing = false;
-    renderCalendar();
+    if (state.activeView === "calendar") renderCalendar();
     if (showLoading) hideLoading();
   }
 }
