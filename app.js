@@ -1156,6 +1156,8 @@ function setTheme(theme) {
 }
 
 function initOptions() {
+  const savedCalendarPath = localStorage.getItem("obsidian-web-viewer-calendar-paths") || "";
+  if (els.calendarPathInput) els.calendarPathInput.value = savedCalendarPath;
   const savedDailyPath = normalizeDailyNotePath(localStorage.getItem("obsidian-web-viewer-daily-note-path") || state.dailyNotePath);
   state.dailyNotePath = savedDailyPath;
   if (els.dailyNotePathInput) els.dailyNotePathInput.value = savedDailyPath;
@@ -1264,6 +1266,7 @@ function setContentAlign(align, { persist }) {
 }
 
 function handleCalendarFilterInput() {
+  localStorage.setItem("obsidian-web-viewer-calendar-paths", els.calendarPathInput?.value || "");
   if (state.activeView !== "calendar") return;
   window.clearTimeout(state.calendarFilterTimer);
   state.calendarFilterTimer = window.setTimeout(() => {
