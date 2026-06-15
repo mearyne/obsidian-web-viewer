@@ -6,3 +6,10 @@ services:
     environment:
       HOST: 0.0.0.0
       PORT: 8088
+      VAULT_PATH: /vault
+      VAULT_NAME: ${VAULT_NAME:-Obsidian Vault}
+      VAULT_READ_ONLY: ${VAULT_READ_ONLY:-false}
+      CALENDAR_CACHE_DIR: /cache
+    volumes:
+      - ${OBSIDIAN_VAULT_PATH:-./sample-vault}:/vault
+      - ${OWV_CACHE_PATH:-./cache}:/cache

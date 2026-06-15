@@ -1,9 +1,12 @@
+const CALENDAR_REFRESH_INTERVAL = 5 * 60 * 1000;
+
 const state = {
   files: new Map(),
   directories: new Map(),
   root: makeDirNode("", ""),
   vaultName: "",
   rootHandle: null,
+  serverVaultWritable: false,
   currentPath: null,
   currentContent: "",
   currentNode: null,
@@ -12,12 +15,20 @@ const state = {
   objectUrls: new Map(),
   savedVaults: [],
   tasks: [],
-  calendarDate: startOfMonth(new Date()),
+  calendarDate: new Date(),
   calendarMode: "month",
   calendarRefreshInFlight: false,
+  calendarRefreshTimer: null,
+  calendarRefreshing: false,
+  calendarCacheState: "empty",
+  calendarSyncedAt: 0,
+  metadataSyncedAt: 0,
+  recentFiles: { updated: [], created: [] },
+  calendarKind: "tasks",
   mobileCalendarMode: "agenda",
   dailyNotePath: "1. Daily",
   sidebarResize: null,
+  sidebarPinned: false,
   lightboxImages: [],
   lightboxIndex: -1,
   treeSortMode: "created",
@@ -31,6 +42,7 @@ const state = {
 const els = {
   sidebarPanel: document.querySelector("#sidebarPanel"),
   sidebarResizeHandle: document.querySelector("#sidebarResizeHandle"),
+  sidebarPinButton: document.querySelector("#sidebarPinButton"),
   fileTree: document.querySelector("#fileTree"),
   openVaultButton: document.querySelector("#openVaultButton"),
   sidebarToggle: document.querySelector("#sidebarToggle"),
@@ -48,6 +60,7 @@ const els = {
   vaultStatus: document.querySelector("#vaultStatus"),
   notePath: document.querySelector("#notePath"),
   noteTitle: document.querySelector("#noteTitle"),
+  syncStatus: document.querySelector("#syncStatus"),
   viewerWrap: document.querySelector(".viewer-wrap"),
   markdownView: document.querySelector("#markdownView"),
   editorShell: document.querySelector("#editorShell"),
@@ -124,8 +137,9 @@ console.log(\`\${vault} markdown viewer\`);
 `,
 };
 
-els.openVaultButton.addEventListener("click", openVault);
+els.openVaultButton?.addEventListener("click", openVault);
 els.sidebarToggle.addEventListener("click", toggleSidebar);
+els.sidebarPinButton?.addEventListener("click", toggleSidebarPin);
 els.searchInput.addEventListener("input", renderTree);
 els.caseSearchToggle.addEventListener("change", renderTree);
 els.regexSearchToggle.addEventListener("change", renderTree);
@@ -135,6 +149,7 @@ els.expandTreeButton.addEventListener("click", expandAllTree);
 els.revealCurrentButton.addEventListener("click", revealCurrentFileInTree);
 els.collapseTreeButton.addEventListener("click", collapseAllTree);
 els.folderPathInput?.addEventListener("input", renderTree);
+els.calendarPathInput?.addEventListener("input", handleCalendarFilterInput);
 els.dailyNotePathInput?.addEventListener("input", updateDailyNotePath);
 els.viewerWrap.addEventListener("scroll", handleViewerScroll, { passive: true });
 els.viewerWrap.addEventListener("click", closeSidebarFromMain);
@@ -144,7 +159,7 @@ els.saveEditButton.addEventListener("click", saveCurrentEdit);
 els.markdownEditor.addEventListener("keydown", handleEditorKeydown);
 els.markdownEditor.addEventListener("input", handleEditorInput);
 els.randomFileButton.addEventListener("click", openRandomMarkdown);
-els.calendarButton.addEventListener("click", buildCalendarView);
+els.calendarButton.addEventListener("click", openNextCalendarKind);
 els.optionsButton.addEventListener("click", toggleOptionsMenu);
 els.optionsCloseButton.addEventListener("click", closeOptionsMenu);
 els.optionsBackdrop.addEventListener("click", closeOptionsMenu);
@@ -154,6 +169,7 @@ els.editButton.addEventListener("click", openCurrentFileInObsidian);
 els.themeButton.addEventListener("click", toggleTheme);
 els.sidebarResizeHandle.addEventListener("pointerdown", startSidebarResize);
 window.addEventListener("keydown", handleGlobalKeydown, true);
+document.addEventListener("pointerdown", closeSidebarFromOutside);
 
 function handleGlobalKeydown(event) {
   if (isShortcut(event, "KeyE", "e")) {
@@ -179,9 +195,10 @@ initOptions();
 updateMarkdownToggleButton();
 updateTreeSortDirectionButton();
 initSidebarWidth();
+initSidebarPin();
 loadSavedVaults();
 loadSampleVault();
-setInterval(refreshCalendarIfVisible, 5000);
+setInterval(refreshCalendarIfVisible, CALENDAR_REFRESH_INTERVAL);
 
 let lastViewerScrollTop = 0;
 
@@ -203,9 +220,39 @@ function closeSidebarFromMain(event) {
   closeSidebar();
 }
 
+function closeSidebarFromOutside(event) {
+  if (state.sidebarPinned || !document.body.classList.contains("sidebar-open")) return;
+  if (event.target.closest("#sidebarPanel, #sidebarToggle")) return;
+  closeSidebar();
+}
+
 function initSidebarWidth() {
   const saved = Number(localStorage.getItem("obsidian-web-viewer-sidebar-width"));
   if (Number.isFinite(saved) && saved > 0) setSidebarWidth(saved);
+}
+
+function initSidebarPin() {
+  state.sidebarPinned = localStorage.getItem("obsidian-web-viewer-sidebar-pinned") === "true";
+  document.body.classList.toggle("sidebar-pinned", state.sidebarPinned);
+  if (state.sidebarPinned) document.body.classList.add("sidebar-open");
+  updateSidebarPinButton();
+}
+
+function toggleSidebarPin() {
+  state.sidebarPinned = !state.sidebarPinned;
+  localStorage.setItem("obsidian-web-viewer-sidebar-pinned", String(state.sidebarPinned));
+  document.body.classList.toggle("sidebar-pinned", state.sidebarPinned);
+  if (state.sidebarPinned) document.body.classList.add("sidebar-open");
+  updateSidebarPinButton();
+}
+
+function updateSidebarPinButton() {
+  if (!els.sidebarPinButton) return;
+  els.sidebarPinButton.classList.toggle("active", state.sidebarPinned);
+  els.sidebarPinButton.setAttribute("aria-pressed", String(state.sidebarPinned));
+  els.sidebarPinButton.textContent = state.sidebarPinned ? "📌" : "📍";
+  els.sidebarPinButton.title = state.sidebarPinned ? "사이드바 고정됨" : "사이드바 고정";
+  els.sidebarPinButton.setAttribute("aria-label", els.sidebarPinButton.title);
 }
 
 function startSidebarResize(event) {
@@ -407,8 +454,10 @@ async function loadVaultFromHandle(handle) {
     refreshDirectoryMetadata();
     els.vaultStatus.textContent = handle.name;
     renderTree();
-    state.calendarDate = startOfMonth(new Date());
-    await buildCalendarView();
+    state.calendarDate = new Date();
+    showInitialCalendarView();
+    loadCalendarCache().finally(scheduleCalendarRefreshIfStale);
+    loadRecentFilesCache().finally(refreshRecentFilesCache);
   } finally {
     hideLoading();
   }
@@ -448,24 +497,33 @@ async function readFileMetadata(handle) {
 
 async function loadSampleVault() {
   try {
-    const response = await fetch("/api/sample-vault", { cache: "no-store" });
-    if (!response.ok) throw new Error("Sample vault API failed");
+    const response = await fetch("/api/vault", { cache: "no-store" });
+    if (!response.ok) throw new Error("Vault API failed");
     const vault = await response.json();
-    hydrateSampleVault(vault.name || "sample-vault", vault.files || []);
+    hydrateServerVault(vault.name || "vault", vault.files || [], Boolean(vault.writable));
   } catch {
-    const files = Object.entries(SAMPLE_FILES).map(([path, content]) => ({ path, content }));
-    hydrateSampleVault("Sample vault", files);
+    try {
+      const response = await fetch("/api/sample-vault", { cache: "no-store" });
+      if (!response.ok) throw new Error("Sample vault API failed");
+      const vault = await response.json();
+      hydrateServerVault(vault.name || "sample-vault", vault.files || [], Boolean(vault.writable));
+    } catch {
+      const files = Object.entries(SAMPLE_FILES).map(([path, content]) => ({ path, content }));
+      hydrateServerVault("Sample vault", files, false);
+    }
   }
 }
 
-function hydrateSampleVault(vaultName, files) {
+function hydrateServerVault(vaultName, files, writable = false) {
   resetVault();
+  state.serverVaultWritable = writable;
+  state.vaultName = vaultName;
   state.root = makeDirNode(vaultName, "");
   state.directories.set("", state.root);
 
   files.forEach((file) => {
     const normalizedPath = normalizeVaultPath(file.path);
-    if (!normalizedPath || !normalizedPath.toLowerCase().endsWith(".md")) return;
+    if (!normalizedPath || !isIndexedFile(normalizedPath)) return;
 
     const parts = normalizedPath.split("/");
     const fileName = parts.pop();
@@ -486,12 +544,14 @@ function hydrateSampleVault(vaultName, files) {
     const fileNode = {
       name: fileName,
       path: normalizedPath,
-      content: file.content || "",
+      url: file.url || "",
+      serverBacked: true,
       kind: "file",
       size: file.size || (file.content || "").length,
       updatedAt: file.updatedAt || file.modifiedAt || 0,
       createdAt: file.createdAt || file.birthtime || file.updatedAt || file.modifiedAt || 0,
     };
+    if (typeof file.content === "string") fileNode.content = file.content;
     state.files.set(normalizedPath, fileNode);
     dir.children.set(fileName, fileNode);
   });
@@ -499,8 +559,10 @@ function hydrateSampleVault(vaultName, files) {
   refreshDirectoryMetadata();
   els.vaultStatus.textContent = vaultName;
   renderTree();
-  state.calendarDate = startOfMonth(new Date());
-  buildCalendarView();
+  state.calendarDate = new Date();
+  showInitialCalendarView();
+  loadCalendarCache().finally(scheduleCalendarRefreshIfStale);
+  loadRecentFilesCache().finally(refreshRecentFilesCache);
 }
 
 function resetVault() {
@@ -508,13 +570,24 @@ function resetVault() {
   state.directories.clear();
   state.vaultName = "";
   state.rootHandle = null;
+  state.serverVaultWritable = false;
   state.currentPath = null;
   state.currentContent = "";
   state.currentNode = null;
   state.editMode = false;
   state.tasks = [];
-  state.calendarDate = startOfMonth(new Date());
+  state.calendarDate = new Date();
   state.calendarRefreshInFlight = false;
+  state.calendarRefreshing = false;
+  state.calendarCacheState = "empty";
+  state.calendarSyncedAt = 0;
+  state.metadataSyncedAt = 0;
+  state.recentFiles = { updated: [], created: [] };
+  state.calendarKind = "tasks";
+  if (state.calendarRefreshTimer) {
+    window.clearTimeout(state.calendarRefreshTimer);
+    state.calendarRefreshTimer = null;
+  }
   state.activeView = "note";
   clearObjectUrls();
 }
@@ -525,6 +598,10 @@ function makeDirNode(name, path) {
 
 function isIndexedFile(name) {
   return /\.(md|excalidraw|png|jpe?g|gif|webp|svg|bmp)$/i.test(name);
+}
+
+function isTextVaultFilePath(name) {
+  return /\.(md|excalidraw)$/i.test(name);
 }
 
 function isMarkdownDocument(name) {
@@ -794,6 +871,13 @@ async function openFile(path) {
 
 async function readFileNode(node) {
   if (typeof node.content === "string") return node.content;
+  if (node.serverBacked) {
+    const response = await fetch(`/api/vault-file?path=${encodeURIComponent(node.path)}`, { cache: "no-store" });
+    if (!response.ok) throw new Error("파일을 읽지 못했습니다.");
+    const content = await response.text();
+    if (isTextVaultFilePath(node.path)) node.content = content;
+    return content;
+  }
   const file = await node.handle.getFile();
   return file.text();
 }
@@ -826,6 +910,11 @@ function updateDailyNotePath() {
   localStorage.setItem("obsidian-web-viewer-daily-note-path", nextPath);
 }
 
+function handleCalendarFilterInput() {
+  if (state.activeView !== "calendar") return;
+  loadCalendarCache().finally(() => scheduleCalendarRefreshIfStale(250));
+}
+
 function toggleMarkdownMode() {
   state.markdownEnabled = !state.markdownEnabled;
   updateMarkdownToggleButton();
@@ -833,9 +922,10 @@ function toggleMarkdownMode() {
 }
 
 function updateMarkdownToggleButton() {
-  const label = state.markdownEnabled ? "Markdown 렌더링 켜짐" : "순수 텍스트 보기";
-  els.markdownToggleButton.classList.toggle("active", state.markdownEnabled);
-  els.markdownToggleButton.setAttribute("aria-pressed", String(state.markdownEnabled));
+  const originalOn = !state.markdownEnabled;
+  const label = originalOn ? "원본 보기 ON" : "원본 보기 OFF";
+  els.markdownToggleButton.classList.toggle("active", originalOn);
+  els.markdownToggleButton.setAttribute("aria-pressed", String(originalOn));
   els.markdownToggleButton.setAttribute("aria-label", label);
   els.markdownToggleButton.title = label;
 }
@@ -870,13 +960,13 @@ function renderCurrentDocument() {
 }
 
 async function enterEditMode() {
-  if (!state.currentNode?.handle) return false;
+  if (!canEditNode(state.currentNode)) return false;
   if (state.editMode) {
     focusEditor();
     return true;
   }
 
-  const granted = await ensureWritePermission(state.currentNode.handle);
+  const granted = await ensureNodeWritePermission(state.currentNode);
   if (!granted) {
     alert("파일 편집 권한이 필요합니다.");
     return false;
@@ -885,7 +975,6 @@ async function enterEditMode() {
   state.editMode = true;
   state.editorDirty = false;
   setEditorValue(state.currentContent);
-  renderEditorPreview();
   els.markdownView.hidden = true;
   els.calendarView.hidden = true;
   els.editorShell.hidden = false;
@@ -897,17 +986,17 @@ async function enterEditMode() {
 }
 
 async function saveCurrentEdit() {
-  if (!state.editMode || !state.currentNode?.handle) return;
+  if (!state.editMode || !canEditNode(state.currentNode)) return;
   return persistCurrentEdit({ closeEditor: true });
 }
 
 async function autoSaveCurrentEdit() {
-  if (!state.editMode || !state.editorDirty || state.autoSaveInFlight || !state.currentNode?.handle) return;
+  if (!state.editMode || !state.editorDirty || state.autoSaveInFlight || !canEditNode(state.currentNode)) return;
   return persistCurrentEdit({ closeEditor: false });
 }
 
 async function persistCurrentEdit({ closeEditor }) {
-  if (!state.editMode || !state.currentNode?.handle) return;
+  if (!state.editMode || !canEditNode(state.currentNode)) return;
   if (state.autoSaveInFlight) return;
   state.autoSaveInFlight = true;
   els.saveEditButton.disabled = true;
@@ -915,13 +1004,14 @@ async function persistCurrentEdit({ closeEditor }) {
   try {
     const nextContent = editorValue();
     if (nextContent === state.currentContent && !closeEditor) return;
-    if (nextContent !== state.currentContent) await writeBackupFile(state.currentNode, state.currentContent);
-    await writeFileHandle(state.currentNode.handle, nextContent);
-    const metadata = await readFileMetadata(state.currentNode.handle);
+    const metadata = await writeNodeContent(state.currentNode, nextContent, { backup: nextContent !== state.currentContent, previousContent: state.currentContent });
     Object.assign(state.currentNode, metadata);
+    if (typeof state.currentNode.content === "string") state.currentNode.content = nextContent;
     refreshDirectoryMetadata();
     state.currentContent = nextContent;
     state.editorDirty = false;
+    updateTasksForFile(state.currentNode.path, nextContent);
+    refreshRecentFilesCache();
     renderTree();
     if (closeEditor) {
       state.editMode = false;
@@ -950,7 +1040,6 @@ function handleEditorKeydown(event) {
 
 function handleEditorInput() {
   markEditorDirty();
-  renderEditorPreview();
 }
 
 function editorValue() {
@@ -959,7 +1048,6 @@ function editorValue() {
 
 function setEditorValue(value) {
   els.markdownEditor.value = value;
-  renderEditorPreview();
 }
 
 function renderEditorPreview() {
@@ -1163,6 +1251,16 @@ async function ensureWritePermission(handle) {
   return permission === "granted";
 }
 
+async function ensureNodeWritePermission(node) {
+  if (node?.handle) return ensureWritePermission(node.handle);
+  return Boolean(node?.serverBacked && state.serverVaultWritable && isTextVaultFilePath(node.path));
+}
+
+function canEditNode(node) {
+  if (!node || !isTextVaultFilePath(node.path)) return false;
+  return Boolean(node.handle || (node.serverBacked && state.serverVaultWritable));
+}
+
 async function writeBackupFile(node, content) {
   if (!node.dirHandle) return;
   const backupHandle = await node.dirHandle.getFileHandle(`${node.name}.bak`, { create: true });
@@ -1175,8 +1273,37 @@ async function writeFileHandle(handle, content) {
   await writable.close();
 }
 
+async function writeNodeContent(node, content, { backup = true, previousContent = state.currentContent } = {}) {
+  if (node.handle) {
+    if (backup) await writeBackupFile(node, previousContent);
+    await writeFileHandle(node.handle, content);
+    return readFileMetadata(node.handle);
+  }
+
+  if (node.serverBacked && state.serverVaultWritable) {
+    return writeServerFile(node.path, content, { backup });
+  }
+
+  throw new Error("File is not writable");
+}
+
+async function writeServerFile(path, content, { backup = true } = {}) {
+  const response = await fetch(`/api/vault-file?path=${encodeURIComponent(path)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content, backup }),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || "파일 저장에 실패했습니다.");
+  return {
+    size: result.size || content.length,
+    updatedAt: result.updatedAt || Date.now(),
+    createdAt: result.createdAt || result.updatedAt || Date.now(),
+  };
+}
+
 function updateEditButtons() {
-  const canEdit = Boolean(state.currentNode?.handle) && state.activeView === "note";
+  const canEdit = canEditNode(state.currentNode) && state.activeView === "note";
   els.editButton.disabled = state.activeView !== "note" || !state.vaultName || !state.currentPath;
   els.webEditButton.disabled = !canEdit || state.editMode;
   els.webEditButton.hidden = state.activeView !== "note";
@@ -1192,11 +1319,18 @@ function openCurrentFileInObsidian() {
 function toggleSidebar(event) {
   event?.stopPropagation();
   const open = document.body.classList.toggle("sidebar-open");
+  if (!open && state.sidebarPinned) {
+    state.sidebarPinned = false;
+    localStorage.setItem("obsidian-web-viewer-sidebar-pinned", "false");
+    document.body.classList.remove("sidebar-pinned");
+    updateSidebarPinButton();
+  }
   els.sidebarToggle.setAttribute("aria-expanded", String(open));
   els.sidebarToggle.setAttribute("aria-label", open ? "문서 목록 닫기" : "문서 목록 열기");
 }
 
 function closeSidebar() {
+  if (state.sidebarPinned) return;
   document.body.classList.remove("sidebar-open");
   els.sidebarToggle.setAttribute("aria-expanded", "false");
   els.sidebarToggle.setAttribute("aria-label", "문서 목록 열기");
@@ -1278,27 +1412,76 @@ function hideLoading() {
 async function buildCalendarView() {
   if (!(await confirmDiscardEdit())) return;
   closeOptionsMenu();
-  if (state.calendarMode === "week" || state.calendarMode === "day") state.calendarDate = new Date();
+  closeSidebar();
+  state.calendarKind = "tasks";
   showCalendarView();
-  await refreshCalendarTasks({ showLoading: true });
+  renderCalendar();
+  scheduleCalendarRefreshIfStale();
+}
+
+async function buildRecentCalendarView(type) {
+  if (!(await confirmDiscardEdit())) return;
+  closeOptionsMenu();
+  closeSidebar();
+  state.calendarKind = type === "created" ? "created" : "updated";
+  showCalendarView();
+  renderCalendar();
+  loadRecentFilesCache().finally(refreshRecentFilesCache);
+}
+
+async function openNextCalendarKind() {
+  if (state.activeView !== "calendar") {
+    await buildCalendarView();
+  } else if (state.calendarKind === "tasks") {
+    await buildRecentCalendarView("updated");
+  } else if (state.calendarKind === "updated") {
+    await buildRecentCalendarView("created");
+  } else {
+    await buildCalendarView();
+  }
 }
 
 async function refreshCalendarIfVisible() {
   if (state.activeView !== "calendar") return;
-  await refreshCalendarTasks({ showLoading: false });
+  if (state.calendarRefreshing) return;
+  scheduleCalendarRefreshIfStale();
+}
+
+function showInitialCalendarView() {
+  state.calendarMode = "month";
+  state.calendarDate = new Date();
+  showCalendarView();
+  renderCalendar();
+}
+
+function scheduleCalendarRefresh(delay = 0) {
+  if (state.calendarRefreshTimer || state.calendarRefreshInFlight) return;
+  state.calendarRefreshTimer = window.setTimeout(() => {
+    state.calendarRefreshTimer = null;
+    refreshCalendarTasks({ showLoading: false });
+  }, delay);
+}
+
+function scheduleCalendarRefreshIfStale(delay = 0) {
+  if (state.calendarSyncedAt && Date.now() - state.calendarSyncedAt < CALENDAR_REFRESH_INTERVAL) {
+    state.calendarCacheState = "fresh";
+    renderCalendar();
+    return;
+  }
+  scheduleCalendarRefresh(delay);
 }
 
 async function refreshCalendarTasks({ showLoading }) {
   if (state.calendarRefreshInFlight) return;
   state.calendarRefreshInFlight = true;
+  state.calendarRefreshing = true;
+  state.calendarCacheState = state.tasks.length ? "stale" : "refreshing";
+  renderCalendar();
 
   try {
     const pathPrefixes = parsePathList(els.calendarPathInput.value);
-    els.notePath.textContent = pathPrefixes.length ? `calendar: ${pathPrefixes.join(", ")}` : "calendar: vault";
-    els.noteTitle.textContent = "Tasks Calendar";
     if (showLoading) {
       showLoadingOverlay("캘린더 불러오는 중...");
-      els.calendarView.innerHTML = '<div class="calendar-loading">Loading tasks...</div>';
     }
 
     const mdFiles = [...state.files.values()].filter((node) => {
@@ -1307,19 +1490,152 @@ async function refreshCalendarTasks({ showLoading }) {
     });
 
     const parsed = [];
-    await Promise.all(
-      mdFiles.map(async (node) => {
-        const content = await readFileNode(node);
-        parsed.push(...parseTasks(content, node.path));
-      }),
-    );
+    for (let index = 0; index < mdFiles.length; index += 8) {
+      const batch = mdFiles.slice(index, index + 8);
+      await Promise.all(
+        batch.map(async (node) => {
+          const content = await readFileNode(node);
+          parsed.push(...parseTasks(content, node.path));
+        }),
+      );
+
+      if (index + 8 < mdFiles.length) {
+        await waitForBrowser();
+      }
+    }
 
     state.tasks = parsed;
-    renderCalendar();
+    state.calendarSyncedAt = Date.now();
+    state.calendarCacheState = "fresh";
+    saveCalendarCache();
   } finally {
     state.calendarRefreshInFlight = false;
+    state.calendarRefreshing = false;
+    renderCalendar();
     if (showLoading) hideLoading();
   }
+}
+
+function calendarCacheKey() {
+  const filter = parsePathList(els.calendarPathInput.value).join(",");
+  return `obsidian-web-viewer-calendar:${state.vaultName || "vault"}:${filter || "all"}`;
+}
+
+async function loadCalendarCache() {
+  try {
+    const response = await fetch(`/api/calendar-cache?key=${encodeURIComponent(calendarCacheKey())}`, { cache: "no-store" });
+    if (response.status === 404) {
+      state.tasks = [];
+      state.calendarCacheState = "refreshing";
+      state.calendarSyncedAt = 0;
+      renderCalendar();
+      return;
+    }
+    if (!response.ok) throw new Error("Calendar cache failed");
+
+    const cached = await response.json();
+    if (!Array.isArray(cached.tasks)) throw new Error("Invalid calendar cache");
+    const syncedAt = Number(cached.syncedAt || 0);
+    if (state.calendarCacheState === "fresh" && state.calendarSyncedAt > syncedAt) return;
+    state.tasks = cached.tasks;
+    state.calendarSyncedAt = syncedAt;
+    state.calendarCacheState = "stale";
+    renderCalendar();
+  } catch {
+    state.tasks = [];
+    state.calendarCacheState = "refreshing";
+    state.calendarSyncedAt = 0;
+    renderCalendar();
+  }
+}
+
+async function saveCalendarCache() {
+  try {
+    await fetch(`/api/calendar-cache?key=${encodeURIComponent(calendarCacheKey())}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        version: 1,
+        syncedAt: state.calendarSyncedAt,
+        tasks: state.tasks,
+      }),
+    });
+  } catch {
+    // Cache is best-effort; server write failures should not block the app.
+  }
+}
+
+function updateTasksForFile(path, content) {
+  if (!path || !path.toLowerCase().endsWith(".md")) return;
+  state.tasks = state.tasks.filter((task) => task.path !== path).concat(parseTasks(content, path));
+  state.calendarSyncedAt = Date.now();
+  state.calendarCacheState = "fresh";
+  saveCalendarCache();
+  if (state.activeView === "calendar") renderCalendar();
+}
+
+function metadataCacheKey() {
+  return `obsidian-web-viewer-metadata:${state.vaultName || "vault"}`;
+}
+
+async function loadRecentFilesCache() {
+  try {
+    const response = await fetch(`/api/calendar-cache?key=${encodeURIComponent(metadataCacheKey())}`, { cache: "no-store" });
+    if (!response.ok) return;
+    const cached = await response.json();
+    if (!Array.isArray(cached.updated) || !Array.isArray(cached.created)) return;
+    state.recentFiles = { updated: cached.updated, created: cached.created };
+    state.metadataSyncedAt = Number(cached.syncedAt || 0);
+    if (state.activeView === "calendar" && state.calendarKind !== "tasks") renderCalendar();
+  } catch {
+    // Metadata cache is best-effort.
+  }
+}
+
+async function refreshRecentFilesCache() {
+  state.recentFiles = buildRecentFiles();
+  state.metadataSyncedAt = Date.now();
+  if (state.activeView === "calendar" && state.calendarKind !== "tasks") renderCalendar();
+  try {
+    await fetch(`/api/calendar-cache?key=${encodeURIComponent(metadataCacheKey())}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        syncedAt: state.metadataSyncedAt,
+        tasks: [],
+        updated: state.recentFiles.updated,
+        created: state.recentFiles.created,
+      }),
+    });
+  } catch {
+    // Metadata cache is best-effort.
+  }
+}
+
+function buildRecentFiles() {
+  const files = [...state.files.values()]
+    .filter((node) => node.kind === "file" && isOpenableDocument(node.name))
+    .map((node) => ({
+      path: node.path,
+      name: node.name,
+      updatedAt: node.updatedAt || 0,
+      createdAt: node.createdAt || node.updatedAt || 0,
+    }));
+
+  return {
+    updated: files.slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 80),
+    created: files.slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 80),
+  };
+}
+
+function waitForBrowser() {
+  return new Promise((resolve) => {
+    if ("requestIdleCallback" in window) {
+      window.requestIdleCallback(resolve, { timeout: 100 });
+      return;
+    }
+    window.setTimeout(resolve, 0);
+  });
 }
 
 function showNoteView() {
@@ -1329,18 +1645,51 @@ function showNoteView() {
   els.editorShell.hidden = true;
   els.calendarView.hidden = true;
   els.calendarButton.classList.remove("active");
+  updateCalendarKindButton();
+  updateSyncStatus();
   updateEditButtons();
 }
 
 function showCalendarView() {
   state.activeView = "calendar";
   showTitlebar();
+  updateCalendarTitle();
   els.markdownView.hidden = true;
   els.editorShell.hidden = true;
   els.calendarView.hidden = false;
   els.calendarButton.classList.add("active");
+  updateCalendarKindButton();
   els.editButton.disabled = true;
   updateEditButtons();
+}
+
+function updateCalendarKindButton() {
+  if (!els.calendarButton) return;
+  if (state.activeView === "calendar" && state.calendarKind === "updated") {
+    els.calendarButton.textContent = "✨";
+    els.calendarButton.title = "최근 생성 파일";
+    els.calendarButton.setAttribute("aria-label", "최근 생성 파일 캘린더");
+  } else if (state.activeView === "calendar" && state.calendarKind === "created") {
+    els.calendarButton.textContent = "📅";
+    els.calendarButton.title = "Task 캘린더";
+    els.calendarButton.setAttribute("aria-label", "Task 캘린더");
+  } else {
+    els.calendarButton.textContent = state.activeView === "calendar" ? "📝" : "📅";
+    els.calendarButton.title = state.activeView === "calendar" ? "최근 수정 파일" : "Task 캘린더";
+    els.calendarButton.setAttribute("aria-label", state.activeView === "calendar" ? "최근 수정 파일 캘린더" : "Task 캘린더");
+  }
+}
+
+function updateCalendarTitle() {
+  const pathPrefixes = parsePathList(els.calendarPathInput.value);
+  if (state.calendarKind === "tasks") {
+    els.notePath.textContent = pathPrefixes.length ? `calendar: ${pathPrefixes.join(", ")}` : "calendar: vault";
+    els.noteTitle.textContent = "Tasks Calendar";
+  } else {
+    els.notePath.textContent = `calendar: ${calendarTitle()}`;
+    els.noteTitle.textContent = state.calendarKind === "created" ? "최근 생성 파일" : "최근 수정 파일";
+  }
+  updateSyncStatus();
 }
 
 function parseTasks(content, path) {
@@ -1419,21 +1768,28 @@ function cleanTaskText(text) {
 }
 
 function renderCalendar() {
+  if (state.activeView === "calendar") updateCalendarTitle();
+  const showingTasks = state.calendarKind === "tasks";
   const month = startOfMonth(state.calendarDate);
   const monthKey = formatMonth(month);
   const todayKey = formatDate(new Date());
   const firstGridDate = startOfWeek(month, 0);
   const tasksByDate = groupTasksByDate(state.tasks);
+  const recentField = state.calendarKind === "created" ? "createdAt" : "updatedAt";
+  const recentByDate = groupRecentFilesByDate(state.recentFiles[state.calendarKind] || [], recentField);
   const cells = [];
   const agendaItems = calendarAgendaDates(month).map((date) => {
     const dateKey = formatDate(date);
-    return renderAgendaDay(date, tasksByDate.get(dateKey) || [], dateKey === todayKey);
+    return showingTasks
+      ? renderAgendaDay(date, tasksByDate.get(dateKey) || [], dateKey === todayKey)
+      : renderRecentAgendaDay(date, recentByDate.get(dateKey) || [], dateKey === todayKey, recentField);
   });
 
   for (let offset = 0; offset < 42; offset += 1) {
     const date = addDays(firstGridDate, offset);
     const dateKey = formatDate(date);
     const dayTasks = tasksByDate.get(dateKey) || [];
+    const dayFiles = recentByDate.get(dateKey) || [];
     const classes = ["calendar-cell"];
     if (formatMonth(date) !== monthKey) classes.push("outside-month");
     if (dateKey === todayKey) classes.push("today");
@@ -1442,8 +1798,11 @@ function renderCalendar() {
       <div class="${classes.join(" ")}" data-calendar-date="${dateKey}">
         <div class="calendar-day">${date.getDate()}</div>
         <div class="calendar-tasks">
-          ${dayTasks.slice(0, 5).map(renderCalendarTask).join("")}
-          ${dayTasks.length > 5 ? `<div class="calendar-more">+${dayTasks.length - 5}</div>` : ""}
+          ${
+            showingTasks
+              ? `${dayTasks.slice(0, 5).map(renderCalendarTask).join("")}${dayTasks.length > 5 ? `<button class="calendar-more" type="button" data-calendar-more="${dateKey}">+${dayTasks.length - 5}</button>` : ""}`
+              : `${dayFiles.slice(0, 5).map((item) => renderCalendarFile(item, recentField)).join("")}${dayFiles.length > 5 ? `<button class="calendar-more" type="button" data-calendar-more="${dateKey}">+${dayFiles.length - 5}</button>` : ""}`
+          }
         </div>
       </div>
     `);
@@ -1458,26 +1817,63 @@ function renderCalendar() {
         <button type="button" data-calendar-action="next">&gt;</button>
         <button type="button" data-calendar-action="today">Today</button>
         <div class="calendar-mode-switch" aria-label="Calendar view">
-          <button type="button" data-calendar-mode="month" class="${state.calendarMode === "month" ? "active" : ""}">캘린더</button>
+          <button type="button" data-calendar-mode="month" class="${state.calendarMode === "month" ? "active" : ""}">월간</button>
           <button type="button" data-calendar-mode="week" class="${state.calendarMode === "week" ? "active" : ""}">주간</button>
           <button type="button" data-calendar-mode="day" class="${state.calendarMode === "day" ? "active" : ""}">일일</button>
         </div>
-        <button class="calendar-mobile-mode" type="button" data-calendar-action="toggle-mobile-mode">
-          ${state.mobileCalendarMode === "agenda" ? "Month" : "Agenda"}
-        </button>
-        <span>${state.tasks.length} tasks</span>
+        <span>${showingTasks ? `${state.tasks.length} tasks` : `${(state.recentFiles[state.calendarKind] || []).length} files`}</span>
       </div>
       <div class="calendar-weekdays">
         ${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => `<div>${day}</div>`).join("")}
       </div>
       <div class="calendar-grid">${cells.join("")}</div>
       <div class="calendar-agenda">
-        ${agendaItems.length ? agendaItems.join("") : '<div class="calendar-empty">No tasks this month</div>'}
+        ${agendaItems.length ? agendaItems.join("") : '<div class="calendar-empty">No items this month</div>'}
       </div>
     </div>
   `;
 
   bindCalendarEvents();
+  updateSyncStatus();
+}
+
+function updateSyncStatus() {
+  if (!els.syncStatus) return;
+  if (state.activeView !== "calendar" || state.calendarKind !== "tasks") {
+    els.syncStatus.hidden = true;
+    return;
+  }
+
+  els.syncStatus.hidden = false;
+  els.syncStatus.className = `sync-status ${state.calendarRefreshing ? "refreshing" : state.calendarCacheState}`;
+
+  if (state.calendarRefreshing) {
+    els.syncStatus.textContent = "⟳";
+    els.syncStatus.title = state.calendarCacheState === "stale" ? "캐시 표시 중, 최신화 중" : "최신화 중";
+  } else if (state.calendarCacheState === "fresh") {
+    els.syncStatus.textContent = "✓";
+    els.syncStatus.title = state.calendarSyncedAt ? `최신화 완료: ${new Date(state.calendarSyncedAt).toLocaleString()}` : "최신화 완료";
+  } else if (state.calendarCacheState === "stale") {
+    els.syncStatus.textContent = "!";
+    els.syncStatus.title = state.calendarSyncedAt ? `캐시 표시 중: ${new Date(state.calendarSyncedAt).toLocaleString()}` : "캐시 표시 중";
+  } else {
+    els.syncStatus.textContent = "…";
+    els.syncStatus.title = "최신화 대기 중";
+  }
+}
+
+function currentCalendarRange() {
+  if (state.calendarMode === "day") {
+    const start = new Date(state.calendarDate.getFullYear(), state.calendarDate.getMonth(), state.calendarDate.getDate());
+    return { start, end: addDays(start, 1) };
+  }
+  if (state.calendarMode === "week") {
+    const start = addDays(state.calendarDate, -1);
+    const normalized = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+    return { start: normalized, end: addDays(normalized, 8) };
+  }
+  const start = startOfMonth(state.calendarDate);
+  return { start, end: new Date(start.getFullYear(), start.getMonth() + 1, 1) };
 }
 
 function calendarAgendaDates(month) {
@@ -1521,6 +1917,22 @@ function renderAgendaDay(date, tasks, isToday) {
   `;
 }
 
+function renderRecentAgendaDay(date, files, isToday, field) {
+  const classes = ["calendar-agenda-day"];
+  if (isToday) classes.push("today");
+  return `
+    <section class="${classes.join(" ")}" data-calendar-date="${formatDate(date)}">
+      <div class="calendar-agenda-date">
+        <strong>${date.getDate()}</strong>
+        <span>${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][date.getDay()]}</span>
+      </div>
+      <div class="calendar-agenda-tasks">
+        ${files.length ? files.map((file) => renderCalendarFile(file, field)).join("") : '<div class="calendar-empty">No files</div>'}
+      </div>
+    </section>
+  `;
+}
+
 function renderCalendarTask(task) {
   const title = `${task.path}: ${task.text}`;
   return `
@@ -1531,14 +1943,23 @@ function renderCalendarTask(task) {
   `;
 }
 
+function renderCalendarFile(file, field) {
+  const title = `${file.path}: ${file[field] ? new Date(file[field]).toLocaleString() : ""}`;
+  return `
+    <button class="calendar-task calendar-file" type="button" data-path="${escapeAttribute(file.path)}" title="${escapeAttribute(title)}">
+      <span>${field === "createdAt" ? "➕" : "✏️"}</span>
+      <span>${escapeHtml(displayDocumentTitle(file.name || file.path.split("/").pop() || file.path))}</span>
+    </button>
+  `;
+}
+
 function bindCalendarEvents() {
   els.calendarView.querySelectorAll("[data-calendar-action]").forEach((button) => {
     button.addEventListener("click", () => {
       const action = button.getAttribute("data-calendar-action");
       if (action === "prev") state.calendarDate = shiftCalendarDate(-1);
       if (action === "next") state.calendarDate = shiftCalendarDate(1);
-      if (action === "today") state.calendarDate = state.calendarMode === "month" ? startOfMonth(new Date()) : new Date();
-      if (action === "toggle-mobile-mode") state.mobileCalendarMode = state.mobileCalendarMode === "agenda" ? "month" : "agenda";
+      if (action === "today") state.calendarDate = new Date();
       renderCalendar();
     });
   });
@@ -1546,14 +1967,23 @@ function bindCalendarEvents() {
   els.calendarView.querySelectorAll("[data-calendar-mode]").forEach((button) => {
     button.addEventListener("click", () => {
       state.calendarMode = button.getAttribute("data-calendar-mode") || "month";
-      if (state.calendarMode === "month") state.calendarDate = startOfMonth(state.calendarDate);
-      if (state.calendarMode === "week" || state.calendarMode === "day") state.calendarDate = new Date();
+      renderCalendar();
+    });
+  });
+
+  els.calendarView.querySelectorAll("[data-calendar-more]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const date = parseDateKey(button.getAttribute("data-calendar-more"));
+      if (!date) return;
+      state.calendarDate = date;
+      state.calendarMode = "day";
       renderCalendar();
     });
   });
 
   els.calendarView.querySelectorAll(".calendar-task").forEach((button) => {
-    bindTaskLongPress(button);
+    if (button.hasAttribute("data-line")) bindTaskLongPress(button);
     button.addEventListener("click", async () => {
       if (button.dataset.longPressed === "true") {
         button.dataset.longPressed = "";
@@ -1564,15 +1994,23 @@ function bindCalendarEvents() {
     });
   });
 
-  els.calendarView.querySelectorAll("[data-calendar-date]").forEach((target) => {
-    bindDateClick(target);
-  });
+  if (state.calendarKind === "tasks") {
+    els.calendarView.querySelectorAll("[data-calendar-date]").forEach((target) => {
+      bindDateClick(target);
+    });
+  }
 }
 
 function shiftCalendarDate(direction) {
   if (state.calendarMode === "day") return addDays(state.calendarDate, direction);
   if (state.calendarMode === "week") return addDays(state.calendarDate, direction * 7);
   return addMonths(state.calendarDate, direction);
+}
+
+function parseDateKey(value) {
+  const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
 }
 
 function bindTaskLongPress(button) {
@@ -1598,12 +2036,12 @@ function bindTaskLongPress(button) {
 
 async function toggleCalendarTask(path, lineNumber, button) {
   const node = state.files.get(path);
-  if (!node?.handle || !Number.isInteger(lineNumber) || lineNumber < 1) {
+  if (!canEditNode(node) || !Number.isInteger(lineNumber) || lineNumber < 1) {
     alert("실제 vault 파일에서만 완료 상태를 바꿀 수 있습니다.");
     return;
   }
 
-  const granted = await ensureWritePermission(node.handle);
+  const granted = await ensureNodeWritePermission(node);
   if (!granted) {
     alert("파일 편집 권한이 필요합니다.");
     return;
@@ -1622,11 +2060,10 @@ async function toggleCalendarTask(path, lineNumber, button) {
     lines[index] = nextLine;
     const nextContent = lines.join("\n");
 
-    await writeBackupFile(node, content);
-    await writeFileHandle(node.handle, nextContent);
-    const metadata = await readFileMetadata(node.handle);
+    const metadata = await writeNodeContent(node, nextContent, { backup: true, previousContent: content });
     Object.assign(node, metadata);
     refreshDirectoryMetadata();
+    if (typeof node.content === "string") node.content = nextContent;
 
     if (state.currentPath === path) {
       state.currentContent = nextContent;
@@ -1654,7 +2091,7 @@ function bindDateClick(target) {
 }
 
 async function openDateEditor(date) {
-  if (!date || !state.rootHandle) {
+  if (!date || (!state.rootHandle && !state.serverVaultWritable)) {
     alert("실제 vault를 먼저 열어야 날짜 편집을 시작할 수 있습니다.");
     return;
   }
@@ -1671,6 +2108,18 @@ async function getOrCreateDailyNote(date) {
   const path = `${dirPath}/${date}.md`;
   const existing = state.files.get(path);
   if (existing) return existing;
+
+  if (!state.rootHandle && state.serverVaultWritable) {
+    const initialContent = `# ${date}\n\n`;
+    const metadata = await writeServerFile(path, initialContent, { backup: false });
+    ensureDirectoryNodePath(dirPath);
+    const node = { name: `${date}.md`, path, content: initialContent, serverBacked: true, kind: "file", ...metadata };
+    state.files.set(path, node);
+    state.directories.get(dirPath).children.set(node.name, node);
+    refreshDirectoryMetadata();
+    renderTree();
+    return node;
+  }
 
   const dirHandle = await getOrCreateDirectoryHandle(dirPath);
   const handle = await dirHandle.getFileHandle(`${date}.md`, { create: true });
@@ -1747,6 +2196,18 @@ function groupTasksByDate(tasks) {
   tasks.forEach((task) => {
     if (!map.has(task.date)) map.set(task.date, []);
     map.get(task.date).push(task);
+  });
+  return map;
+}
+
+function groupRecentFilesByDate(files, field) {
+  const map = new Map();
+  files.forEach((file) => {
+    const value = file[field] || 0;
+    if (!value) return;
+    const date = formatDate(new Date(value));
+    if (!map.has(date)) map.set(date, []);
+    map.get(date).push(file);
   });
   return map;
 }
@@ -1988,7 +2449,10 @@ function renderInline(input) {
   let text = escapeHtml(input);
 
   text = text.replace(/!\[\[([^\]]+)\]\]/g, (_, target) => renderEmbed(target));
-  text = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, src) => `<img src="${escapeAttribute(src)}" alt="${escapeAttribute(alt)}" loading="lazy">`);
+  text = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, src) => {
+    const resolvedSrc = resolveMarkdownImageSrc(src);
+    return `<img src="${escapeAttribute(resolvedSrc)}" alt="${escapeAttribute(alt)}" loading="lazy">`;
+  });
   text = text.replace(/\[\[([^\]]+)\]\]/g, (_, target) => renderWikiLink(target));
   text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, href) => `<a href="${escapeAttribute(href)}" target="_blank" rel="noreferrer">${label}</a>`);
   text = text.replace(/`([^`]+)`/g, "<code>$1</code>");
@@ -2018,6 +2482,23 @@ function renderEmbed(rawTarget) {
   }
 
   return `<a class="wiki-link" href="#" data-wiki="${escapeAttribute(path)}">${escapeHtml(target)}</a>`;
+}
+
+function resolveMarkdownImageSrc(src) {
+  const cleanSrc = decodeURIComponent(src.trim().replace(/^<|>$/g, "")).split("#")[0];
+  if (!cleanSrc || /^(https?:|data:|blob:|\/)/i.test(cleanSrc)) return src;
+
+  const currentDir = state.currentPath?.includes("/") ? state.currentPath.split("/").slice(0, -1).join("/") : "";
+  const candidates = [cleanSrc];
+  if (currentDir) candidates.unshift(`${currentDir}/${cleanSrc}`);
+
+  for (const candidate of candidates) {
+    const path = resolveVaultPath(normalizeVaultPath(candidate));
+    if (!path || !isImageDocument(path)) continue;
+    return getFileUrl(path) || src;
+  }
+
+  return src;
 }
 
 function renderWikiLink(rawTarget) {
@@ -2273,6 +2754,7 @@ function flushImageGroup(images) {
 function getFileUrl(path) {
   const node = state.files.get(path);
   if (!node || typeof node.content === "string") return "";
+  if (node.url) return node.url;
   return state.objectUrls.get(path) || "";
 }
 
@@ -2292,8 +2774,10 @@ async function hydrateVaultImages(root) {
 async function getOrCreateFileUrl(path) {
   const node = state.files.get(path);
   if (!node || typeof node.content === "string") return "";
+  if (node.url) return node.url;
   const cached = state.objectUrls.get(path);
   if (cached) return cached;
+  if (!node.handle) return "";
   const file = await node.handle.getFile();
   const url = URL.createObjectURL(file);
   state.objectUrls.set(path, url);
