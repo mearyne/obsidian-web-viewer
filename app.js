@@ -163,7 +163,6 @@ els.collapseTreeButton.addEventListener("click", collapseAllTree);
 els.folderPathInput?.addEventListener("input", renderTree);
 els.calendarPathInput?.addEventListener("input", handleCalendarFilterInput);
 els.dailyNotePathInput?.addEventListener("input", updateDailyNotePath);
-els.viewerWrap.addEventListener("scroll", handleViewerScroll, { passive: true });
 els.viewerWrap.addEventListener("click", closeSidebarFromMain);
 els.historyBackButton.addEventListener("click", navigateHistoryBack);
 els.historyForwardButton.addEventListener("click", navigateHistoryForward);
@@ -272,21 +271,6 @@ initSidebarPin();
 loadSavedVaults();
 loadSampleVault();
 setInterval(refreshCalendarIfVisible, CALENDAR_REFRESH_INTERVAL);
-
-let lastViewerScrollTop = 0;
-
-function handleViewerScroll() {
-  const top = els.viewerWrap.scrollTop;
-  const delta = top - lastViewerScrollTop;
-
-  if (top < 12 || delta < -2) {
-    document.body.classList.remove("titlebar-hidden");
-  } else if (delta > 4 && top > 72) {
-    document.body.classList.add("titlebar-hidden");
-  }
-
-  lastViewerScrollTop = Math.max(0, top);
-}
 
 function closeSidebarFromMain(event) {
   if (event.target.closest("button, a, input, textarea, select, summary, details, .loading-overlay")) return;
@@ -1148,10 +1132,11 @@ function renderPlainTextDocument(content) {
 function renderCodeDocument(content, path) {
   els.markdownView.classList.add("plain-text-mode", "code-document");
   const pre = document.createElement("pre");
-  pre.dataset.language = codeLanguageFromPath(path);
+  const language = codeLanguageFromPath(path);
+  pre.dataset.language = language;
   const code = document.createElement("code");
-  code.className = `language-${pre.dataset.language}`;
-  code.textContent = content;
+  code.className = `language-${language}`;
+  code.innerHTML = highlightCode(content, language);
   pre.append(code);
   els.markdownView.replaceChildren(pre);
 }
@@ -1617,11 +1602,6 @@ function closeImageLightbox(event) {
   els.imageLightboxImg.removeAttribute("src");
 }
 
-function showTitlebar() {
-  document.body.classList.remove("titlebar-hidden");
-  lastViewerScrollTop = els.viewerWrap.scrollTop;
-}
-
 function showLoading(message) {
   showLoadingOverlay(message);
 }
@@ -1873,7 +1853,6 @@ function waitForBrowser() {
 
 function showNoteView() {
   state.activeView = "note";
-  showTitlebar();
   els.markdownView.hidden = false;
   els.editorShell.hidden = true;
   els.calendarView.hidden = true;
@@ -1885,7 +1864,6 @@ function showNoteView() {
 
 function showCalendarView() {
   state.activeView = "calendar";
-  showTitlebar();
   updateCalendarTitle();
   els.markdownView.hidden = true;
   els.editorShell.hidden = true;
@@ -2055,9 +2033,6 @@ function renderCalendar() {
     const classes = ["calendar-cell"];
     if (formatMonth(date) !== monthKey) classes.push("outside-month");
     if (dateKey === todayKey) classes.push("today");
-    const rangePositions = calendarRangeClasses(dayTasks, dateKey);
-    classes.push(...rangePositions);
-
     cells.push(`
       <div class="${classes.join(" ")}" data-calendar-date="${dateKey}">
         <div class="calendar-day">${date.getDate()}</div>
@@ -2109,7 +2084,7 @@ function updateSyncStatus() {
   }
 
   els.syncStatus.hidden = false;
-  els.syncStatus.className = `sync-status ${state.calendarRefreshing ? "refreshing" : state.calendarCacheState}`;
+  els.syncStatus.className = `sync-status sync-status-bar ${state.calendarRefreshing ? "refreshing" : state.calendarCacheState}`;
 
   if (state.calendarRefreshing) {
     els.syncStatus.textContent = "⟳";
@@ -2200,23 +2175,13 @@ function renderRecentAgendaDay(date, files, isToday, field) {
 function renderCalendarTask(task, dateKey = task.date) {
   const title = `${task.path}: ${task.text}`;
   const range = taskRangePosition(task, dateKey);
-  const label = range && range !== "single" && range !== "start" ? "" : escapeHtml(task.text);
-  const ariaLabel = range && range !== "single" && range !== "start" ? `Continuation: ${task.text}` : task.text;
+  const colorClass = range ? `range-color-${rangeColorIndex(task)}` : "";
   return `
-    <button class="calendar-task ${task.checked ? "done" : ""} ${task.type} ${range ? `range-task range-${range}` : ""}" type="button" data-path="${escapeAttribute(task.path)}" data-line="${task.line}" title="${escapeAttribute(title)}" aria-label="${escapeAttribute(ariaLabel)}">
+    <button class="calendar-task ${task.checked ? "done" : ""} ${task.type} ${range ? `range-task ${colorClass}` : ""}" type="button" data-path="${escapeAttribute(task.path)}" data-line="${task.line}" title="${escapeAttribute(title)}">
       <span>${taskTypeIcon(task.type)}</span>
-      <span>${label}</span>
+      <span>${escapeHtml(task.text)}</span>
     </button>
   `;
-}
-
-function calendarRangeClasses(tasks, dateKey) {
-  const positions = new Set();
-  tasks.forEach((task) => {
-    const position = taskRangePosition(task, dateKey);
-    if (position) positions.add(`has-range-${position}`);
-  });
-  return [...positions];
 }
 
 function taskRangePosition(task, dateKey) {
@@ -2231,6 +2196,13 @@ function taskRangePosition(task, dateKey) {
   if (dateKey === fromKey) return "start";
   if (dateKey === toKey) return "end";
   return "middle";
+}
+
+function rangeColorIndex(task) {
+  const key = `${task.path}:${task.line}:${task.dates?.start || ""}:${task.dates?.end || task.dates?.due || ""}`;
+  let hash = 0;
+  for (let index = 0; index < key.length; index += 1) hash = (hash * 31 + key.charCodeAt(index)) >>> 0;
+  return hash % 6;
 }
 
 function renderCalendarFile(file, field) {
@@ -2641,6 +2613,7 @@ function renderMarkdown(source) {
   const html = [];
   let i = 0;
   let currentDepth = 0;
+  const openHeadings = [];
 
   if (frontmatter) html.push(renderFrontmatter(frontmatter));
 
@@ -2653,6 +2626,7 @@ function renderMarkdown(source) {
     }
 
     if (line.startsWith("```")) {
+      const language = line.slice(3).trim().split(/\s+/)[0] || "";
       const code = [];
       i += 1;
       while (i < lines.length && !lines[i].startsWith("```")) {
@@ -2660,14 +2634,19 @@ function renderMarkdown(source) {
         i += 1;
       }
       i += 1;
-      html.push(`<pre${depthAttribute(currentDepth)}><code>${escapeHtml(code.join("\n"))}</code></pre>`);
+      html.push(renderCodeBlock(code.join("\n"), language, currentDepth));
       continue;
     }
 
     const heading = line.match(/^(#{1,6})\s+(.+)$/);
     if (heading) {
       const level = heading[1].length;
-      html.push(`<h${level} class="heading-level heading-level-${level}" data-heading-label="h${level}">${renderInline(heading[2])}</h${level}>`);
+      while (openHeadings.length && openHeadings[openHeadings.length - 1] >= level) {
+        html.push("</details>");
+        openHeadings.pop();
+      }
+      html.push(`<details class="heading-section heading-section-${level}" open><summary><h${level} class="heading-level heading-level-${level}" data-heading-label="h${level}">${renderInline(heading[2])}</h${level}></summary>`);
+      openHeadings.push(level);
       currentDepth = level;
       i += 1;
       continue;
@@ -2741,7 +2720,72 @@ function renderMarkdown(source) {
     html.push(`<p${depthAttribute(currentDepth)}>${renderInline(paragraph.join(" "))}</p>`);
   }
 
+  while (openHeadings.length) {
+    html.push("</details>");
+    openHeadings.pop();
+  }
+
   return html.join("\n");
+}
+
+function renderCodeBlock(code, language, depth) {
+  const normalizedLanguage = codeLanguageAlias(language);
+  const depthClassName = depthClass(depth);
+  const classes = ["code-block", `language-${normalizedLanguage}`, depthClassName].filter(Boolean).join(" ");
+  return `<pre class="${escapeAttribute(classes)}" data-language="${escapeAttribute(normalizedLanguage)}"><code>${highlightCode(code, normalizedLanguage)}</code></pre>`;
+}
+
+function codeLanguageAlias(language) {
+  const clean = String(language || "text").toLowerCase();
+  return {
+    ahk: "autohotkey",
+    bash: "shell",
+    cmd: "batch",
+    js: "javascript",
+    ps1: "powershell",
+    py: "python",
+    ts: "typescript",
+    yml: "yaml",
+  }[clean] || clean || "text";
+}
+
+function highlightCode(code, language) {
+  const keywordSets = {
+    css: "\\b(?:align-items|background|border|color|content|display|font-size|font-weight|gap|grid|height|justify-content|margin|overflow|padding|position|width)\\b",
+    html: "\\b(?:DOCTYPE|html|head|body|main|section|article|header|footer|div|span|button|input|script|style|link|meta|class|id)\\b",
+    javascript: "\\b(?:const|let|var|function|return|if|else|for|while|class|new|await|async|import|export|from|try|catch|throw|switch|case|break|continue|true|false|null|undefined)\\b",
+    typescript: "\\b(?:const|let|var|function|return|if|else|for|while|class|interface|type|new|await|async|import|export|from|try|catch|throw|switch|case|break|continue|true|false|null|undefined|private|public|readonly)\\b",
+    python: "\\b(?:def|return|if|elif|else|for|while|class|import|from|as|try|except|raise|with|lambda|True|False|None|async|await|yield|in|is|not|and|or)\\b",
+    java: "\\b(?:class|public|private|protected|static|final|void|int|long|double|float|boolean|char|new|return|if|else|for|while|switch|case|break|continue|try|catch|throw|throws|extends|implements|import|package|null|true|false)\\b",
+    autohotkey: "\\b(?:if|else|return|class|try|catch|throw|Loop|While|For|In|SetTimer|Send|Click|Sleep|Hotkey|MsgBox|WinActivate|WinWait)\\b",
+    shell: "\\b(?:if|then|else|fi|for|while|do|done|case|esac|function|return|export|local|sudo|echo|cd|grep|awk|sed)\\b",
+    powershell: "\\b(?:function|param|if|else|elseif|foreach|while|return|try|catch|throw|New-Object|Get-ChildItem|Set-Content|Write-Host)\\b",
+  };
+  const tokens = [];
+  const stash = (className, value) => {
+    const token = `\u0000${tokens.length}\u0000`;
+    tokens.push(`<span class="${className}">${value}</span>`);
+    return token;
+  };
+  const commentPatterns = {
+    autohotkey: /(;.*)$/gm,
+    java: /(\/\/.*)$/gm,
+    javascript: /(\/\/.*)$/gm,
+    powershell: /(#.*)$/gm,
+    python: /(#.*)$/gm,
+    shell: /(#.*)$/gm,
+    typescript: /(\/\/.*)$/gm,
+  };
+
+  let highlighted = escapeHtml(code)
+    .replace(/(&quot;.*?&quot;|&#039;.*?&#039;|`.*?`)/g, (value) => stash("code-string", value));
+
+  if (commentPatterns[language]) {
+    highlighted = highlighted.replace(commentPatterns[language], (value) => stash("code-comment", value));
+  }
+
+  highlighted = highlighted.replace(new RegExp(keywordSets[language] || "\\b(?:true|false|null)\\b", "g"), '<span class="code-keyword">$&</span>');
+  return highlighted.replace(/\u0000(\d+)\u0000/g, (_, index) => tokens[Number(index)] || "");
 }
 
 function renderBlocks(lines) {

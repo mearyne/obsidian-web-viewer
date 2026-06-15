@@ -401,15 +401,7 @@ button:disabled {
   padding: 10px 22px;
   position: sticky;
   top: 0;
-  transform: translateY(0);
-  transition: margin-bottom 150ms ease, transform 150ms ease, box-shadow 150ms ease;
   z-index: 16;
-}
-
-.titlebar-hidden .note-header {
-  box-shadow: none;
-  margin-bottom: -55px;
-  transform: translateY(-100%);
 }
 
 .header-left {
@@ -467,6 +459,17 @@ button:disabled {
   to {
     transform: rotate(360deg);
   }
+}
+
+.sync-status-bar {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  bottom: 12px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.16);
+  min-width: 30px;
+  position: fixed;
+  right: 12px;
+  z-index: 45;
 }
 
 .header-left > div {
@@ -709,6 +712,10 @@ button:disabled {
   position: relative;
 }
 
+.viewer-wrap:has(.calendar-view:not([hidden])) {
+  overflow: hidden;
+}
+
 .loading-overlay {
   align-items: center;
   background: color-mix(in srgb, var(--surface) 76%, transparent);
@@ -817,6 +824,40 @@ button:disabled {
   display: block;
   min-width: max-content;
   tab-size: 2;
+}
+
+.markdown-body .code-block {
+  background: var(--code);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: auto;
+  padding: 32px 14px 14px;
+  position: relative;
+}
+
+.markdown-body .code-block::before {
+  color: var(--faint);
+  content: attr(data-language);
+  font-size: 11px;
+  font-weight: 650;
+  left: 14px;
+  position: absolute;
+  text-transform: uppercase;
+  top: 10px;
+}
+
+.code-keyword {
+  color: #b47cff;
+  font-weight: 650;
+}
+
+.code-string {
+  color: #3f9f69;
+}
+
+.code-comment {
+  color: var(--faint);
+  font-style: italic;
 }
 
 .editor-shell {
@@ -961,6 +1002,27 @@ button:disabled {
   display: grid;
   gap: 8px;
   grid-template-columns: auto minmax(0, 1fr);
+}
+
+.heading-section {
+  margin: 0;
+}
+
+.heading-section > summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.heading-section > summary::-webkit-details-marker {
+  display: none;
+}
+
+.heading-section > summary .heading-level::before {
+  content: attr(data-heading-label) " ▾";
+}
+
+.heading-section:not([open]) > summary .heading-level::before {
+  content: attr(data-heading-label) " ▸";
 }
 
 .markdown-body .heading-level::before {
@@ -1331,8 +1393,10 @@ button:disabled {
 }
 
 .calendar-view {
+  height: calc(100vh - 132px);
   margin: 0 auto;
   max-width: 1180px;
+  overflow: hidden;
   padding: 12px 0 48px;
 }
 
@@ -1344,8 +1408,8 @@ button:disabled {
 .calendar-toolbar {
   align-items: center;
   display: grid;
-  grid-template-columns: 34px 108px 34px 64px 174px auto minmax(0, 1fr);
-  gap: 4px;
+  grid-template-columns: 24px 76px 24px 56px 174px auto minmax(0, 1fr);
+  gap: 2px;
   min-height: 36px;
   overflow-x: auto;
 }
@@ -1422,7 +1486,7 @@ button:disabled {
 .calendar-cell {
   border-bottom: 1px solid var(--line);
   border-right: 1px solid var(--line);
-  min-height: 124px;
+  height: 124px;
   min-width: 0;
   padding: 7px;
   position: relative;
@@ -1436,38 +1500,6 @@ button:disabled {
 
 .calendar-cell.today {
   box-shadow: inset 0 0 0 2px var(--accent);
-}
-
-.calendar-cell.has-range-start::before,
-.calendar-cell.has-range-middle::before,
-.calendar-cell.has-range-end::before {
-  background: color-mix(in srgb, var(--accent) 24%, var(--surface));
-  border-bottom: 1px solid color-mix(in srgb, var(--accent) 68%, var(--line));
-  border-top: 1px solid color-mix(in srgb, var(--accent) 68%, var(--line));
-  content: "";
-  height: 31px;
-  left: 0;
-  pointer-events: none;
-  position: absolute;
-  right: 0;
-  top: 36px;
-  z-index: 0;
-}
-
-.calendar-cell.has-range-start::before {
-  border-left: 1px solid color-mix(in srgb, var(--accent) 68%, var(--line));
-  border-radius: 5px 0 0 5px;
-  left: 7px;
-}
-
-.calendar-cell.has-range-end::before {
-  border-radius: 0 5px 5px 0;
-  border-right: 1px solid color-mix(in srgb, var(--accent) 68%, var(--line));
-  right: 7px;
-}
-
-.calendar-cell.has-range-start.has-range-end::before {
-  border-radius: 5px;
 }
 
 .calendar-cell.drag-range,
@@ -1552,41 +1584,15 @@ button:disabled {
 }
 
 .calendar-task.range-task {
-  background: color-mix(in srgb, var(--accent) 24%, var(--surface));
-  border-color: color-mix(in srgb, var(--accent) 62%, var(--line));
   color: var(--text);
-  position: relative;
 }
 
-.calendar-task.range-start {
-  border-bottom-right-radius: 0;
-  border-top-right-radius: 0;
-  margin-right: -8px;
-}
-
-.calendar-task.range-middle {
-  border-left-color: transparent;
-  border-radius: 0;
-  border-right-color: transparent;
-  grid-template-columns: minmax(0, 1fr);
-  margin-left: -8px;
-  margin-right: -8px;
-}
-
-.calendar-task.range-end {
-  border-bottom-left-radius: 0;
-  border-left-color: transparent;
-  border-top-left-radius: 0;
-  grid-template-columns: minmax(0, 1fr);
-  margin-left: -8px;
-}
-
-.calendar-task.range-middle span:first-child,
-.calendar-task.range-end span:first-child,
-.calendar-task.range-middle span:last-child,
-.calendar-task.range-end span:last-child {
-  display: none;
-}
+.calendar-task.range-color-0 { background: #3b3559; border-color: #8f7cff; }
+.calendar-task.range-color-1 { background: #2f443a; border-color: #57b982; }
+.calendar-task.range-color-2 { background: #4b392a; border-color: #d79754; }
+.calendar-task.range-color-3 { background: #2f4054; border-color: #68a8e8; }
+.calendar-task.range-color-4 { background: #4d3038; border-color: #e17191; }
+.calendar-task.range-color-5 { background: #3f3f2c; border-color: #c7c95a; }
 
 .calendar-file-icon.created {
   color: #2684ff;
@@ -1610,6 +1616,7 @@ button.calendar-more {
 
 .calendar-agenda {
   display: none;
+  overflow: hidden;
 }
 
 .calendar-mode-week .calendar-weekdays,
@@ -1708,10 +1715,11 @@ button.calendar-more {
   }
 
   .calendar-view {
+    height: calc(100vh - 112px);
     margin: 0;
     max-width: none;
     min-width: 0;
-    padding: 4px 0 24px;
+    padding: 4px 0 8px;
     width: 100%;
   }
 
@@ -1721,8 +1729,8 @@ button.calendar-more {
   }
 
   .calendar-toolbar {
-    gap: 5px;
-    grid-template-columns: 32px 82px 32px 56px 138px auto minmax(64px, 1fr);
+    gap: 3px;
+    grid-template-columns: 26px 74px 26px 52px 138px auto minmax(48px, 1fr);
   }
 
   .calendar-toolbar strong {
@@ -1786,7 +1794,7 @@ button.calendar-more {
   }
 
   .calendar-cell {
-    min-height: 78px;
+    height: clamp(48px, calc((100vh - 178px) / 6), 68px);
     padding: 3px;
   }
 
@@ -1809,6 +1817,10 @@ button.calendar-more {
 
   .calendar-task span:first-child {
     display: none;
+  }
+
+  .calendar-file span:first-child {
+    display: inline;
   }
 
   .calendar-agenda-day {
