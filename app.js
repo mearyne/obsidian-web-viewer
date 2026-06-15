@@ -90,6 +90,8 @@ const els = {
   loadingText: document.querySelector("#loadingText"),
   markdownToggleButton: document.querySelector("#markdownToggleButton"),
   fullscreenButton: document.querySelector("#fullscreenButton"),
+  collapseHeadingsButton: document.querySelector("#collapseHeadingsButton"),
+  expandHeadingLevelButton: document.querySelector("#expandHeadingLevelButton"),
   historyBackButton: document.querySelector("#historyBackButton"),
   historyForwardButton: document.querySelector("#historyForwardButton"),
   webEditButton: document.querySelector("#webEditButton"),
@@ -186,6 +188,8 @@ els.calendarView.addEventListener("pointercancel", clearCalendarSwipe, true);
 els.historyBackButton.addEventListener("click", navigateHistoryBack);
 els.historyForwardButton.addEventListener("click", navigateHistoryForward);
 els.fullscreenButton?.addEventListener("click", enterFullscreen);
+els.collapseHeadingsButton?.addEventListener("click", collapseAllHeadings);
+els.expandHeadingLevelButton?.addEventListener("click", expandNextHeadingLevel);
 els.markdownToggleButton.addEventListener("click", toggleMarkdownMode);
 els.webEditButton.addEventListener("click", enterEditMode);
 els.saveEditButton.addEventListener("click", saveCurrentEdit);
@@ -1241,6 +1245,31 @@ function renderPlainTextDocument(content) {
   els.markdownView.replaceChildren(pre);
 }
 
+function collapseAllHeadings() {
+  els.markdownView.querySelectorAll(".heading-section").forEach((section) => {
+    section.open = false;
+  });
+}
+
+function expandNextHeadingLevel() {
+  const sections = [...els.markdownView.querySelectorAll(".heading-section")];
+  if (!sections.length) return;
+  const openLevels = sections
+    .filter((section) => section.open)
+    .map((section) => headingSectionLevel(section))
+    .filter(Boolean);
+  const nextLevel = openLevels.length ? Math.min(6, Math.max(...openLevels) + 1) : Math.min(...sections.map(headingSectionLevel).filter(Boolean));
+  sections.forEach((section) => {
+    const level = headingSectionLevel(section);
+    if (level && level <= nextLevel) section.open = true;
+  });
+}
+
+function headingSectionLevel(section) {
+  const match = [...section.classList].find((className) => className.startsWith("heading-section-"))?.match(/(\d)$/);
+  return match ? Number(match[1]) : 0;
+}
+
 function renderCodeDocument(content, path) {
   els.markdownView.classList.add("plain-text-mode", "code-document");
   const pre = document.createElement("pre");
@@ -2027,6 +2056,11 @@ function parseTasks(content, path) {
       const checked = match[1].toLowerCase() === "x" || match[1] === "-";
       const rawText = match[2].trim();
       const dates = extractTaskDates(rawText);
+      const implicitDailyDate = dailyDateFromPath(path);
+      if (!dates.due && !dates.end && !dates.scheduled && !dates.start && !dates.done && !dates.cancelled && implicitDailyDate) {
+        dates.due = implicitDailyDate;
+        dates.end = implicitDailyDate;
+      }
       const displayDate = dates.due || dates.end || dates.scheduled || dates.start || dates.done || dates.cancelled;
       if (!displayDate) return [];
 
@@ -2043,6 +2077,15 @@ function parseTasks(content, path) {
         },
       ];
     });
+}
+
+function dailyDateFromPath(path) {
+  const dailyPath = normalizeDailyNotePath(state.dailyNotePath || els.dailyNotePathInput?.value || "");
+  const normalizedPath = normalizeVaultPath(path || "");
+  if (!dailyPath || !normalizedPath.startsWith(`${dailyPath}/`)) return "";
+  const name = normalizedPath.split("/").pop() || "";
+  const match = name.match(/^(\d{4}-\d{2}-\d{2})\.md$/);
+  return match ? match[1] : "";
 }
 
 function extractTaskDates(text) {
