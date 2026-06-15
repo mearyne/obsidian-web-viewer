@@ -108,6 +108,13 @@ button:disabled {
   margin-left: min(var(--sidebar-width), 90vw);
 }
 
+.sidebar-pinned .markdown-body,
+.sidebar-pinned .editor-shell,
+.sidebar-pinned .calendar-view {
+  margin-left: 0;
+  margin-right: auto;
+}
+
 .sidebar-resize-handle {
   bottom: 0;
   cursor: ew-resize;
@@ -303,6 +310,45 @@ button:disabled {
 
 .tree-row.active {
   font-weight: 650;
+}
+
+.tree-row.not-openable {
+  opacity: 0.48;
+}
+
+.tree-row[class*="file-ext-"] .tree-name::before {
+  border-radius: 999px;
+  content: "";
+  display: inline-block;
+  height: 7px;
+  margin-right: 6px;
+  width: 7px;
+}
+
+.file-ext-md .tree-name::before,
+.file-ext-excalidraw .tree-name::before {
+  background: #6f6bdc;
+}
+
+.file-ext-py .tree-name::before,
+.file-ext-sh .tree-name::before,
+.file-ext-bat .tree-name::before {
+  background: #2f9f6b;
+}
+
+.file-ext-js .tree-name::before,
+.file-ext-ts .tree-name::before,
+.file-ext-json .tree-name::before {
+  background: #c4932f;
+}
+
+.file-ext-png .tree-name::before,
+.file-ext-jpg .tree-name::before,
+.file-ext-jpeg .tree-name::before,
+.file-ext-gif .tree-name::before,
+.file-ext-webp .tree-name::before,
+.file-ext-svg .tree-name::before {
+  background: #4d8fd6;
 }
 
 .tree-toggle {
@@ -712,7 +758,7 @@ button:disabled {
 }
 
 .markdown-body.plain-text-mode {
-  max-width: min(980px, calc(100vw - 48px));
+  max-width: var(--line-width);
 }
 
 .markdown-body.plain-text-mode pre {
@@ -943,16 +989,20 @@ button:disabled {
   display: block;
   height: auto;
   margin: 18px auto;
-  max-width: 100%;
+  max-height: min(400px, calc(100vh - 120px));
+  max-width: min(400px, 100%);
+  object-fit: contain;
   width: auto;
 }
 
 .markdown-body > img,
 .markdown-body p > img:only-child {
-  height: min(520px, 70vh);
-  object-fit: cover;
+  height: auto;
+  max-height: min(400px, calc(100vh - 120px));
+  max-width: min(400px, 100%);
+  object-fit: contain;
   object-position: center;
-  width: 100%;
+  width: auto;
 }
 
 .image-grid {
@@ -964,10 +1014,11 @@ button:disabled {
 
 .image-grid img {
   aspect-ratio: 4 / 3;
-  height: 100%;
+  height: auto;
   margin: 0;
-  max-height: none;
-  object-fit: cover;
+  max-height: min(400px, calc(100vh - 120px));
+  max-width: min(400px, 100%);
+  object-fit: contain;
   width: 100%;
 }
 
@@ -1313,6 +1364,10 @@ button:disabled {
 .calendar-task.done {
   opacity: 0.62;
   text-decoration: line-through;
+}
+
+.calendar-file-icon.created {
+  color: #2684ff;
 }
 
 .calendar-more,

@@ -29,6 +29,9 @@ const state = {
   dailyNotePath: "1. Daily",
   sidebarResize: null,
   sidebarPinned: false,
+  activeTabId: "main",
+  navigationHistories: new Map(),
+  navigatingHistory: false,
   lightboxImages: [],
   lightboxIndex: -1,
   treeSortMode: "created",
@@ -37,6 +40,8 @@ const state = {
   editorDirty: false,
   autoSaveTimer: null,
   autoSaveInFlight: false,
+  calendarDragStartDate: "",
+  calendarDragHandled: false,
 };
 
 const els = {
@@ -71,6 +76,8 @@ const els = {
   loadingOverlay: document.querySelector("#loadingOverlay"),
   loadingText: document.querySelector("#loadingText"),
   markdownToggleButton: document.querySelector("#markdownToggleButton"),
+  historyBackButton: document.querySelector("#historyBackButton"),
+  historyForwardButton: document.querySelector("#historyForwardButton"),
   webEditButton: document.querySelector("#webEditButton"),
   saveEditButton: document.querySelector("#saveEditButton"),
   randomFileButton: document.querySelector("#randomFileButton"),
@@ -153,6 +160,8 @@ els.calendarPathInput?.addEventListener("input", handleCalendarFilterInput);
 els.dailyNotePathInput?.addEventListener("input", updateDailyNotePath);
 els.viewerWrap.addEventListener("scroll", handleViewerScroll, { passive: true });
 els.viewerWrap.addEventListener("click", closeSidebarFromMain);
+els.historyBackButton.addEventListener("click", navigateHistoryBack);
+els.historyForwardButton.addEventListener("click", navigateHistoryForward);
 els.markdownToggleButton.addEventListener("click", toggleMarkdownMode);
 els.webEditButton.addEventListener("click", enterEditMode);
 els.saveEditButton.addEventListener("click", saveCurrentEdit);
@@ -172,6 +181,43 @@ window.addEventListener("keydown", handleGlobalKeydown, true);
 document.addEventListener("pointerdown", closeSidebarFromOutside);
 
 function handleGlobalKeydown(event) {
+  if (event.altKey && !event.ctrlKey && !event.metaKey && event.code === "Digit1") {
+    event.preventDefault();
+    event.stopPropagation();
+    openSidebar();
+    return;
+  }
+
+  if (event.ctrlKey && event.shiftKey && !event.metaKey && event.code === "KeyF") {
+    event.preventDefault();
+    event.stopPropagation();
+    openSidebar();
+    els.searchInput.focus();
+    els.searchInput.select();
+    return;
+  }
+
+  if (!isTypingTarget(event.target) && !event.ctrlKey && !event.metaKey && !event.altKey) {
+    if (event.key.toLowerCase() === "e") {
+      event.preventDefault();
+      event.stopPropagation();
+      enterEditMode();
+      return;
+    }
+    if (event.key.toLowerCase() === "r") {
+      event.preventDefault();
+      event.stopPropagation();
+      openRandomMarkdown();
+      return;
+    }
+    if (event.key.toLowerCase() === "c") {
+      event.preventDefault();
+      event.stopPropagation();
+      openNextCalendarKind();
+      return;
+    }
+  }
+
   if (isShortcut(event, "KeyE", "e")) {
     event.preventDefault();
     event.stopPropagation();
@@ -188,6 +234,10 @@ function handleGlobalKeydown(event) {
   } else if (event.key === "ArrowRight") {
     showAdjacentLightboxImage(1);
   }
+}
+
+function isTypingTarget(target) {
+  return Boolean(target?.closest?.("input, textarea, select, [contenteditable='true']"));
 }
 
 initTheme();
@@ -218,6 +268,12 @@ function handleViewerScroll() {
 function closeSidebarFromMain(event) {
   if (event.target.closest("button, a, input, textarea, select, summary, details, .loading-overlay")) return;
   closeSidebar();
+}
+
+function openSidebar() {
+  document.body.classList.add("sidebar-open");
+  els.sidebarToggle.setAttribute("aria-expanded", "true");
+  els.sidebarToggle.setAttribute("aria-label", "문서 목록 닫기");
 }
 
 function closeSidebarFromOutside(event) {
@@ -298,6 +354,7 @@ async function openRandomMarkdown() {
   const candidates = files.length > 1 && state.currentPath ? files.filter((path) => path !== state.currentPath) : files;
   const path = candidates[Math.floor(Math.random() * candidates.length)];
   await openFile(path);
+  scrollViewerTop();
 }
 
 async function loadSavedVaults() {
@@ -597,11 +654,11 @@ function makeDirNode(name, path) {
 }
 
 function isIndexedFile(name) {
-  return /\.(md|excalidraw|png|jpe?g|gif|webp|svg|bmp)$/i.test(name);
+  return /\.(md|excalidraw|txt|py|bat|sh|js|ts|json|yaml|yml|css|html|xml|csv|log|png|jpe?g|gif|webp|svg|bmp|pdf|zip)$/i.test(name);
 }
 
 function isTextVaultFilePath(name) {
-  return /\.(md|excalidraw)$/i.test(name);
+  return /\.(md|excalidraw|txt|py|bat|sh|js|ts|json|yaml|yml|css|html|xml|csv|log)$/i.test(name);
 }
 
 function isMarkdownDocument(name) {
@@ -613,7 +670,7 @@ function isExcalidrawDocument(name) {
 }
 
 function isOpenableDocument(name) {
-  return isMarkdownDocument(name) || isExcalidrawDocument(name);
+  return isTextVaultFilePath(name);
 }
 
 function isImageDocument(name) {
@@ -712,7 +769,6 @@ function expandPathToFile(path) {
 
 function renderDirChildren(dir, parent, matcher, folderPaths) {
   const entries = [...dir.children.values()]
-    .filter((node) => node.kind === "directory" || isOpenableDocument(node.name))
     .sort(compareTreeNodes);
 
   entries.forEach((node) => {
@@ -727,6 +783,10 @@ function renderDirChildren(dir, parent, matcher, folderPaths) {
     const row = document.createElement("button");
     row.type = "button";
     row.className = "tree-row";
+    if (node.kind === "file") {
+      row.classList.add(`file-ext-${extensionOf(node.name) || "file"}`);
+      if (!isOpenableDocument(node.name)) row.classList.add("not-openable");
+    }
     if (node.path === state.currentPath) row.classList.add("active");
 
     const toggle = document.createElement("span");
@@ -743,7 +803,7 @@ function renderDirChildren(dir, parent, matcher, folderPaths) {
       if (node.kind === "directory") {
         node.collapsed = !node.collapsed;
         renderTree();
-      } else {
+      } else if (isOpenableDocument(node.name)) {
         await openFile(node.path);
       }
     });
@@ -858,6 +918,7 @@ async function openFile(path) {
     state.currentContent = content;
     state.currentNode = node;
     state.editMode = false;
+    pushNavigationHistory({ type: "file", path });
     els.notePath.textContent = path;
     els.noteTitle.textContent = displayDocumentTitle(node.name);
     updateEditButtons();
@@ -867,6 +928,64 @@ async function openFile(path) {
   } finally {
     hideLoading();
   }
+}
+
+function activeNavigationHistory() {
+  if (!state.navigationHistories.has(state.activeTabId)) {
+    state.navigationHistories.set(state.activeTabId, { entries: [], index: -1 });
+  }
+  return state.navigationHistories.get(state.activeTabId);
+}
+
+function pushNavigationHistory(entry) {
+  if (state.navigatingHistory) {
+    updateHistoryButtons();
+    return;
+  }
+  const history = activeNavigationHistory();
+  const current = history.entries[history.index];
+  if (current?.type === entry.type && current?.path === entry.path) {
+    updateHistoryButtons();
+    return;
+  }
+  history.entries = history.entries.slice(0, history.index + 1).concat(entry);
+  history.index = history.entries.length - 1;
+  updateHistoryButtons();
+}
+
+async function navigateHistoryBack() {
+  const history = activeNavigationHistory();
+  if (history.index <= 0) return;
+  history.index -= 1;
+  await openHistoryEntry(history.entries[history.index]);
+}
+
+async function navigateHistoryForward() {
+  const history = activeNavigationHistory();
+  if (history.index >= history.entries.length - 1) return;
+  history.index += 1;
+  await openHistoryEntry(history.entries[history.index]);
+}
+
+async function openHistoryEntry(entry) {
+  if (!entry) return;
+  state.navigatingHistory = true;
+  try {
+    if (entry.type === "file") await openFile(entry.path);
+  } finally {
+    state.navigatingHistory = false;
+    updateHistoryButtons();
+  }
+}
+
+function updateHistoryButtons() {
+  const history = activeNavigationHistory();
+  if (els.historyBackButton) els.historyBackButton.disabled = history.index <= 0;
+  if (els.historyForwardButton) els.historyForwardButton.disabled = history.index >= history.entries.length - 1;
+}
+
+function scrollViewerTop() {
+  els.viewerWrap.scrollTo({ top: 0, behavior: "auto" });
 }
 
 async function readFileNode(node) {
@@ -1893,8 +2012,8 @@ function calendarTitle() {
   if (state.calendarMode === "day") return formatDate(state.calendarDate);
   if (state.calendarMode === "week") {
     const start = addDays(state.calendarDate, -1);
-    const end = addDays(state.calendarDate, 6);
-    return `${formatDate(start)} - ${formatDate(end)}`;
+    const week = Math.ceil((start.getDate() + startOfMonth(start).getDay()) / 7);
+    return `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")} ${week}W`;
   }
 
   const month = startOfMonth(state.calendarDate);
@@ -1947,7 +2066,7 @@ function renderCalendarFile(file, field) {
   const title = `${file.path}: ${file[field] ? new Date(file[field]).toLocaleString() : ""}`;
   return `
     <button class="calendar-task calendar-file" type="button" data-path="${escapeAttribute(file.path)}" title="${escapeAttribute(title)}">
-      <span>${field === "createdAt" ? "➕" : "✏️"}</span>
+      <span class="${field === "createdAt" ? "calendar-file-icon created" : "calendar-file-icon"}">${field === "createdAt" ? "➕" : "✏️"}</span>
       <span>${escapeHtml(displayDocumentTitle(file.name || file.path.split("/").pop() || file.path))}</span>
     </button>
   `;
@@ -2054,8 +2173,11 @@ async function toggleCalendarTask(path, lineNumber, button) {
     const index = lineNumber - 1;
     if (!lines[index] || !/^\s*[-*+]\s+\[[ xX-]\]/.test(lines[index])) return;
 
-    const nextLine = lines[index].replace(/^(\s*[-*+]\s+\[)([ xX-])(\])/, (_, head, checked, tail) => {
-      return `${head}${checked.toLowerCase() === "x" || checked === "-" ? " " : "x"}${tail}`;
+    const taskDate = taskDateFromText(lines[index]) || formatDate(new Date());
+    const nextLine = lines[index].replace(/^(\s*[-*+]\s+\[)([ xX-])(\])(.+)$/, (_, head, checked, tail, rest) => {
+      const isDone = checked.toLowerCase() === "x" || checked === "-";
+      const cleanRest = rest.replace(/\s*✅\s*\d{4}-\d{2}-\d{2}/gu, "");
+      return `${head}${isDone ? " " : "x"}${tail}${cleanRest}${isDone ? "" : ` ✅ ${taskDate}`}`;
     });
     lines[index] = nextLine;
     const nextContent = lines.join("\n");
@@ -2083,14 +2205,34 @@ async function toggleCalendarTask(path, lineNumber, button) {
 }
 
 function bindDateClick(target) {
+  target.addEventListener("pointerdown", (event) => {
+    if (event.target.closest(".calendar-task, .calendar-more")) return;
+    state.calendarDragStartDate = target.getAttribute("data-calendar-date") || "";
+  });
+
+  target.addEventListener("pointerup", async (event) => {
+    if (event.target.closest(".calendar-task, .calendar-more")) return;
+    const startDate = state.calendarDragStartDate;
+    const endDate = target.getAttribute("data-calendar-date") || "";
+    state.calendarDragStartDate = "";
+    if (startDate && endDate && startDate !== endDate) {
+      state.calendarDragHandled = true;
+      await openDateEditor(endDate, startDate);
+      window.setTimeout(() => {
+        state.calendarDragHandled = false;
+      }, 0);
+    }
+  });
+
   target.addEventListener("click", async (event) => {
-    if (event.target.closest(".calendar-task")) return;
+    if (event.target.closest(".calendar-task, .calendar-more")) return;
+    if (state.calendarDragHandled) return;
     const date = target.getAttribute("data-calendar-date");
     await openDateEditor(date);
   });
 }
 
-async function openDateEditor(date) {
+async function openDateEditor(date, startDate = "") {
   if (!date || (!state.rootHandle && !state.serverVaultWritable)) {
     alert("실제 vault를 먼저 열어야 날짜 편집을 시작할 수 있습니다.");
     return;
@@ -2098,7 +2240,7 @@ async function openDateEditor(date) {
 
   const node = await getOrCreateDailyNote(date);
   await openFile(node.path);
-  if (await enterEditMode()) appendTaskTemplate(date);
+  if (await enterEditMode()) appendTaskTemplate(date, startDate);
 }
 
 async function getOrCreateDailyNote(date) {
@@ -2161,29 +2303,10 @@ function ensureDirectoryNodePath(dirPath) {
   });
 }
 
-function appendTaskTemplate(date) {
-  const prefix = els.markdownEditor.value.endsWith("\n") ? "" : "\n";
-  const taskLine = `${prefix}- [ ]  📅 ${date}`;
-  const start = els.markdownEditor.value.length + prefix.length + "- [ ] ".length;
-  els.markdownEditor.value += taskLine;
-  els.markdownEditor.focus();
-  els.markdownEditor.setSelectionRange(start, start);
-}
-
-function appendTaskTemplate(date) {
-  const prefix = els.markdownEditor.value.endsWith("\n") ? "" : "\n";
-  const taskLine = `${prefix}- [ ] ${date}`;
-  const start = els.markdownEditor.value.length + prefix.length + "- [ ] ".length;
-  els.markdownEditor.value += taskLine;
-  els.markdownEditor.focus();
-  els.markdownEditor.setSelectionRange(start, start);
-  markEditorDirty();
-}
-
-function appendTaskTemplate(date) {
+function appendTaskTemplate(date, startDate = "") {
   const value = editorValue();
   const prefix = value.endsWith("\n") ? "" : "\n";
-  const taskLine = `${prefix}- [ ] ${date}`;
+  const taskLine = startDate ? `${prefix}- [ ]  🛫 ${startDate} 📅 ${date}` : `${prefix}- [ ]  📅 ${date}`;
   const start = value.length + prefix.length + "- [ ] ".length;
   setEditorValue(value + taskLine);
   focusEditor();
@@ -2197,7 +2320,14 @@ function groupTasksByDate(tasks) {
     if (!map.has(task.date)) map.set(task.date, []);
     map.get(task.date).push(task);
   });
+  map.forEach((items) => {
+    items.sort((a, b) => Number(a.checked) - Number(b.checked) || taskTypeRank(a.type) - taskTypeRank(b.type) || a.text.localeCompare(b.text, "ko"));
+  });
   return map;
+}
+
+function taskTypeRank(type) {
+  return { due: 0, scheduled: 1, start: 2, done: 3, cancelled: 4 }[type] ?? 9;
 }
 
 function groupRecentFilesByDate(files, field) {
