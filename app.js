@@ -41,6 +41,7 @@ const state = {
   autoSaveTimer: null,
   autoSaveInFlight: false,
   calendarDragStartDate: "",
+  calendarDragCurrentDate: "",
   calendarDragHandled: false,
 };
 
@@ -183,6 +184,8 @@ els.themeButton.addEventListener("click", toggleTheme);
 els.sidebarResizeHandle.addEventListener("pointerdown", startSidebarResize);
 window.addEventListener("keydown", handleGlobalKeydown, true);
 document.addEventListener("pointerdown", closeSidebarFromOutside);
+document.addEventListener("pointerup", clearCalendarDragIfActive);
+document.addEventListener("pointercancel", clearCalendarDragIfActive);
 
 function handleGlobalKeydown(event) {
   if (event.altKey && !event.ctrlKey && !event.metaKey && event.code === "Digit1") {
@@ -1042,7 +1045,9 @@ function toggleTheme() {
 function setTheme(theme) {
   document.documentElement.dataset.theme = theme;
   localStorage.setItem("obsidian-web-viewer-theme", theme);
-  els.themeButton.textContent = theme === "dark" ? "Light" : "Dark";
+  els.themeButton.textContent = theme === "dark" ? "☀️" : "🌙";
+  els.themeButton.title = theme === "dark" ? "Light" : "Dark";
+  els.themeButton.setAttribute("aria-label", els.themeButton.title);
 }
 
 function initOptions() {
@@ -1868,7 +1873,7 @@ function parseTasks(content, path) {
       const checked = match[1].toLowerCase() === "x" || match[1] === "-";
       const rawText = match[2].trim();
       const dates = extractTaskDates(rawText);
-      const displayDate = dates.due || dates.scheduled || dates.start || dates.done || dates.cancelled;
+      const displayDate = dates.due || dates.end || dates.scheduled || dates.start || dates.done || dates.cancelled;
       if (!displayDate) return [];
 
       return [
@@ -1879,7 +1884,7 @@ function parseTasks(content, path) {
           text: cleanTaskText(rawText),
           rawText,
           date: displayDate,
-          type: dates.due ? "due" : dates.scheduled ? "scheduled" : dates.start ? "start" : dates.done ? "done" : "cancelled",
+          type: dates.due || dates.end ? "due" : dates.scheduled ? "scheduled" : dates.start ? "start" : dates.done ? "done" : "cancelled",
           dates,
         },
       ];
@@ -1928,6 +1933,35 @@ function findBareTaskDate(text) {
 function cleanTaskText(text) {
   return text
     .replace(/[📅⏳🛫✅❌]?\s*\b\d{4}-\d{2}-\d{2}\b/gu, "")
+    .replace(/#[\p{L}\p{N}_/-]+/gu, "")
+    .trim();
+}
+
+function extractTaskDates(text) {
+  const due = findTaskDateByMarkers(text, ["\u{1F4C5}", "due", "end"]) || findBareTaskDate(text);
+  const start = findTaskDateByMarkers(text, ["\u{1F6EB}", "start"]);
+  return {
+    due,
+    end: due,
+    scheduled: findTaskDateByMarkers(text, ["\u{23F3}", "scheduled"]),
+    start,
+    done: findTaskDateByMarkers(text, ["\u{2705}", "done"]),
+    cancelled: findTaskDateByMarkers(text, ["\u{274C}", "cancelled", "canceled"]),
+  };
+}
+
+function findTaskDateByMarkers(text, markers) {
+  for (const marker of markers) {
+    const escaped = marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const match = text.match(new RegExp(`(?:${escaped})\\s*(\\d{4}-\\d{2}-\\d{2})`, "iu"));
+    if (match) return match[1];
+  }
+  return null;
+}
+
+function cleanTaskText(text) {
+  return text
+    .replace(/(?:\u{1F4C5}|\u{1F6EB}|\u{23F3}|\u{2705}|\u{274C}|due|start|end|scheduled|done|cancelled|canceled)\s*\d{4}-\d{2}-\d{2}/giu, "")
     .replace(/#[\p{L}\p{N}_/-]+/gu, "")
     .trim();
 }
@@ -2159,11 +2193,9 @@ function bindCalendarEvents() {
     });
   });
 
-  if (state.calendarKind === "tasks") {
-    els.calendarView.querySelectorAll("[data-calendar-date]").forEach((target) => {
-      bindDateClick(target);
-    });
-  }
+  els.calendarView.querySelectorAll("[data-calendar-date]").forEach((target) => {
+    bindDateClick(target);
+  });
 }
 
 function shiftCalendarDate(direction) {
@@ -2262,7 +2294,16 @@ async function toggleCalendarTask(path, lineNumber, button) {
 function bindDateClick(target) {
   target.addEventListener("pointerdown", (event) => {
     if (event.target.closest(".calendar-task, .calendar-more")) return;
+    event.preventDefault();
     state.calendarDragStartDate = target.getAttribute("data-calendar-date") || "";
+    state.calendarDragCurrentDate = state.calendarDragStartDate;
+    updateCalendarDragHighlight();
+  });
+
+  target.addEventListener("pointerenter", () => {
+    if (!state.calendarDragStartDate) return;
+    state.calendarDragCurrentDate = target.getAttribute("data-calendar-date") || "";
+    updateCalendarDragHighlight();
   });
 
   target.addEventListener("pointerup", async (event) => {
@@ -2270,6 +2311,8 @@ function bindDateClick(target) {
     const startDate = state.calendarDragStartDate;
     const endDate = target.getAttribute("data-calendar-date") || "";
     state.calendarDragStartDate = "";
+    state.calendarDragCurrentDate = "";
+    clearCalendarDragHighlight();
     if (startDate && endDate && startDate !== endDate) {
       state.calendarDragHandled = true;
       await openDateEditor(endDate, startDate);
@@ -2287,10 +2330,49 @@ function bindDateClick(target) {
   });
 }
 
+function updateCalendarDragHighlight() {
+  clearCalendarDragHighlight();
+  const start = parseDateKey(state.calendarDragStartDate);
+  const current = parseDateKey(state.calendarDragCurrentDate);
+  if (!start || !current) return;
+  const from = start <= current ? start : current;
+  const to = start <= current ? current : start;
+  els.calendarView.querySelectorAll("[data-calendar-date]").forEach((cell) => {
+    const date = parseDateKey(cell.getAttribute("data-calendar-date"));
+    if (!date || date < from || date > to) return;
+    cell.classList.add("drag-range");
+    if (formatDate(date) === state.calendarDragStartDate) cell.classList.add("drag-start");
+    if (formatDate(date) === state.calendarDragCurrentDate) cell.classList.add("drag-end");
+  });
+}
+
+function clearCalendarDragHighlight() {
+  els.calendarView.querySelectorAll(".drag-range, .drag-start, .drag-end").forEach((cell) => {
+    cell.classList.remove("drag-range", "drag-start", "drag-end");
+  });
+}
+
+function clearCalendarDragIfActive() {
+  if (!state.calendarDragStartDate && !state.calendarDragCurrentDate) return;
+  state.calendarDragStartDate = "";
+  state.calendarDragCurrentDate = "";
+  clearCalendarDragHighlight();
+}
+
 async function openDateEditor(date, startDate = "") {
   if (!date || (!state.rootHandle && !state.serverVaultWritable)) {
     alert("실제 vault를 먼저 열어야 날짜 편집을 시작할 수 있습니다.");
     return;
+  }
+
+  if (startDate) {
+    const start = parseDateKey(startDate);
+    const end = parseDateKey(date);
+    if (start && end && start > end) {
+      const nextDate = startDate;
+      startDate = date;
+      date = nextDate;
+    }
   }
 
   const node = await getOrCreateDailyNote(date);
@@ -2372,13 +2454,29 @@ function appendTaskTemplate(date, startDate = "") {
 function groupTasksByDate(tasks) {
   const map = new Map();
   tasks.forEach((task) => {
-    if (!map.has(task.date)) map.set(task.date, []);
-    map.get(task.date).push(task);
+    taskCalendarDates(task).forEach((date) => {
+      if (!map.has(date)) map.set(date, []);
+      map.get(date).push(task);
+    });
   });
   map.forEach((items) => {
     items.sort((a, b) => Number(a.checked) - Number(b.checked) || taskTypeRank(a.type) - taskTypeRank(b.type) || a.text.localeCompare(b.text, "ko"));
   });
   return map;
+}
+
+function taskCalendarDates(task) {
+  const start = parseDateKey(task.dates?.start);
+  const end = parseDateKey(task.dates?.end || task.dates?.due);
+  if (!start || !end) return [task.date].filter(Boolean);
+
+  const from = start <= end ? start : end;
+  const to = start <= end ? end : start;
+  const dates = [];
+  for (let current = new Date(from); current <= to; current = addDays(current, 1)) {
+    dates.push(formatDate(current));
+  }
+  return dates.length ? dates : [task.date].filter(Boolean);
 }
 
 function taskTypeRank(type) {

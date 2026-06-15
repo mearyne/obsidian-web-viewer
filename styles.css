@@ -528,6 +528,7 @@ button:disabled {
   border-top: 1px solid var(--line);
   display: grid;
   gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   margin-top: auto;
   padding: 10px;
   position: relative;
@@ -536,7 +537,9 @@ button:disabled {
 .sidebar-options > button {
   background: var(--surface);
   border-color: var(--line);
+  font-size: 17px;
   min-width: 0;
+  padding: 0;
   width: 100%;
 }
 
@@ -1323,6 +1326,7 @@ button:disabled {
 .calendar-grid {
   border-left: 1px solid var(--line);
   border-top: 1px solid var(--line);
+  user-select: none;
 }
 
 .calendar-cell {
@@ -1331,6 +1335,8 @@ button:disabled {
   min-height: 124px;
   min-width: 0;
   padding: 7px;
+  position: relative;
+  user-select: none;
 }
 
 .calendar-cell.outside-month {
@@ -1340,6 +1346,31 @@ button:disabled {
 
 .calendar-cell.today {
   box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.calendar-cell.drag-range,
+.calendar-cell.drag-start,
+.calendar-cell.drag-end,
+.calendar-agenda-day.drag-range,
+.calendar-agenda-day.drag-start,
+.calendar-agenda-day.drag-end {
+  box-shadow: inset 0 0 0 2px var(--accent-strong), inset 0 0 0 999px color-mix(in srgb, var(--accent-soft) 58%, transparent);
+}
+
+.calendar-cell.drag-start::after,
+.calendar-cell.drag-end::after,
+.calendar-agenda-day.drag-start::after,
+.calendar-agenda-day.drag-end::after {
+  border: 2px solid var(--accent-strong);
+  border-radius: 5px;
+  content: "";
+  inset: 3px;
+  pointer-events: none;
+  position: absolute;
+}
+
+.calendar-agenda-day {
+  user-select: none;
 }
 
 .calendar-day {
@@ -1442,6 +1473,8 @@ button.calendar-more {
   grid-template-columns: 56px minmax(0, 1fr);
   min-width: 0;
   padding: 10px;
+  position: relative;
+  user-select: none;
 }
 
 .calendar-agenda-day.today {
