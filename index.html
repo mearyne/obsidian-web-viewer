@@ -4,6 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Obsidian Web Viewer</title>
+    <meta name="theme-color" content="#15171a" />
+    <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
@@ -74,6 +76,7 @@
                 <h2 id="noteTitle">Obsidian Markdown Viewer</h2>
                 <div class="heading-controls">
                   <button id="collapseHeadingsButton" class="icon-button" type="button" aria-label="헤더 모두 접기" title="헤더 모두 접기">−∞</button>
+                  <button id="collapseHeadingLevelButton" class="icon-button" type="button" aria-label="헤더 한단계 접기" title="헤더 한단계 접기">−1</button>
                   <button id="expandHeadingLevelButton" class="icon-button" type="button" aria-label="헤더 한단계 펼치기" title="헤더 한단계 펼치기">+1</button>
                 </div>
               </div>

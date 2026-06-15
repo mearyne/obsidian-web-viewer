@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Obsidian Web Viewer">
+  <rect width="512" height="512" rx="112" fill="#15171a"/>
+  <path d="M181 54 75 192l61 251 165 48 136-192-117-208Z" fill="#7c5cff"/>
+  <path d="M181 54 320 91 251 213 75 192Z" fill="#a794ff"/>
+  <path d="M251 213 437 299 301 491 136 443Z" fill="#5c42d6"/>
+  <path d="M251 213 320 91l117 208Z" fill="#d5ceff"/>
+  <path d="M136 443 251 213l50 278Z" fill="#856cff"/>
+</svg>

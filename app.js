@@ -93,6 +93,7 @@ const els = {
   markdownToggleButton: document.querySelector("#markdownToggleButton"),
   fullscreenButton: document.querySelector("#fullscreenButton"),
   collapseHeadingsButton: document.querySelector("#collapseHeadingsButton"),
+  collapseHeadingLevelButton: document.querySelector("#collapseHeadingLevelButton"),
   expandHeadingLevelButton: document.querySelector("#expandHeadingLevelButton"),
   historyBackButton: document.querySelector("#historyBackButton"),
   historyForwardButton: document.querySelector("#historyForwardButton"),
@@ -192,6 +193,7 @@ els.historyBackButton.addEventListener("click", navigateHistoryBack);
 els.historyForwardButton.addEventListener("click", navigateHistoryForward);
 els.fullscreenButton?.addEventListener("click", enterFullscreen);
 els.collapseHeadingsButton?.addEventListener("click", collapseAllHeadings);
+els.collapseHeadingLevelButton?.addEventListener("click", collapseCurrentHeadingLevel);
 els.expandHeadingLevelButton?.addEventListener("click", expandNextHeadingLevel);
 els.markdownToggleButton.addEventListener("click", toggleMarkdownMode);
 els.webEditButton.addEventListener("click", enterEditMode);
@@ -217,6 +219,16 @@ document.addEventListener("pointerdown", requestFullscreenOnce, { once: true });
 document.addEventListener("keydown", requestFullscreenOnce, { once: true });
 document.addEventListener("fullscreenchange", () => setFullscreenFallback(false));
 document.addEventListener("webkitfullscreenchange", () => setFullscreenFallback(false));
+registerServiceWorker();
+
+function registerServiceWorker() {
+  if (!("serviceWorker" in navigator) || !window.isSecureContext) return;
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch(() => {
+      // PWA support is optional; the viewer must keep working as a normal page.
+    });
+  });
+}
 
 function handleGlobalKeydown(event) {
   if (event.altKey && !event.ctrlKey && !event.metaKey && event.code === "Digit1") {
@@ -1293,6 +1305,15 @@ function renderPlainTextDocument(content) {
 function collapseAllHeadings() {
   els.markdownView.querySelectorAll(".heading-section").forEach((section) => {
     section.open = false;
+  });
+}
+
+function collapseCurrentHeadingLevel() {
+  const openSections = [...els.markdownView.querySelectorAll(".heading-section[open]")];
+  if (!openSections.length) return;
+  const deepestLevel = Math.max(...openSections.map((section) => headingSectionLevel(section)).filter(Boolean));
+  openSections.forEach((section) => {
+    if (headingSectionLevel(section) === deepestLevel) section.open = false;
   });
 }
 
