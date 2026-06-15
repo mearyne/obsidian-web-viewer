@@ -1552,9 +1552,9 @@ async function openNextCalendarKind() {
   if (state.activeView !== "calendar") {
     await buildCalendarView();
   } else if (state.calendarKind === "tasks") {
-    await buildRecentCalendarView("updated");
-  } else if (state.calendarKind === "updated") {
     await buildRecentCalendarView("created");
+  } else if (state.calendarKind === "created") {
+    await buildRecentCalendarView("updated");
   } else {
     await buildCalendarView();
   }
@@ -1784,18 +1784,18 @@ function showCalendarView() {
 
 function updateCalendarKindButton() {
   if (!els.calendarButton) return;
-  if (state.activeView === "calendar" && state.calendarKind === "updated") {
-    els.calendarButton.textContent = "✨";
-    els.calendarButton.title = "최근 생성 파일";
-    els.calendarButton.setAttribute("aria-label", "최근 생성 파일 캘린더");
-  } else if (state.activeView === "calendar" && state.calendarKind === "created") {
+  if (state.activeView === "calendar" && state.calendarKind === "created") {
+    els.calendarButton.textContent = "✏️";
+    els.calendarButton.title = "최근 수정 파일";
+    els.calendarButton.setAttribute("aria-label", "최근 수정 파일 캘린더");
+  } else if (state.activeView === "calendar" && state.calendarKind === "updated") {
     els.calendarButton.textContent = "📅";
     els.calendarButton.title = "Task 캘린더";
     els.calendarButton.setAttribute("aria-label", "Task 캘린더");
   } else {
-    els.calendarButton.textContent = state.activeView === "calendar" ? "📝" : "📅";
-    els.calendarButton.title = state.activeView === "calendar" ? "최근 수정 파일" : "Task 캘린더";
-    els.calendarButton.setAttribute("aria-label", state.activeView === "calendar" ? "최근 수정 파일 캘린더" : "Task 캘린더");
+    els.calendarButton.textContent = state.activeView === "calendar" ? "➕" : "📅";
+    els.calendarButton.title = state.activeView === "calendar" ? "최근 생성 파일" : "Task 캘린더";
+    els.calendarButton.setAttribute("aria-label", state.activeView === "calendar" ? "최근 생성 파일 캘린더" : "Task 캘린더");
   }
 }
 
