@@ -13,6 +13,7 @@ const state = {
   editMode: false,
   markdownEnabled: true,
   objectUrls: new Map(),
+  readFileRequests: new Map(),
   savedVaults: [],
   tasks: [],
   calendarDate: new Date(),
@@ -25,6 +26,7 @@ const state = {
   holidays: new Map(),
   holidayYearsLoaded: new Set(),
   holidayYearsLoading: new Set(),
+  holidayRenderTimer: null,
   metadataSyncedAt: 0,
   recentFiles: { updated: [], created: [] },
   calendarKind: "tasks",
@@ -1105,6 +1107,15 @@ function scrollViewerByPageFraction(direction) {
 
 async function readFileNode(node) {
   if (typeof node.content === "string") return node.content;
+  if (state.readFileRequests.has(node.path)) return state.readFileRequests.get(node.path);
+  const request = readFileNodeUncached(node).finally(() => {
+    state.readFileRequests.delete(node.path);
+  });
+  state.readFileRequests.set(node.path, request);
+  return request;
+}
+
+async function readFileNodeUncached(node) {
   if (node.serverBacked) {
     const response = await fetch(`/api/vault-file?path=${encodeURIComponent(node.path)}`, { cache: "no-store" });
     if (!response.ok) throw new Error("파일을 읽지 못했습니다.");
@@ -2516,12 +2527,20 @@ async function loadHolidaysForYear(year) {
       });
     }
     state.holidayYearsLoaded.add(year);
-    if (state.activeView === "calendar") renderCalendar();
+    scheduleHolidayRender();
   } catch {
     console.warn(`Holiday load failed for ${year}`);
   } finally {
     state.holidayYearsLoading.delete(year);
   }
+}
+
+function scheduleHolidayRender() {
+  if (state.activeView !== "calendar" || state.holidayRenderTimer) return;
+  state.holidayRenderTimer = window.setTimeout(() => {
+    state.holidayRenderTimer = null;
+    if (state.activeView === "calendar") renderCalendar();
+  }, 50);
 }
 
 function renderCalendarTask(task, dateKey = task.date) {
