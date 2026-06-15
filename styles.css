@@ -468,6 +468,7 @@ button:disabled {
 }
 
 .note-title-row h2 {
+  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -550,6 +551,13 @@ button:disabled {
   font-size: 12px;
   padding: 0 6px;
   width: auto;
+}
+
+.heading-controls {
+  align-items: center;
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 4px;
 }
 
 .note-header h2 {
@@ -786,6 +794,15 @@ button:disabled {
   padding: 8px 9px;
   resize: vertical;
   width: 100%;
+}
+
+.option-reset-button {
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--muted);
+  justify-self: start;
+  min-height: 30px;
+  padding: 0 10px;
 }
 
 .viewer-wrap {
@@ -1182,25 +1199,25 @@ button:disabled {
 }
 
 .markdown-body h1 {
-  font-size: 26.4px;
+  font-size: 24px;
 }
 
 .markdown-body h2 {
   border-bottom: 0;
-  font-size: 20.2px;
+  font-size: 18.4px;
 }
 
 .markdown-body h3 {
-  font-size: 16.7px;
+  font-size: 15.2px;
 }
 
 .markdown-body h4 {
-  font-size: 15px;
+  font-size: 13.6px;
 }
 
 .markdown-body h5,
 .markdown-body h6 {
-  font-size: 13.2px;
+  font-size: 12px;
 }
 
 .markdown-body .heading-level-2 {

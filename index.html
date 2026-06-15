@@ -72,6 +72,10 @@
               <p id="notePath" class="note-path">문서를 선택하세요</p>
               <div class="note-title-row">
                 <h2 id="noteTitle">Obsidian Markdown Viewer</h2>
+                <div class="heading-controls">
+                  <button id="collapseHeadingsButton" class="icon-button" type="button" aria-label="헤더 모두 접기" title="헤더 모두 접기">−∞</button>
+                  <button id="expandHeadingLevelButton" class="icon-button" type="button" aria-label="헤더 한단계 펼치기" title="헤더 한단계 펼치기">+1</button>
+                </div>
               </div>
             </div>
           </div>
@@ -79,8 +83,6 @@
             <button id="historyBackButton" class="icon-button" type="button" disabled aria-label="이전 페이지" title="이전 페이지">←</button>
             <button id="historyForwardButton" class="icon-button" type="button" disabled aria-label="이후 페이지" title="이후 페이지">→</button>
             <button id="fullscreenButton" class="icon-button" type="button" aria-label="전체화면" title="전체화면">⛶</button>
-            <button id="collapseHeadingsButton" class="icon-button" type="button" aria-label="헤더 모두 접기" title="헤더 모두 접기">접기</button>
-            <button id="expandHeadingLevelButton" class="icon-button" type="button" aria-label="헤더 한단계 펼치기" title="헤더 한단계 펼치기">+1</button>
             <button id="markdownToggleButton" class="icon-button" type="button" aria-pressed="false" aria-label="원본 보기 OFF" title="원본 보기 OFF">
               <svg aria-hidden="true" viewBox="0 0 24 24">
                 <path d="M4 5h16v14H4z" />
@@ -155,6 +157,7 @@
               <option value="malgun-gothic">맑은고딕</option>
             </select>
           </label>
+          <button id="fontResetButton" class="option-reset-button" type="button">폰트 초기화</button>
           <label class="option-field">
             <span>본문 글자 크기</span>
             <input id="contentFontSizeInput" type="number" min="10" max="28" step="1" />

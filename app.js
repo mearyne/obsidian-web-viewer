@@ -72,6 +72,7 @@ const els = {
   calendarPathInput: document.querySelector("#calendarPathInput"),
   dailyNotePathInput: document.querySelector("#dailyNotePathInput"),
   fontSelect: document.querySelector("#fontSelect"),
+  fontResetButton: document.querySelector("#fontResetButton"),
   contentFontSizeInput: document.querySelector("#contentFontSizeInput"),
   calendarRowFontSizeInput: document.querySelector("#calendarRowFontSizeInput"),
   contentAlignSelect: document.querySelector("#contentAlignSelect"),
@@ -177,6 +178,7 @@ els.folderPathInput?.addEventListener("input", renderTree);
 els.calendarPathInput?.addEventListener("input", handleCalendarFilterInput);
 els.dailyNotePathInput?.addEventListener("input", updateDailyNotePath);
 els.fontSelect?.addEventListener("change", updateAppFont);
+els.fontResetButton?.addEventListener("click", resetFontOptions);
 els.contentFontSizeInput?.addEventListener("input", updateContentFontSize);
 els.calendarRowFontSizeInput?.addEventListener("input", updateCalendarRowFontSize);
 els.contentAlignSelect?.addEventListener("change", updateContentAlign);
@@ -1102,6 +1104,16 @@ function updateDailyNotePath() {
 
 function updateAppFont() {
   setAppFont(els.fontSelect?.value || "default");
+}
+
+function resetFontOptions() {
+  const deviceKey = currentFontDeviceKey();
+  localStorage.removeItem("obsidian-web-viewer-font");
+  localStorage.removeItem(deviceOptionStorageKey("content-font-size", deviceKey));
+  localStorage.removeItem(deviceOptionStorageKey("calendar-row-font-size", deviceKey));
+  const appliedFont = setAppFont("default");
+  if (els.fontSelect) els.fontSelect.value = appliedFont;
+  applyDeviceDisplayOptions();
 }
 
 function setAppFont(fontKey) {
