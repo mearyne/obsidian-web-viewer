@@ -54,6 +54,8 @@ const state = {
   calendarDragHandled: false,
   calendarDragPointer: null,
   calendarTaskDrag: null,
+  noteTitlePressTimer: null,
+  noteTitleDeleteSuppressedUntil: 0,
   calendarSwipe: null,
   calendarWheelAt: 0,
   calendarTaskOpenSuppressedUntil: 0,
@@ -220,6 +222,11 @@ els.imageLightboxClose.addEventListener("click", closeImageLightbox);
 els.editButton.addEventListener("click", openCurrentFileInObsidian);
 els.themeButton.addEventListener("click", toggleTheme);
 els.sidebarResizeHandle.addEventListener("pointerdown", startSidebarResize);
+els.noteTitle?.addEventListener("click", showFullCurrentTitle);
+els.noteTitle?.addEventListener("pointerdown", startNoteTitleLongPress);
+els.noteTitle?.addEventListener("pointerup", clearNoteTitleLongPress);
+els.noteTitle?.addEventListener("pointerleave", clearNoteTitleLongPress);
+els.noteTitle?.addEventListener("pointercancel", clearNoteTitleLongPress);
 window.addEventListener("keydown", handleGlobalKeydown, true);
 document.addEventListener("pointerdown", closeSidebarFromOutside);
 document.addEventListener("pointerup", clearCalendarDragIfActive);
@@ -286,7 +293,7 @@ function handleGlobalKeydown(event) {
     if (event.key.toLowerCase() === "c") {
       event.preventDefault();
       event.stopPropagation();
-      openNextCalendarKind();
+      openCalendarFromShortcut();
       return;
     }
     if (event.key.toLowerCase() === "d") {
@@ -777,7 +784,7 @@ function resetVault() {
 }
 
 function makeDirNode(name, path) {
-  return { name, path, kind: "directory", children: new Map(), collapsed: Boolean(path), size: 0, updatedAt: 0, createdAt: 0 };
+  return { name, path, kind: "directory", children: new Map(), collapsed: Boolean(path), size: 0, fileCount: 0, updatedAt: 0, createdAt: 0 };
 }
 
 function isIndexedFile(name) {
@@ -849,6 +856,7 @@ function refreshDirectoryMetadata() {
   dirs.forEach((dir) => {
     const children = [...dir.children.values()];
     dir.size = children.reduce((sum, node) => sum + (node.size || 0), 0);
+    dir.fileCount = children.reduce((sum, node) => sum + (node.kind === "directory" ? node.fileCount || 0 : 1), 0);
     dir.updatedAt = children.reduce((latest, node) => Math.max(latest, node.updatedAt || 0), 0);
     dir.createdAt = children.reduce((latest, node) => Math.max(latest, node.createdAt || node.updatedAt || 0), 0);
   });
@@ -913,6 +921,8 @@ function renderDirChildren(dir, parent, matcher, folderPaths) {
     if (node.kind === "file") {
       row.classList.add(`file-ext-${extensionOf(node.name) || "file"}`);
       if (!isOpenableDocument(node.name)) row.classList.add("not-openable");
+    } else {
+      row.classList.add("directory");
     }
     if (node.path === state.currentPath) row.classList.add("active");
 
@@ -925,6 +935,12 @@ function renderDirChildren(dir, parent, matcher, folderPaths) {
     name.textContent = node.name;
 
     row.append(toggle, name);
+    if (node.kind === "directory") {
+      const count = document.createElement("span");
+      count.className = "tree-count";
+      count.textContent = String(node.fileCount || 0);
+      row.append(count);
+    }
     row.addEventListener("click", async (event) => {
       event.stopPropagation();
       if (node.kind === "directory") {
@@ -1122,6 +1138,103 @@ function scrollViewerByPageFraction(direction) {
   const nextTop = Math.max(0, Math.min(maxTop, els.viewerWrap.scrollTop + amount * direction));
   if (Math.abs(nextTop - els.viewerWrap.scrollTop) < 1) return;
   els.viewerWrap.scrollTo({ top: nextTop, behavior: "auto" });
+}
+
+function showFullCurrentTitle() {
+  if (Date.now() < state.noteTitleDeleteSuppressedUntil) return;
+  if (!state.currentPath) return;
+  alert(`${displayDocumentTitle(state.currentNode?.name || state.currentPath)}\n${state.currentPath}`);
+}
+
+function startNoteTitleLongPress() {
+  clearNoteTitleLongPress();
+  state.noteTitlePressTimer = window.setTimeout(async () => {
+    state.noteTitlePressTimer = null;
+    state.noteTitleDeleteSuppressedUntil = Date.now() + 1000;
+    await confirmDeleteCurrentFile();
+  }, 700);
+}
+
+function clearNoteTitleLongPress() {
+  if (!state.noteTitlePressTimer) return;
+  window.clearTimeout(state.noteTitlePressTimer);
+  state.noteTitlePressTimer = null;
+}
+
+async function confirmDeleteCurrentFile() {
+  const node = state.currentNode;
+  if (!node || !state.currentPath) return;
+  if (!canDeleteNode(node)) {
+    alert("현재 문서는 웹에서 삭제할 수 없습니다.");
+    return;
+  }
+  const ok = confirm(`파일을 삭제하시겠습니까?\n${state.currentPath}`);
+  if (!ok) return;
+  await deleteCurrentFileNode(node);
+}
+
+function canDeleteNode(node) {
+  return Boolean(node?.handle || (node?.serverBacked && state.serverVaultWritable));
+}
+
+async function deleteCurrentFileNode(node) {
+  const path = node.path;
+  showLoading("문서 삭제 중...");
+  try {
+    if (node.handle && node.dirHandle) {
+      await node.dirHandle.removeEntry(node.name);
+    } else if (node.serverBacked && state.serverVaultWritable) {
+      await deleteServerFile(path);
+    } else {
+      return;
+    }
+
+    removeFileNode(path);
+    state.currentPath = null;
+    state.currentContent = "";
+    state.currentNode = null;
+    state.editMode = false;
+    state.tasks = state.tasks.filter((task) => task.path !== path);
+    state.calendarTaskFiles.delete(path);
+    saveCalendarCache();
+    refreshDirectoryMetadata();
+    renderTree();
+    els.notePath.textContent = "문서를 선택하세요";
+    els.noteTitle.textContent = "Obsidian Markdown Viewer";
+    els.markdownView.classList.add("empty-state");
+    els.markdownView.innerHTML = "<p>문서를 선택하세요.</p>";
+    showNoteView();
+  } finally {
+    hideLoading();
+  }
+}
+
+function removeFileNode(path) {
+  const node = state.files.get(path);
+  if (!node) return;
+  state.files.delete(path);
+  forgetCreatedAt(path);
+  const parentPath = path.includes("/") ? path.split("/").slice(0, -1).join("/") : "";
+  const parent = state.directories.get(parentPath);
+  parent?.children.delete(node.name);
+  const objectUrl = state.objectUrls.get(path);
+  if (objectUrl) URL.revokeObjectURL(objectUrl);
+  state.objectUrls.delete(path);
+  state.readFileRequests.delete(path);
+}
+
+function forgetCreatedAt(path) {
+  if (!path) return;
+  const metadata = readCreationMetadata();
+  if (!(path in metadata)) return;
+  delete metadata[path];
+  writeCreationMetadata(metadata);
+}
+
+async function deleteServerFile(path) {
+  const response = await fetch(`/api/vault-file?path=${encodeURIComponent(path)}`, { method: "DELETE" });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || "파일 삭제에 실패했습니다.");
 }
 
 async function readFileNode(node) {
@@ -2133,6 +2246,14 @@ function updateTasksForFile(path, content) {
   if (state.activeView === "calendar") renderCalendar();
 }
 
+async function openCalendarFromShortcut() {
+  if (state.activeView !== "calendar") {
+    await buildCalendarView();
+    return;
+  }
+  await openNextCalendarKind();
+}
+
 function calendarTaskFileMapFromCache(files) {
   const map = new Map();
   if (!Array.isArray(files)) return map;
@@ -2429,6 +2550,7 @@ function renderCalendar() {
     const classes = ["calendar-cell"];
     if (formatMonth(date) !== monthKey) classes.push("outside-month");
     if (dateKey === todayKey) classes.push("today");
+    if (date.getDay() === 0) classes.push("sunday");
     if (holidays.length) classes.push("holiday");
     cells.push(`
       <div class="${classes.join(" ")}" data-calendar-date="${dateKey}">
@@ -2583,6 +2705,7 @@ function calendarTitle() {
 function renderAgendaDay(date, tasks, isToday, holidays = []) {
   const classes = ["calendar-agenda-day"];
   if (isToday) classes.push("today");
+  if (date.getDay() === 0) classes.push("sunday");
   if (holidays.length) classes.push("holiday");
   return `
     <section class="${classes.join(" ")}" data-calendar-date="${formatDate(date)}">
@@ -2601,6 +2724,7 @@ function renderAgendaDay(date, tasks, isToday, holidays = []) {
 function renderRecentAgendaDay(date, files, isToday, field, holidays = []) {
   const classes = ["calendar-agenda-day"];
   if (isToday) classes.push("today");
+  if (date.getDay() === 0) classes.push("sunday");
   if (holidays.length) classes.push("holiday");
   return `
     <section class="${classes.join(" ")}" data-calendar-date="${formatDate(date)}">
@@ -2759,6 +2883,8 @@ function bindCalendarEvents() {
     if (button.hasAttribute("data-line")) {
       bindTaskDrag(button);
       bindTaskLongPress(button);
+    } else {
+      bindCalendarRowLongPressGuard(button);
     }
     button.addEventListener("click", async (event) => {
       if (button.dataset.longPressed === "true" || button.dataset.dragged === "true" || Date.now() < state.calendarTaskOpenSuppressedUntil) {
@@ -2956,6 +3082,33 @@ function bindTaskDrag(button) {
   });
 }
 
+function bindCalendarRowLongPressGuard(button) {
+  let timer = null;
+  let startX = 0;
+  let startY = 0;
+  const clear = () => {
+    if (timer) window.clearTimeout(timer);
+    timer = null;
+  };
+
+  button.addEventListener("pointerdown", (event) => {
+    startX = event.clientX;
+    startY = event.clientY;
+    timer = window.setTimeout(() => {
+      timer = null;
+      button.dataset.longPressed = "true";
+      state.calendarTaskOpenSuppressedUntil = Date.now() + 1200;
+    }, 520);
+  });
+  button.addEventListener("pointermove", (event) => {
+    if (!timer) return;
+    if (Math.hypot(event.clientX - startX, event.clientY - startY) > 10) clear();
+  });
+  button.addEventListener("pointerup", clear);
+  button.addEventListener("pointerleave", clear);
+  button.addEventListener("pointercancel", clear);
+}
+
 function startCalendarTaskDragListeners() {
   window.addEventListener("pointermove", handleWindowCalendarTaskDragMove, true);
   window.addEventListener("pointerup", handleWindowCalendarTaskDragEnd, true);
@@ -3146,8 +3299,10 @@ async function moveCalendarTaskDate(path, lineNumber, targetDate, sourceDate = "
   if (!lines[index] || !/^\s*[-*+]\s+\[[ xX-]\]/.test(lines[index])) return;
 
   const task = state.tasks.find((item) => item.path === path && item.line === lineNumber);
-  const marker = taskDateMarkerForMove(task, sourceDate);
-  const nextLine = replaceTaskLineDate(lines[index], targetDate, marker);
+  const moveMode = calendarTaskMoveMode(task, sourceDate);
+  const nextLine = moveMode === "range-shift"
+    ? shiftTaskLineDateRange(lines[index], task, sourceDate, targetDate)
+    : replaceTaskLineDate(lines[index], targetDate, taskDateMarkerForMove(task, sourceDate));
   if (nextLine === lines[index]) return;
 
   lines[index] = nextLine;
@@ -3178,6 +3333,38 @@ function taskDateMarkerForMove(task, sourceDate) {
   if (task?.dates?.cancelled) return "\u{274C}";
   if (task?.dates?.start && !task?.dates?.due && !task?.dates?.end) return "\u{1F6EB}";
   return "\u{1F4C5}";
+}
+
+function calendarTaskMoveMode(task, sourceDate) {
+  const startKey = task?.dates?.start || "";
+  const endKey = task?.dates?.end || task?.dates?.due || "";
+  if (!startKey || !endKey || !sourceDate || startKey === endKey) return "single";
+  if (sourceDate !== startKey && sourceDate !== endKey) return "range-shift";
+  return "single";
+}
+
+function shiftTaskLineDateRange(line, task, sourceDate, targetDate) {
+  const start = parseDateKey(task?.dates?.start);
+  const end = parseDateKey(task?.dates?.end || task?.dates?.due);
+  const source = parseDateKey(sourceDate);
+  const target = parseDateKey(targetDate);
+  if (!start || !end || !source || !target) return line;
+
+  const delta = calendarDayDiff(source, target);
+  const nextStart = formatDate(addDays(start, delta));
+  const nextEnd = formatDate(addDays(end, delta));
+  let nextLine = replaceSpecificTaskLineDate(line, nextStart, ["\u{1F6EB}", "start"]);
+  nextLine = replaceSpecificTaskLineDate(nextLine, nextEnd, ["\u{1F4C5}", "due", "end"]);
+  return nextLine;
+}
+
+function replaceSpecificTaskLineDate(line, targetDate, markers) {
+  for (const marker of markers) {
+    const escapedMarker = marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const pattern = new RegExp(`(${escapedMarker}\\s*)\\d{4}-\\d{2}-\\d{2}`, "iu");
+    if (pattern.test(line)) return line.replace(pattern, `$1${targetDate}`);
+  }
+  return line;
 }
 
 function replaceTaskLineDate(line, targetDate, marker = "\u{1F4C5}") {
@@ -3401,18 +3588,32 @@ function calendarPreviewTasks() {
   return state.tasks.map((task) => {
     if (task.path !== drag.path || task.line !== drag.line) return task;
     const dates = { ...(task.dates || {}) };
-    const marker = taskDateMarkerForMove(task, drag.sourceDate);
-    if (marker === "\u{1F6EB}") {
-      dates.start = drag.previewDate;
-    } else if (marker === "\u{23F3}") {
-      dates.scheduled = drag.previewDate;
-    } else if (marker === "\u{2705}") {
-      dates.done = drag.previewDate;
-    } else if (marker === "\u{274C}") {
-      dates.cancelled = drag.previewDate;
+    const moveMode = calendarTaskMoveMode(task, drag.sourceDate);
+    if (moveMode === "range-shift") {
+      const source = parseDateKey(drag.sourceDate);
+      const target = parseDateKey(drag.previewDate);
+      const start = parseDateKey(dates.start);
+      const end = parseDateKey(dates.end || dates.due);
+      if (source && target && start && end) {
+        const delta = calendarDayDiff(source, target);
+        dates.start = formatDate(addDays(start, delta));
+        dates.due = formatDate(addDays(end, delta));
+        dates.end = dates.due;
+      }
     } else {
-      dates.due = drag.previewDate;
-      dates.end = drag.previewDate;
+      const marker = taskDateMarkerForMove(task, drag.sourceDate);
+      if (marker === "\u{1F6EB}") {
+        dates.start = drag.previewDate;
+      } else if (marker === "\u{23F3}") {
+        dates.scheduled = drag.previewDate;
+      } else if (marker === "\u{2705}") {
+        dates.done = drag.previewDate;
+      } else if (marker === "\u{274C}") {
+        dates.cancelled = drag.previewDate;
+      } else {
+        dates.due = drag.previewDate;
+        dates.end = drag.previewDate;
+      }
     }
     const date = dates.due || dates.end || dates.scheduled || dates.start || dates.done || dates.cancelled || drag.previewDate;
     return {
@@ -3490,6 +3691,12 @@ function startOfWeek(date, firstDay) {
 
 function addDays(date, days) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
+}
+
+function calendarDayDiff(from, to) {
+  const fromUtc = Date.UTC(from.getFullYear(), from.getMonth(), from.getDate());
+  const toUtc = Date.UTC(to.getFullYear(), to.getMonth(), to.getDate());
+  return Math.round((toUtc - fromUtc) / 86400000);
 }
 
 function addMonths(date, months) {

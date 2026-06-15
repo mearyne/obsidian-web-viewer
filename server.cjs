@@ -46,6 +46,11 @@ const server = http.createServer((req, res) => {
   }
 
   if (requestPath === "/api/vault-file") {
+    if (req.method === "DELETE") {
+      deleteVaultFile(url.searchParams.get("path"), res);
+      return;
+    }
+
     if (req.method === "PUT") {
       receiveBody(req, (error, body) => {
         if (error) {
@@ -142,12 +147,14 @@ function sendVault(res, sourceRoot, name) {
       return;
     }
 
-    const files = readVaultFiles(sourceRoot, "");
+    const createdTimes = readCreatedTimes();
+    const files = readVaultFiles(sourceRoot, "", createdTimes);
+    writeCreatedTimes(createdTimes);
     sendJson(res, 200, { name, writable: !readOnly, files });
   });
 }
 
-function readVaultFiles(dir, prefix) {
+function readVaultFiles(dir, prefix, createdTimes) {
   return fs
     .readdirSync(dir, { withFileTypes: true })
     .filter((entry) => !entry.name.startsWith(".") || entry.name === ".attachments")
@@ -155,7 +162,7 @@ function readVaultFiles(dir, prefix) {
       const absolute = path.join(dir, entry.name);
       const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
 
-      if (entry.isDirectory()) return readVaultFiles(absolute, relative);
+      if (entry.isDirectory()) return readVaultFiles(absolute, relative, createdTimes);
       if (!entry.isFile() || !isIndexedFile(entry.name)) return [];
 
       const stat = fs.statSync(absolute);
@@ -163,7 +170,7 @@ function readVaultFiles(dir, prefix) {
         path: relative,
         size: stat.size,
         updatedAt: stat.mtimeMs,
-        createdAt: createdAtFromStat(stat),
+        createdAt: stableCreatedAt(relative, stat, createdTimes),
       };
 
       if (!isTextVaultFile(entry.name)) {
@@ -172,6 +179,14 @@ function readVaultFiles(dir, prefix) {
 
       return [item];
     });
+}
+
+function stableCreatedAt(relativePath, stat, createdTimes) {
+  const previous = Number(createdTimes[relativePath]);
+  if (Number.isFinite(previous) && previous > 0) return previous;
+  const createdAt = createdAtFromStat(stat);
+  createdTimes[relativePath] = createdAt;
+  return createdAt;
 }
 
 function createdAtFromStat(stat) {
@@ -238,12 +253,15 @@ function writeVaultFile(requestedPath, body, res) {
 
   try {
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    const previousCreatedAt = fs.existsSync(filePath) ? createdAtFromStat(fs.statSync(filePath)) : 0;
+    const createdTimes = readCreatedTimes();
+    const previousCreatedAt = Number(createdTimes[safePath]) || (fs.existsSync(filePath) ? createdAtFromStat(fs.statSync(filePath)) : 0);
     if (fs.existsSync(filePath) && payload.backup !== false) {
       fs.copyFileSync(filePath, `${filePath}.bak`);
     }
     fs.writeFileSync(filePath, payload.content, "utf8");
     const stat = fs.statSync(filePath);
+    createdTimes[safePath] = previousCreatedAt || createdAtFromStat(stat);
+    writeCreatedTimes(createdTimes);
     sendJson(res, 200, {
       path: safePath,
       size: stat.size,
@@ -316,6 +334,30 @@ function writeCalendarCache(key, body, res) {
   }
 }
 
+function deleteVaultFile(requestedPath, res) {
+  if (readOnly) {
+    sendJson(res, 403, { error: "Vault is read-only" });
+    return;
+  }
+
+  const safePath = normalizeVaultPath(requestedPath || "");
+  const filePath = resolveVaultFilePath(safePath);
+  if (!filePath || !isIndexedFile(safePath)) {
+    sendJson(res, 403, { error: "Invalid vault file path" });
+    return;
+  }
+
+  try {
+    fs.unlinkSync(filePath);
+    const createdTimes = readCreatedTimes();
+    delete createdTimes[safePath];
+    writeCreatedTimes(createdTimes);
+    sendJson(res, 200, { ok: true, path: safePath });
+  } catch (error) {
+    sendJson(res, 500, { error: error.message || "Delete failed" });
+  }
+}
+
 function normalizeCalendarCacheFiles(files) {
   return files
     .filter((file) => file && typeof file.path === "string")
@@ -372,6 +414,28 @@ function normalizeSettings(settings) {
 
 function settingsFilePath() {
   return path.join(calendarCacheRoot, "settings.json");
+}
+
+function readCreatedTimes() {
+  try {
+    const value = JSON.parse(fs.readFileSync(createdTimesFilePath(), "utf8"));
+    return value && typeof value === "object" ? value : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeCreatedTimes(createdTimes) {
+  try {
+    fs.mkdirSync(calendarCacheRoot, { recursive: true });
+    fs.writeFileSync(createdTimesFilePath(), JSON.stringify(createdTimes), "utf8");
+  } catch {
+    // Creation-time metadata is best-effort.
+  }
+}
+
+function createdTimesFilePath() {
+  return path.join(calendarCacheRoot, "created-times.json");
 }
 
 async function sendHolidays(yearValue, res) {
