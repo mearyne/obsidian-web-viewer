@@ -251,6 +251,8 @@ function handleGlobalKeydown(event) {
     return;
   }
 
+  if (isTypingTarget(event.target)) return;
+
   if (event.altKey && !event.ctrlKey && !event.metaKey && event.code === "Digit1") {
     event.preventDefault();
     event.stopPropagation();
@@ -267,7 +269,7 @@ function handleGlobalKeydown(event) {
     return;
   }
 
-  if (!isTypingTarget(event.target) && !event.ctrlKey && !event.metaKey && !event.altKey) {
+  if (!event.ctrlKey && !event.metaKey && !event.altKey) {
     if (event.key.toLowerCase() === "e") {
       event.preventDefault();
       event.stopPropagation();
@@ -2614,7 +2616,7 @@ function renderRecentAgendaDay(date, files, isToday, field, holidays = []) {
 function renderHolidayBadges(holidays, compact = false) {
   if (!holidays.length) return "";
   const label = holidays.map((holiday) => holiday.name).join(", ");
-  return `<span class="${compact ? "calendar-holiday compact" : "calendar-holiday"}" title="${escapeAttribute(label)}">${compact ? "휴" : escapeHtml(label)}</span>`;
+  return `<span class="${compact ? "calendar-holiday compact" : "calendar-holiday"}" title="${escapeAttribute(label)}">${compact ? `휴 ${escapeHtml(label)}` : escapeHtml(label)}</span>`;
 }
 
 function ensureVisibleHolidays() {
