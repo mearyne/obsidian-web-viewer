@@ -73,6 +73,8 @@ const els = {
   dailyNotePathInput: document.querySelector("#dailyNotePathInput"),
   fontSelect: document.querySelector("#fontSelect"),
   contentFontSizeInput: document.querySelector("#contentFontSizeInput"),
+  calendarRowFontSizeInput: document.querySelector("#calendarRowFontSizeInput"),
+  contentAlignSelect: document.querySelector("#contentAlignSelect"),
   vaultStatus: document.querySelector("#vaultStatus"),
   notePath: document.querySelector("#notePath"),
   noteTitle: document.querySelector("#noteTitle"),
@@ -174,6 +176,8 @@ els.calendarPathInput?.addEventListener("input", handleCalendarFilterInput);
 els.dailyNotePathInput?.addEventListener("input", updateDailyNotePath);
 els.fontSelect?.addEventListener("change", updateAppFont);
 els.contentFontSizeInput?.addEventListener("input", updateContentFontSize);
+els.calendarRowFontSizeInput?.addEventListener("input", updateCalendarRowFontSize);
+els.contentAlignSelect?.addEventListener("change", updateContentAlign);
 els.viewerWrap.addEventListener("click", closeSidebarFromMain);
 els.calendarView.addEventListener("wheel", handleCalendarWheel, { passive: false });
 els.calendarView.addEventListener("pointerdown", handleCalendarSwipeStart, true);
@@ -1083,7 +1087,7 @@ function initOptions() {
   const savedFont = localStorage.getItem("obsidian-web-viewer-font") || "default";
   const appliedFont = setAppFont(savedFont);
   if (els.fontSelect) els.fontSelect.value = appliedFont;
-  applyDeviceContentFontSize();
+  applyDeviceDisplayOptions();
 }
 
 function updateDailyNotePath() {
@@ -1114,16 +1118,29 @@ function currentFontDeviceKey() {
   return window.matchMedia("(max-width: 780px)").matches ? "mobile" : "desktop";
 }
 
-function contentFontStorageKey(deviceKey = currentFontDeviceKey()) {
-  return `obsidian-web-viewer-content-font-size-${deviceKey}`;
+function deviceOptionStorageKey(optionName, deviceKey = currentFontDeviceKey()) {
+  return `obsidian-web-viewer-${optionName}-${deviceKey}`;
 }
 
-function applyDeviceContentFontSize() {
+function applyDeviceDisplayOptions() {
   const deviceKey = currentFontDeviceKey();
   state.fontDeviceKey = deviceKey;
-  const saved = Number(localStorage.getItem(contentFontStorageKey(deviceKey)));
-  const size = Number.isFinite(saved) && saved >= 10 && saved <= 28 ? saved : 16;
-  setContentFontSize(size, { persist: false });
+  const contentSize = readNumberOption(deviceOptionStorageKey("content-font-size", deviceKey), 16, 10, 28);
+  const rowSize = readNumberOption(deviceOptionStorageKey("calendar-row-font-size", deviceKey), deviceKey === "mobile" ? 10.8 : 14.4, 6, 22);
+  const align = readChoiceOption(deviceOptionStorageKey("content-align", deviceKey), "soft-center", ["left", "soft-center", "center"]);
+  setContentFontSize(contentSize, { persist: false });
+  setCalendarRowFontSize(rowSize, { persist: false });
+  setContentAlign(align, { persist: false });
+}
+
+function readNumberOption(key, fallback, min, max) {
+  const saved = Number(localStorage.getItem(key));
+  return Number.isFinite(saved) && saved >= min && saved <= max ? saved : fallback;
+}
+
+function readChoiceOption(key, fallback, choices) {
+  const saved = localStorage.getItem(key);
+  return choices.includes(saved) ? saved : fallback;
 }
 
 function updateContentFontSize() {
@@ -1135,7 +1152,30 @@ function updateContentFontSize() {
 function setContentFontSize(size, { persist }) {
   document.documentElement.style.setProperty("--content-font-size", `${size}px`);
   if (els.contentFontSizeInput) els.contentFontSizeInput.value = String(size);
-  if (persist) localStorage.setItem(contentFontStorageKey(), String(size));
+  if (persist) localStorage.setItem(deviceOptionStorageKey("content-font-size"), String(size));
+}
+
+function updateCalendarRowFontSize() {
+  const value = Number(els.calendarRowFontSizeInput?.value || 14.4);
+  const size = Math.max(6, Math.min(22, Number.isFinite(value) ? value : 14.4));
+  setCalendarRowFontSize(size, { persist: true });
+}
+
+function setCalendarRowFontSize(size, { persist }) {
+  document.documentElement.style.setProperty("--calendar-row-font-size", `${size}px`);
+  if (els.calendarRowFontSizeInput) els.calendarRowFontSizeInput.value = String(size);
+  if (persist) localStorage.setItem(deviceOptionStorageKey("calendar-row-font-size"), String(size));
+}
+
+function updateContentAlign() {
+  setContentAlign(els.contentAlignSelect?.value || "soft-center", { persist: true });
+}
+
+function setContentAlign(align, { persist }) {
+  const nextAlign = ["left", "soft-center", "center"].includes(align) ? align : "soft-center";
+  document.documentElement.dataset.contentAlign = nextAlign;
+  if (els.contentAlignSelect) els.contentAlignSelect.value = nextAlign;
+  if (persist) localStorage.setItem(deviceOptionStorageKey("content-align"), nextAlign);
 }
 
 function handleCalendarFilterInput() {
@@ -2184,7 +2224,7 @@ function syncCalendarRowLimit() {
 
 function handleCalendarResize() {
   const nextFontDeviceKey = currentFontDeviceKey();
-  if (state.fontDeviceKey && state.fontDeviceKey !== nextFontDeviceKey) applyDeviceContentFontSize();
+  if (state.fontDeviceKey && state.fontDeviceKey !== nextFontDeviceKey) applyDeviceDisplayOptions();
   if (state.activeView !== "calendar" || state.calendarMode !== "month") return;
   window.clearTimeout(handleCalendarResize.timer);
   handleCalendarResize.timer = window.setTimeout(syncCalendarRowLimit, 80);

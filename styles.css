@@ -19,6 +19,7 @@
   --sidebar-width: 320px;
   --app-font: "Inter", "Segoe UI", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   --content-font-size: 16px;
+  --calendar-row-font-size: 14.4px;
   --range-bg-0: #efeaff;
   --range-border-0: #7057d6;
   --range-bg-1: #e5f7ed;
@@ -945,6 +946,24 @@ button:disabled {
   padding: 28px 0 60px;
 }
 
+:root[data-content-align="left"] .markdown-body,
+:root[data-content-align="left"] .editor-shell {
+  margin-left: 0;
+  margin-right: auto;
+}
+
+:root[data-content-align="soft-center"] .markdown-body,
+:root[data-content-align="soft-center"] .editor-shell {
+  margin-left: max(0px, calc((100% - var(--line-width)) / 2 - 72px));
+  margin-right: auto;
+}
+
+:root[data-content-align="center"] .markdown-body,
+:root[data-content-align="center"] .editor-shell {
+  margin-left: auto;
+  margin-right: auto;
+}
+
 .editor-shell[hidden] {
   display: none;
 }
@@ -1086,28 +1105,16 @@ button:disabled {
 }
 
 .heading-section .heading-section-1,
-.heading-section-1 > :not(summary) {
-  margin-left: 18px;
-}
-
+.heading-section-1 > :not(summary),
 .heading-section .heading-section-2,
-.heading-section-2 > :not(summary) {
-  margin-left: 18px;
-}
-
+.heading-section-2 > :not(summary),
 .heading-section .heading-section-3,
-.heading-section-3 > :not(summary) {
-  margin-left: 18px;
-}
-
+.heading-section-3 > :not(summary),
 .heading-section .heading-section-4,
-.heading-section-4 > :not(summary) {
-  margin-left: 18px;
-}
-
+.heading-section-4 > :not(summary),
 .heading-section .heading-section-5,
 .heading-section-5 > :not(summary) {
-  margin-left: 18px;
+  margin-left: 9px;
 }
 
 .heading-section > summary {
@@ -1168,65 +1175,65 @@ button:disabled {
 }
 
 .markdown-body h1 {
-  font-size: 30px;
+  font-size: 24px;
 }
 
 .markdown-body h2 {
   border-bottom: 0;
-  font-size: 23px;
+  font-size: 18.4px;
 }
 
 .markdown-body h3 {
-  font-size: 19px;
+  font-size: 15.2px;
 }
 
 .markdown-body h4 {
-  font-size: 17px;
+  font-size: 13.6px;
 }
 
 .markdown-body h5,
 .markdown-body h6 {
-  font-size: 15px;
+  font-size: 12px;
 }
 
 .markdown-body .heading-level-2 {
-  margin-left: 18px;
+  margin-left: 0;
 }
 
 .markdown-body .heading-level-3 {
-  margin-left: 36px;
+  margin-left: 0;
 }
 
 .markdown-body .heading-level-4 {
-  margin-left: 54px;
+  margin-left: 0;
 }
 
 .markdown-body .heading-level-5 {
-  margin-left: 72px;
+  margin-left: 0;
 }
 
 .markdown-body .heading-level-6 {
-  margin-left: 90px;
+  margin-left: 0;
 }
 
 .markdown-body .markdown-depth-2 {
-  margin-left: 18px;
+  margin-left: 0;
 }
 
 .markdown-body .markdown-depth-3 {
-  margin-left: 36px;
+  margin-left: 0;
 }
 
 .markdown-body .markdown-depth-4 {
-  margin-left: 54px;
+  margin-left: 0;
 }
 
 .markdown-body .markdown-depth-5 {
-  margin-left: 72px;
+  margin-left: 0;
 }
 
 .markdown-body .markdown-depth-6 {
-  margin-left: 90px;
+  margin-left: 0;
 }
 
 .markdown-body p {
@@ -1334,11 +1341,11 @@ button:disabled {
   border-radius: 4px;
   color: var(--text);
   display: inline;
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: "Cascadia Code", "Consolas", "D2Coding", "Malgun Gothic", "Nanum Gothic", monospace;
   font-size: 0.92em;
   line-height: 1.25;
   padding: 2px 5px;
-  white-space: break-spaces;
+  word-break: keep-all;
 }
 
 .markdown-body .heading-level code {
@@ -1701,7 +1708,7 @@ button:disabled {
   border: 1px solid var(--line);
   border-radius: 5px;
   display: grid;
-  font-size: 14.4px;
+  font-size: var(--calendar-row-font-size);
   gap: 4px;
   grid-template-columns: auto minmax(0, 1fr);
   height: 100%;
@@ -2011,7 +2018,7 @@ button.calendar-more {
     border-width: 0;
     border-left-width: 2px;
     border-radius: 3px;
-    font-size: clamp(7.2px, 1.96vw, 10.8px);
+    font-size: var(--calendar-row-font-size);
     gap: 1px;
     grid-template-columns: minmax(0, 1fr);
     line-height: 0.92;
@@ -2087,7 +2094,7 @@ button.calendar-more {
   }
 
   .calendar-more {
-    font-size: clamp(7.2px, 1.96vw, 10.8px);
+    font-size: var(--calendar-row-font-size);
   }
 }
 
@@ -2107,31 +2114,31 @@ button.calendar-more {
   .heading-section-4 > :not(summary),
   .heading-section .heading-section-5,
   .heading-section-5 > :not(summary) {
-    margin-left: 8px;
+    margin-left: 4px;
   }
 
   .markdown-body .heading-level-2,
   .markdown-body .markdown-depth-2 {
-    margin-left: 8px;
+    margin-left: 0;
   }
 
   .markdown-body .heading-level-3,
   .markdown-body .markdown-depth-3 {
-    margin-left: 16px;
+    margin-left: 0;
   }
 
   .markdown-body .heading-level-4,
   .markdown-body .markdown-depth-4 {
-    margin-left: 24px;
+    margin-left: 0;
   }
 
   .markdown-body .heading-level-5,
   .markdown-body .markdown-depth-5 {
-    margin-left: 32px;
+    margin-left: 0;
   }
 
   .markdown-body .heading-level-6,
   .markdown-body .markdown-depth-6 {
-    margin-left: 40px;
+    margin-left: 0;
   }
 }
