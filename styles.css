@@ -903,6 +903,7 @@ button:disabled {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   min-height: calc(100vh - 184px);
+  min-width: 0;
 }
 
 .markdown-editor {
@@ -1001,7 +1002,7 @@ button:disabled {
   align-items: baseline;
   display: grid;
   gap: 8px;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: 28px minmax(0, 1fr);
 }
 
 .heading-section {
@@ -1027,11 +1028,14 @@ button:disabled {
 
 .markdown-body .heading-level::before {
   color: var(--faint);
-  content: attr(data-heading-label);
   font-size: 11px;
   font-weight: 650;
   line-height: 1;
   text-transform: lowercase;
+}
+
+.markdown-body .heading-text {
+  min-width: 0;
 }
 
 .markdown-body h1::after,
@@ -1044,7 +1048,7 @@ button:disabled {
   bottom: 0;
   content: "";
   height: 1px;
-  left: 30px;
+  left: 36px;
   position: absolute;
   right: 0;
 }
@@ -1069,7 +1073,6 @@ button:disabled {
 .markdown-body h2 {
   border-bottom: 0;
   font-size: 23px;
-  padding-bottom: 0;
 }
 
 .markdown-body h3 {
@@ -1229,14 +1232,26 @@ button:disabled {
   background: var(--code);
   border-radius: 4px;
   color: var(--text);
+  display: inline;
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   font-size: 0.92em;
+  line-height: 1.25;
   padding: 2px 5px;
+  white-space: break-spaces;
+}
+
+.markdown-body .heading-level code {
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  font-size: 0.84em;
+  padding: 1px 5px;
 }
 
 .markdown-body pre code {
   background: transparent;
+  display: block;
   padding: 0;
+  white-space: pre;
 }
 
 .markdown-body blockquote {
@@ -1408,7 +1423,7 @@ button:disabled {
 .calendar-toolbar {
   align-items: center;
   display: grid;
-  grid-template-columns: 24px 76px 24px 56px 174px auto minmax(0, 1fr);
+  grid-template-columns: 22px 72px 22px 52px 108px minmax(0, 1fr);
   gap: 2px;
   min-height: 36px;
   overflow-x: auto;
@@ -1434,7 +1449,7 @@ button:disabled {
   border: 1px solid var(--line);
   border-radius: 7px;
   display: grid;
-  grid-template-columns: repeat(3, 58px);
+  grid-template-columns: repeat(3, 36px);
   overflow: hidden;
   white-space: nowrap;
 }
@@ -1444,7 +1459,7 @@ button:disabled {
   border-radius: 0;
   min-height: 30px;
   padding: 0;
-  width: 58px;
+  width: 36px;
 }
 
 .calendar-mode-switch button + button {
@@ -1536,7 +1551,10 @@ button:disabled {
 
 .calendar-tasks {
   display: grid;
+  grid-template-rows: repeat(5, minmax(0, 1fr));
   gap: 4px;
+  height: calc(100% - 22px);
+  min-height: 0;
   position: relative;
   z-index: 1;
 }
@@ -1552,7 +1570,7 @@ button:disabled {
   grid-template-columns: auto minmax(0, 1fr);
   justify-items: start;
   line-height: 1.25;
-  min-height: 25px;
+  min-height: 0;
   overflow: hidden;
   padding: 4px 6px;
   text-align: left;
@@ -1583,6 +1601,10 @@ button:disabled {
   text-decoration: line-through;
 }
 
+.calendar-row-spacer {
+  min-height: 0;
+}
+
 .calendar-task.range-task {
   color: var(--text);
 }
@@ -1609,6 +1631,7 @@ button.calendar-more {
   background: transparent;
   border: 0;
   display: inline;
+  line-height: 1.2;
   min-height: 0;
   padding: 0;
   text-align: left;
@@ -1730,7 +1753,7 @@ button.calendar-more {
 
   .calendar-toolbar {
     gap: 3px;
-    grid-template-columns: 26px 74px 26px 52px 138px auto minmax(48px, 1fr);
+    grid-template-columns: 24px 70px 24px 48px 96px minmax(0, 1fr);
   }
 
   .calendar-toolbar strong {
@@ -1743,12 +1766,12 @@ button.calendar-more {
   }
 
   .calendar-mode-switch {
-    grid-template-columns: repeat(3, 46px);
+    grid-template-columns: repeat(3, 32px);
   }
 
   .calendar-mode-switch button {
     font-size: 12px;
-    width: 46px;
+    width: 32px;
   }
 
   .editor-split {
@@ -1805,13 +1828,14 @@ button.calendar-more {
 
   .calendar-tasks {
     gap: 2px;
+    height: calc(100% - 16px);
   }
 
   .calendar-task {
     font-size: 9px;
     gap: 2px;
     grid-template-columns: minmax(0, 1fr);
-    min-height: 17px;
+    min-height: 0;
     padding: 2px 3px;
   }
 

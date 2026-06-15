@@ -1180,6 +1180,7 @@ async function enterEditMode() {
   els.markdownView.hidden = true;
   els.calendarView.hidden = true;
   els.editorShell.hidden = false;
+  requestAnimationFrame(resizeEditorToContent);
   focusEditor();
   startAutoSave();
   updateEditorStatus();
@@ -2039,8 +2040,8 @@ function renderCalendar() {
         <div class="calendar-tasks">
           ${
             showingTasks
-              ? `${dayTasks.slice(0, 5).map((task) => renderCalendarTask(task, dateKey)).join("")}${dayTasks.length > 5 ? `<button class="calendar-more" type="button" data-calendar-more="${dateKey}">+${dayTasks.length - 5}</button>` : ""}`
-              : `${dayFiles.slice(0, 5).map((item) => renderCalendarFile(item, recentField)).join("")}${dayFiles.length > 5 ? `<button class="calendar-more" type="button" data-calendar-more="${dateKey}">+${dayFiles.length - 5}</button>` : ""}`
+              ? renderCalendarRows(dayTasks, dateKey, (task) => renderCalendarTask(task, dateKey))
+              : renderCalendarRows(dayFiles, dateKey, (item) => renderCalendarFile(item, recentField))
           }
         </div>
       </div>
@@ -2056,11 +2057,10 @@ function renderCalendar() {
         <button type="button" data-calendar-action="next">&gt;</button>
         <button type="button" data-calendar-action="today">Today</button>
         <div class="calendar-mode-switch" aria-label="Calendar view">
-          <button type="button" data-calendar-mode="month" class="${state.calendarMode === "month" ? "active" : ""}">월간</button>
-          <button type="button" data-calendar-mode="week" class="${state.calendarMode === "week" ? "active" : ""}">주간</button>
-          <button type="button" data-calendar-mode="day" class="${state.calendarMode === "day" ? "active" : ""}">일일</button>
+          <button type="button" data-calendar-mode="month" class="${state.calendarMode === "month" ? "active" : ""}">30d</button>
+          <button type="button" data-calendar-mode="week" class="${state.calendarMode === "week" ? "active" : ""}">7d</button>
+          <button type="button" data-calendar-mode="day" class="${state.calendarMode === "day" ? "active" : ""}">1d</button>
         </div>
-        <span>${showingTasks ? `${state.tasks.length} tasks` : `${(state.recentFiles[state.calendarKind] || []).length} files`}</span>
       </div>
       <div class="calendar-weekdays">
         ${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => `<div>${day}</div>`).join("")}
@@ -2074,6 +2074,14 @@ function renderCalendar() {
 
   bindCalendarEvents();
   updateSyncStatus();
+}
+
+function renderCalendarRows(items, context, renderer) {
+  const visible = items.length > 5 ? items.slice(0, 4) : items.slice(0, 5);
+  const rows = visible.map((item) => renderer(item, context));
+  if (items.length > 5) rows.push(`<button class="calendar-more" type="button" data-calendar-more="${context}">+${items.length - 4}</button>`);
+  while (rows.length < 5) rows.push('<span class="calendar-row-spacer" aria-hidden="true"></span>');
+  return rows.join("");
 }
 
 function updateSyncStatus() {
@@ -2645,9 +2653,9 @@ function renderMarkdown(source) {
         html.push("</details>");
         openHeadings.pop();
       }
-      html.push(`<details class="heading-section heading-section-${level}" open><summary><h${level} class="heading-level heading-level-${level}" data-heading-label="h${level}">${renderInline(heading[2])}</h${level}></summary>`);
+      html.push(`<details class="heading-section heading-section-${level}" open><summary><h${level} class="heading-level heading-level-${level}" data-heading-label="h${level}"><span class="heading-text">${renderInline(heading[2])}</span></h${level}></summary>`);
       openHeadings.push(level);
-      currentDepth = level;
+      currentDepth = Math.min(level + 1, 6);
       i += 1;
       continue;
     }
