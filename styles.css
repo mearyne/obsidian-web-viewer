@@ -1050,7 +1050,7 @@ button:disabled {
 .calendar-toolbar {
   align-items: center;
   display: grid;
-  grid-template-columns: auto minmax(12ch, auto) auto auto auto auto minmax(0, 1fr);
+  grid-template-columns: 34px 230px 34px 64px 174px auto minmax(0, 1fr);
   gap: 8px;
   min-height: 36px;
   overflow-x: auto;
@@ -1059,7 +1059,9 @@ button:disabled {
 .calendar-toolbar strong {
   font-size: 18px;
   margin: 0 6px;
+  overflow: hidden;
   text-align: center;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -1073,7 +1075,8 @@ button:disabled {
 .calendar-mode-switch {
   border: 1px solid var(--line);
   border-radius: 7px;
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: repeat(3, 58px);
   overflow: hidden;
   white-space: nowrap;
 }
@@ -1082,6 +1085,8 @@ button:disabled {
   border: 0;
   border-radius: 0;
   min-height: 30px;
+  padding: 0;
+  width: 58px;
 }
 
 .calendar-mode-switch button + button {
@@ -1308,7 +1313,7 @@ button:disabled {
 
   .calendar-toolbar {
     gap: 5px;
-    grid-template-columns: auto minmax(10ch, auto) auto auto auto auto minmax(64px, 1fr);
+    grid-template-columns: 32px 126px 32px 56px 138px auto minmax(64px, 1fr);
   }
 
   .calendar-toolbar strong {
@@ -1318,6 +1323,15 @@ button:disabled {
 
   .calendar-toolbar span {
     margin-left: 0;
+  }
+
+  .calendar-mode-switch {
+    grid-template-columns: repeat(3, 46px);
+  }
+
+  .calendar-mode-switch button {
+    font-size: 12px;
+    width: 46px;
   }
 
   .editor-split {
