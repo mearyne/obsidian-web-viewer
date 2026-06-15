@@ -1148,7 +1148,21 @@ button:disabled {
 }
 
 .excalidraw-preview-body {
+  max-width: min(400px, 100%);
   padding: 14px;
+}
+
+.excalidraw-react-mount {
+  height: min(400px, 60vh);
+  max-height: min(400px, calc(100vh - 180px));
+  max-width: min(400px, calc(100vw - 48px));
+  min-height: 260px;
+  overflow: hidden;
+  width: min(400px, 100%);
+}
+
+.excalidraw-react-mount .excalidraw {
+  --lg-button-size: 26px;
 }
 
 .excalidraw-preview-meta {
@@ -1167,9 +1181,10 @@ button:disabled {
 .excalidraw-canvas svg {
   display: block;
   height: auto;
-  max-height: 720px;
+  max-height: min(400px, calc(100vh - 180px));
+  max-width: min(400px, 100%);
   min-height: 220px;
-  width: 100%;
+  width: min(400px, 100%);
 }
 
 .callout {

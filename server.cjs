@@ -25,6 +25,7 @@ const types = {
   ".gif": "image/gif",
   ".svg": "image/svg+xml",
   ".webp": "image/webp",
+  ".woff2": "font/woff2",
 };
 
 const server = http.createServer((req, res) => {

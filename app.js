@@ -94,6 +94,8 @@ const els = {
   themeButton: document.querySelector("#themeButton"),
 };
 
+let excalidrawPreviewModulePromise = null;
+
 const SAMPLE_FILES = {
   "README.md": `---
 title: Obsidian Sample
@@ -1059,6 +1061,7 @@ function renderCurrentDocument() {
     bindWikiLinks(els.markdownView);
     hydrateVaultImages(els.markdownView);
     hydrateEmbeddedDocuments(els.markdownView);
+    hydrateExcalidrawPackagePreviews(els.markdownView);
     return;
   }
 
@@ -1069,6 +1072,7 @@ function renderCurrentDocument() {
     bindImageLightbox(els.markdownView);
     hydrateVaultImages(els.markdownView);
     hydrateEmbeddedDocuments(els.markdownView);
+    hydrateExcalidrawPackagePreviews(els.markdownView);
     return;
   }
 
@@ -1185,6 +1189,7 @@ function renderEditorPreview() {
   bindImageLightbox(els.editorPreview);
   hydrateVaultImages(els.editorPreview);
   hydrateEmbeddedDocuments(els.editorPreview);
+  hydrateExcalidrawPackagePreviews(els.editorPreview);
 }
 
 function focusEditor() {
@@ -2658,6 +2663,65 @@ async function hydrateEmbeddedDocuments(root) {
       bindWikiLinks(embed);
       hydrateVaultImages(embed);
       hydrateEmbeddedDocuments(embed);
+      hydrateExcalidrawPackagePreviews(embed);
+    }),
+  );
+}
+
+function ensureExcalidrawPreviewModule() {
+  if (!excalidrawPreviewModulePromise) {
+    ensureExcalidrawPreviewStyles();
+    excalidrawPreviewModulePromise = import("./vendor/excalidraw-preview.js");
+  }
+  return excalidrawPreviewModulePromise;
+}
+
+function ensureExcalidrawPreviewStyles() {
+  if (document.querySelector('link[data-excalidraw-preview-style="true"]')) return;
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href = "./vendor/excalidraw-preview.css";
+  link.dataset.excalidrawPreviewStyle = "true";
+  document.head.append(link);
+}
+
+async function hydrateExcalidrawPackagePreviews(root) {
+  const bodies = [...root.querySelectorAll("[data-excalidraw-preview]")].filter((body) => body.dataset.excalidrawHydrated !== "true");
+  if (!bodies.length) return;
+
+  let previewModule;
+  try {
+    previewModule = await ensureExcalidrawPreviewModule();
+  } catch {
+    return;
+  }
+
+  await Promise.all(
+    bodies.map(async (body) => {
+      const path = body.getAttribute("data-excalidraw-path") || "";
+      let content = "";
+      if (path && path === state.currentPath) {
+        content = state.currentContent;
+      } else {
+        const node = path ? state.files.get(path) : null;
+        if (!node) return;
+        content = await readFileNode(node);
+      }
+
+      const scene = extractExcalidrawScene(content);
+      if (!scene) return;
+      body.dataset.excalidrawHydrated = "true";
+      body.classList.add("excalidraw-preview-loading");
+      try {
+        previewModule.renderExcalidrawPreview(body, scene, {
+          path,
+          theme: document.documentElement.dataset.theme === "dark" ? "dark" : "light",
+        });
+      } catch {
+        body.dataset.excalidrawHydrated = "false";
+      } finally {
+        body.classList.remove("excalidraw-preview-loading");
+      }
     }),
   );
 }
@@ -2673,7 +2737,7 @@ function renderExcalidrawPreview(content, path, { embedded = false } = {}) {
         <strong>${escapeHtml(title)}</strong>
         ${openHref ? `<a href="${escapeAttribute(openHref)}">Obsidian에서 열기</a>` : ""}
       </div>
-      <div class="excalidraw-preview-body">${body}</div>
+      <div class="excalidraw-preview-body" data-excalidraw-preview data-excalidraw-path="${escapeAttribute(path)}">${body}</div>
     </div>
   `;
 }
