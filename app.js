@@ -26,6 +26,7 @@ const state = {
   recentFiles: { updated: [], created: [] },
   calendarKind: "tasks",
   mobileCalendarMode: "agenda",
+  calendarRowLimit: 5,
   dailyNotePath: "1. Daily",
   sidebarResize: null,
   sidebarPinned: false,
@@ -65,6 +66,7 @@ const els = {
   folderPathInput: document.querySelector("#folderPathInput"),
   calendarPathInput: document.querySelector("#calendarPathInput"),
   dailyNotePathInput: document.querySelector("#dailyNotePathInput"),
+  fontSelect: document.querySelector("#fontSelect"),
   vaultStatus: document.querySelector("#vaultStatus"),
   notePath: document.querySelector("#notePath"),
   noteTitle: document.querySelector("#noteTitle"),
@@ -163,6 +165,7 @@ els.collapseTreeButton.addEventListener("click", collapseAllTree);
 els.folderPathInput?.addEventListener("input", renderTree);
 els.calendarPathInput?.addEventListener("input", handleCalendarFilterInput);
 els.dailyNotePathInput?.addEventListener("input", updateDailyNotePath);
+els.fontSelect?.addEventListener("change", updateAppFont);
 els.viewerWrap.addEventListener("click", closeSidebarFromMain);
 els.historyBackButton.addEventListener("click", navigateHistoryBack);
 els.historyForwardButton.addEventListener("click", navigateHistoryForward);
@@ -185,6 +188,7 @@ window.addEventListener("keydown", handleGlobalKeydown, true);
 document.addEventListener("pointerdown", closeSidebarFromOutside);
 document.addEventListener("pointerup", clearCalendarDragIfActive);
 document.addEventListener("pointercancel", clearCalendarDragIfActive);
+window.addEventListener("resize", handleCalendarResize, { passive: true });
 
 function handleGlobalKeydown(event) {
   if (event.altKey && !event.ctrlKey && !event.metaKey && event.code === "Digit1") {
@@ -1058,12 +1062,33 @@ function initOptions() {
   const savedDailyPath = normalizeDailyNotePath(localStorage.getItem("obsidian-web-viewer-daily-note-path") || state.dailyNotePath);
   state.dailyNotePath = savedDailyPath;
   if (els.dailyNotePathInput) els.dailyNotePathInput.value = savedDailyPath;
+  const savedFont = localStorage.getItem("obsidian-web-viewer-font") || "default";
+  const appliedFont = setAppFont(savedFont);
+  if (els.fontSelect) els.fontSelect.value = appliedFont;
 }
 
 function updateDailyNotePath() {
   const nextPath = normalizeDailyNotePath(els.dailyNotePathInput?.value || state.dailyNotePath);
   state.dailyNotePath = nextPath;
   localStorage.setItem("obsidian-web-viewer-daily-note-path", nextPath);
+}
+
+function updateAppFont() {
+  setAppFont(els.fontSelect?.value || "default");
+}
+
+function setAppFont(fontKey) {
+  const fonts = {
+    default: '"Inter", "Segoe UI", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
+    ridibatang: '"RIDIBatang", "리디바탕", "Nanum Myeongjo", "Malgun Gothic", serif',
+    "nanum-myeongjo": '"Nanum Myeongjo", "나눔명조", "RIDIBatang", serif',
+    "nanum-gothic": '"Nanum Gothic", "나눔고딕", "Malgun Gothic", sans-serif',
+    "malgun-gothic": '"Malgun Gothic", "맑은 고딕", "Segoe UI", sans-serif',
+  };
+  const nextFont = fonts[fontKey] ? fontKey : "default";
+  document.documentElement.style.setProperty("--app-font", fonts[nextFont]);
+  localStorage.setItem("obsidian-web-viewer-font", nextFont);
+  return nextFont;
 }
 
 function handleCalendarFilterInput() {
@@ -2018,6 +2043,7 @@ function renderCalendar() {
   const tasksByDate = groupTasksByDate(state.tasks);
   const recentField = state.calendarKind === "created" ? "createdAt" : "updatedAt";
   const recentByDate = groupRecentFilesByDate(state.recentFiles[state.calendarKind] || [], recentField);
+  const rowLimit = state.calendarRowLimit || 5;
   const cells = [];
   const agendaItems = calendarAgendaDates(month).map((date) => {
     const dateKey = formatDate(date);
@@ -2040,8 +2066,8 @@ function renderCalendar() {
         <div class="calendar-tasks">
           ${
             showingTasks
-              ? renderCalendarRows(dayTasks, dateKey, (task) => renderCalendarTask(task, dateKey))
-              : renderCalendarRows(dayFiles, dateKey, (item) => renderCalendarFile(item, recentField))
+              ? renderCalendarRows(dayTasks, dateKey, rowLimit, (task) => renderCalendarTask(task, dateKey))
+              : renderCalendarRows(dayFiles, dateKey, rowLimit, (item) => renderCalendarFile(item, recentField))
           }
         </div>
       </div>
@@ -2050,12 +2076,14 @@ function renderCalendar() {
   }
 
   els.calendarView.innerHTML = `
-    <div class="calendar-shell calendar-mode-${state.calendarMode} mobile-${state.mobileCalendarMode}">
+    <div class="calendar-shell calendar-mode-${state.calendarMode} mobile-${state.mobileCalendarMode}" style="--calendar-row-count: ${rowLimit};">
       <div class="calendar-toolbar">
-        <button type="button" data-calendar-action="prev">&lt;</button>
-        <strong>${calendarTitle()}</strong>
-        <button type="button" data-calendar-action="next">&gt;</button>
-        <button type="button" data-calendar-action="today">Today</button>
+        <div class="calendar-month-nav">
+          <button type="button" data-calendar-action="prev">&lt;</button>
+          <strong>${calendarTitle()}</strong>
+          <button type="button" data-calendar-action="next">&gt;</button>
+        </div>
+        <button class="calendar-today-button" type="button" data-calendar-action="today">Today</button>
         <div class="calendar-mode-switch" aria-label="Calendar view">
           <button type="button" data-calendar-mode="month" class="${state.calendarMode === "month" ? "active" : ""}">30d</button>
           <button type="button" data-calendar-mode="week" class="${state.calendarMode === "week" ? "active" : ""}">7d</button>
@@ -2074,14 +2102,43 @@ function renderCalendar() {
 
   bindCalendarEvents();
   updateSyncStatus();
+  requestAnimationFrame(syncCalendarRowLimit);
 }
 
-function renderCalendarRows(items, context, renderer) {
-  const visible = items.length > 5 ? items.slice(0, 4) : items.slice(0, 5);
+function renderCalendarRows(items, context, rowLimit, renderer) {
+  const safeLimit = Math.max(1, Math.min(5, rowLimit));
+  const visibleLimit = items.length > safeLimit ? Math.max(0, safeLimit - 1) : safeLimit;
+  const visible = items.slice(0, visibleLimit);
   const rows = visible.map((item) => renderer(item, context));
-  if (items.length > 5) rows.push(`<button class="calendar-more" type="button" data-calendar-more="${context}">+${items.length - 4}</button>`);
-  while (rows.length < 5) rows.push('<span class="calendar-row-spacer" aria-hidden="true"></span>');
+  if (items.length > safeLimit) rows.push(`<button class="calendar-more" type="button" data-calendar-more="${context}">+${items.length - visibleLimit}</button>`);
+  while (rows.length < safeLimit) rows.push('<span class="calendar-row-spacer" aria-hidden="true"></span>');
   return rows.join("");
+}
+
+function syncCalendarRowLimit() {
+  if (state.activeView !== "calendar" || state.calendarMode !== "month" || els.calendarView.hidden) return;
+  const cell = els.calendarView.querySelector(".calendar-cell");
+  const day = els.calendarView.querySelector(".calendar-day");
+  const tasks = els.calendarView.querySelector(".calendar-tasks");
+  if (!cell || !day || !tasks) return;
+  const styles = getComputedStyle(cell);
+  const tasksStyles = getComputedStyle(tasks);
+  const verticalPadding = parseFloat(styles.paddingTop) + parseFloat(styles.paddingBottom);
+  const dayHeight = day.offsetHeight + parseFloat(getComputedStyle(day).marginBottom || 0);
+  const available = Math.max(0, cell.clientHeight - verticalPadding - dayHeight);
+  const gap = parseFloat(tasksStyles.rowGap || tasksStyles.gap || 0);
+  const rowHeight = window.matchMedia("(max-width: 780px)").matches ? 11 : 18;
+  const nextLimit = Math.max(1, Math.min(5, Math.floor((available + gap) / (rowHeight + gap))));
+  if (nextLimit !== state.calendarRowLimit) {
+    state.calendarRowLimit = nextLimit;
+    renderCalendar();
+  }
+}
+
+function handleCalendarResize() {
+  if (state.activeView !== "calendar" || state.calendarMode !== "month") return;
+  window.clearTimeout(handleCalendarResize.timer);
+  handleCalendarResize.timer = window.setTimeout(syncCalendarRowLimit, 80);
 }
 
 function updateSyncStatus() {

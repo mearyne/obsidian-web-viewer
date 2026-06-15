@@ -47,7 +47,14 @@
         <nav id="fileTree" class="file-tree" aria-label="Vault files"></nav>
 
         <div class="sidebar-options">
-          <button id="editButton" type="button" disabled aria-label="Obsidian에서 열기" title="Obsidian">💎</button>
+          <button id="editButton" type="button" disabled aria-label="Obsidian에서 열기" title="Obsidian">
+            <svg class="obsidian-logo" aria-hidden="true" viewBox="0 0 64 64">
+              <path d="M23 3 9 22l8 33 21 6 17-25L40 7Z" />
+              <path d="M23 3 40 7l-9 16L9 22Z" />
+              <path d="M31 23 55 36 38 61 17 55Z" />
+              <path d="M31 23 40 7l15 29Z" />
+            </svg>
+          </button>
           <button id="themeButton" class="sidebar-theme-button" type="button" aria-label="테마 변경" title="테마 변경">🌙</button>
           <button id="optionsButton" type="button" aria-haspopup="dialog" aria-expanded="false" aria-label="옵션" title="옵션">⚙️</button>
         </div>
@@ -130,6 +137,22 @@
         <h2 id="optionsTitle">옵션</h2>
         <button id="optionsCloseButton" class="icon-button" type="button" aria-label="옵션 닫기">×</button>
       </header>
+
+      <details class="option-node">
+        <summary>화면</summary>
+        <div class="option-node-body">
+          <label class="option-field">
+            <span>폰트</span>
+            <select id="fontSelect">
+              <option value="default">기본</option>
+              <option value="ridibatang">리디바탕</option>
+              <option value="nanum-myeongjo">나눔명조</option>
+              <option value="nanum-gothic">나눔고딕</option>
+              <option value="malgun-gothic">맑은고딕</option>
+            </select>
+          </label>
+        </div>
+      </details>
 
 
       <details class="option-node">

@@ -17,9 +17,20 @@
   --code: #f4f4f4;
   --line-width: 760px;
   --sidebar-width: 320px;
-  font-family:
-    "Inter", "Segoe UI", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-    sans-serif;
+  --app-font: "Inter", "Segoe UI", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --range-bg-0: #efeaff;
+  --range-border-0: #7057d6;
+  --range-bg-1: #e5f7ed;
+  --range-border-1: #1f8a58;
+  --range-bg-2: #fff0db;
+  --range-border-2: #b76615;
+  --range-bg-3: #e5f1ff;
+  --range-border-3: #2b74bf;
+  --range-bg-4: #ffe8ef;
+  --range-border-4: #be3f67;
+  --range-bg-5: #f4f4d5;
+  --range-border-5: #777a16;
+  font-family: var(--app-font);
 }
 
 :root[data-theme="dark"] {
@@ -39,6 +50,18 @@
   --accent-soft: #2b2a44;
   --danger: #ff8f8f;
   --code: #2b2b2b;
+  --range-bg-0: #3b3559;
+  --range-border-0: #8f7cff;
+  --range-bg-1: #2f443a;
+  --range-border-1: #57b982;
+  --range-bg-2: #4b392a;
+  --range-border-2: #d79754;
+  --range-bg-3: #2f4054;
+  --range-border-3: #68a8e8;
+  --range-bg-4: #4d3038;
+  --range-border-4: #e17191;
+  --range-bg-5: #3f3f2c;
+  --range-border-5: #c7c95a;
 }
 
 * {
@@ -55,7 +78,8 @@ body {
 
 button,
 input,
-textarea {
+textarea,
+select {
   font: inherit;
 }
 
@@ -538,9 +562,12 @@ button:disabled {
 }
 
 .sidebar-options > button {
+  align-items: center;
   background: var(--surface);
   border-color: var(--line);
+  display: flex;
   font-size: 17px;
+  justify-content: center;
   min-width: 0;
   padding: 0;
   width: 100%;
@@ -553,6 +580,19 @@ button:disabled {
 
 .sidebar-theme-button {
   text-align: center;
+}
+
+.obsidian-logo {
+  display: block;
+  height: 20px;
+  width: 20px;
+}
+
+.obsidian-logo path {
+  fill: #7c5cff;
+  stroke: color-mix(in srgb, #392e7a 65%, var(--line));
+  stroke-linejoin: round;
+  stroke-width: 2;
 }
 
 .options-backdrop {
@@ -682,7 +722,8 @@ button:disabled {
   font-size: 12px;
 }
 
-.option-field input {
+.option-field input,
+.option-field select {
   background: var(--surface-2);
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -1444,38 +1485,50 @@ button:disabled {
   margin: 0 auto;
   max-width: 1180px;
   overflow: hidden;
-  padding: 12px 0 48px;
+  padding: 12px 0;
 }
 
 .calendar-shell {
   display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
   gap: 10px;
+  height: 100%;
+  min-height: 0;
 }
 
 .calendar-toolbar {
   align-items: center;
-  display: grid;
-  grid-template-columns: 22px 72px 22px 52px 108px minmax(0, 1fr);
-  column-gap: 0;
+  display: flex;
+  gap: 8px;
   min-height: 36px;
   overflow-x: auto;
 }
 
-.calendar-toolbar [data-calendar-action="today"] {
-  margin-left: 6px;
+.calendar-month-nav {
+  align-items: center;
+  display: grid;
+  flex: 0 0 auto;
+  grid-template-columns: 24px 76px 24px;
+  justify-items: center;
 }
 
-.calendar-toolbar .calendar-mode-switch {
-  margin-left: 6px;
-}
-
-.calendar-toolbar strong {
+.calendar-month-nav strong {
   font-size: 18px;
   margin: 0;
   overflow: hidden;
   text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.calendar-month-nav button,
+.calendar-today-button {
+  padding: 0;
+  text-align: center;
+}
+
+.calendar-today-button {
+  flex: 0 0 56px;
 }
 
 .calendar-toolbar span {
@@ -1536,13 +1589,16 @@ button:disabled {
 .calendar-grid {
   border-left: 1px solid var(--line);
   border-top: 1px solid var(--line);
+  grid-template-rows: repeat(6, minmax(0, 1fr));
+  height: 100%;
+  min-height: 0;
   user-select: none;
 }
 
 .calendar-cell {
   border-bottom: 1px solid var(--line);
   border-right: 1px solid var(--line);
-  height: 124px;
+  height: auto;
   min-height: 0;
   min-width: 0;
   overflow: hidden;
@@ -1594,7 +1650,7 @@ button:disabled {
 
 .calendar-tasks {
   display: grid;
-  grid-template-rows: repeat(5, minmax(0, 1fr));
+  grid-template-rows: repeat(var(--calendar-row-count, 5), minmax(0, 1fr));
   gap: 4px;
   height: calc(100% - 21px);
   min-height: 0;
@@ -1659,12 +1715,12 @@ button:disabled {
   color: var(--text);
 }
 
-.calendar-task.range-color-0 { background: #3b3559; border-color: #8f7cff; }
-.calendar-task.range-color-1 { background: #2f443a; border-color: #57b982; }
-.calendar-task.range-color-2 { background: #4b392a; border-color: #d79754; }
-.calendar-task.range-color-3 { background: #2f4054; border-color: #68a8e8; }
-.calendar-task.range-color-4 { background: #4d3038; border-color: #e17191; }
-.calendar-task.range-color-5 { background: #3f3f2c; border-color: #c7c95a; }
+.calendar-task.range-color-0 { background: var(--range-bg-0); border-color: var(--range-border-0); }
+.calendar-task.range-color-1 { background: var(--range-bg-1); border-color: var(--range-border-1); }
+.calendar-task.range-color-2 { background: var(--range-bg-2); border-color: var(--range-border-2); }
+.calendar-task.range-color-3 { background: var(--range-bg-3); border-color: var(--range-border-3); }
+.calendar-task.range-color-4 { background: var(--range-bg-4); border-color: var(--range-border-4); }
+.calendar-task.range-color-5 { background: var(--range-bg-5); border-color: var(--range-border-5); }
 
 .calendar-file-icon.created {
   color: #2684ff;
@@ -1804,7 +1860,7 @@ button.calendar-more {
   }
 
   .calendar-toolbar {
-    grid-template-columns: 24px 70px 24px 48px 96px minmax(0, 1fr);
+    gap: 6px;
   }
 
   .calendar-toolbar strong {
@@ -1868,7 +1924,7 @@ button.calendar-more {
   }
 
   .calendar-cell {
-    height: clamp(48px, calc((100vh - 178px) / 6), 68px);
+    height: auto;
     padding: 3px;
   }
 
