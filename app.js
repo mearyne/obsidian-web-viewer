@@ -84,6 +84,7 @@ const els = {
   loadingOverlay: document.querySelector("#loadingOverlay"),
   loadingText: document.querySelector("#loadingText"),
   markdownToggleButton: document.querySelector("#markdownToggleButton"),
+  fullscreenButton: document.querySelector("#fullscreenButton"),
   historyBackButton: document.querySelector("#historyBackButton"),
   historyForwardButton: document.querySelector("#historyForwardButton"),
   webEditButton: document.querySelector("#webEditButton"),
@@ -176,6 +177,7 @@ els.calendarView.addEventListener("pointerup", handleCalendarSwipeEnd, true);
 els.calendarView.addEventListener("pointercancel", clearCalendarSwipe, true);
 els.historyBackButton.addEventListener("click", navigateHistoryBack);
 els.historyForwardButton.addEventListener("click", navigateHistoryForward);
+els.fullscreenButton?.addEventListener("click", enterFullscreen);
 els.markdownToggleButton.addEventListener("click", toggleMarkdownMode);
 els.webEditButton.addEventListener("click", enterEditMode);
 els.saveEditButton.addEventListener("click", saveCurrentEdit);
@@ -964,6 +966,7 @@ async function openFile(path) {
     updateEditButtons();
     renderCurrentDocument();
     showNoteView();
+    scrollViewerTop();
     renderTree();
   } finally {
     hideLoading();
@@ -2395,6 +2398,10 @@ function clearCalendarSwipe() {
 function requestFullscreenOnce() {
   if (state.fullscreenAttempted || document.fullscreenElement) return;
   state.fullscreenAttempted = true;
+  enterFullscreen();
+}
+
+function enterFullscreen() {
   document.documentElement.requestFullscreen?.().catch(() => {});
   window.moveTo?.(0, 0);
   window.resizeTo?.(screen.availWidth || screen.width, screen.availHeight || screen.height);
