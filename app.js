@@ -2449,7 +2449,7 @@ function bindDateClick(target) {
     clearCalendarDragHighlight();
     if (startDate && endDate && startDate !== endDate) {
       state.calendarDragHandled = true;
-      await openDateEditor(endDate, startDate);
+      await openDateEditor(startDate, endDate);
       window.setTimeout(() => {
         state.calendarDragHandled = false;
       }, 0);
@@ -2499,19 +2499,20 @@ async function openDateEditor(date, startDate = "") {
     return;
   }
 
+  let taskStartDate = "";
+  let taskDueDate = date;
   if (startDate) {
-    const start = parseDateKey(startDate);
-    const end = parseDateKey(date);
-    if (start && end && start > end) {
-      const nextDate = startDate;
-      startDate = date;
-      date = nextDate;
+    const noteDate = parseDateKey(date);
+    const rangeDate = parseDateKey(startDate);
+    if (noteDate && rangeDate) {
+      taskStartDate = formatDate(noteDate <= rangeDate ? noteDate : rangeDate);
+      taskDueDate = formatDate(noteDate <= rangeDate ? rangeDate : noteDate);
     }
   }
 
   const node = await getOrCreateDailyNote(date);
   await openFile(node.path);
-  if (await enterEditMode()) appendTaskTemplate(date, startDate);
+  if (await enterEditMode()) appendTaskTemplate(taskDueDate, taskStartDate);
 }
 
 async function getOrCreateDailyNote(date) {
