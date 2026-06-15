@@ -1732,7 +1732,7 @@ button:disabled {
 }
 
 .calendar-agenda-day {
-  touch-action: none;
+  touch-action: pan-y;
   user-select: none;
 }
 

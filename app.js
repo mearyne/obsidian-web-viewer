@@ -44,6 +44,7 @@ const state = {
   calendarDragStartDate: "",
   calendarDragCurrentDate: "",
   calendarDragHandled: false,
+  calendarDragPointer: null,
   calendarSwipe: null,
   calendarWheelAt: 0,
   calendarTaskOpenSuppressedUntil: 0,
@@ -2747,15 +2748,25 @@ async function toggleCalendarTask(path, lineNumber, button) {
 function bindDateClick(target) {
   target.addEventListener("pointerdown", (event) => {
     if (event.target.closest(".calendar-task, .calendar-more")) return;
-    event.preventDefault();
-    target.setPointerCapture?.(event.pointerId);
+    const isAgendaDate = target.classList.contains("calendar-agenda-day");
+    if (!isAgendaDate) event.preventDefault();
+    if (!isAgendaDate) target.setPointerCapture?.(event.pointerId);
     state.calendarDragStartDate = target.getAttribute("data-calendar-date") || "";
     state.calendarDragCurrentDate = state.calendarDragStartDate;
+    state.calendarDragPointer = { id: event.pointerId, x: event.clientX, y: event.clientY, agenda: isAgendaDate };
     updateCalendarDragHighlight();
   });
 
   target.addEventListener("pointermove", (event) => {
     if (!state.calendarDragStartDate) return;
+    if (state.calendarDragPointer?.agenda) {
+      const dx = event.clientX - state.calendarDragPointer.x;
+      const dy = event.clientY - state.calendarDragPointer.y;
+      if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) {
+        clearCalendarDragState();
+        return;
+      }
+    }
     event.preventDefault();
     const cell = document.elementFromPoint(event.clientX, event.clientY)?.closest?.("[data-calendar-date]");
     const date = cell?.getAttribute("data-calendar-date") || "";
@@ -2769,6 +2780,7 @@ function bindDateClick(target) {
     target.releasePointerCapture?.(event.pointerId);
     const startDate = state.calendarDragStartDate;
     const endDate = state.calendarDragCurrentDate || target.getAttribute("data-calendar-date") || "";
+    state.calendarDragPointer = null;
     state.calendarDragStartDate = "";
     state.calendarDragCurrentDate = "";
     clearCalendarDragHighlight();
@@ -2817,6 +2829,11 @@ function clearCalendarDragHighlight() {
 
 function clearCalendarDragIfActive() {
   if (!state.calendarDragStartDate && !state.calendarDragCurrentDate) return;
+  clearCalendarDragState();
+}
+
+function clearCalendarDragState() {
+  state.calendarDragPointer = null;
   state.calendarDragStartDate = "";
   state.calendarDragCurrentDate = "";
   clearCalendarDragHighlight();
