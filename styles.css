@@ -1847,7 +1847,10 @@ button.calendar-more {
 
 .calendar-agenda {
   display: none;
-  overflow: hidden;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .calendar-mode-week .calendar-weekdays,
@@ -1976,6 +1979,7 @@ button.calendar-more {
 
   .calendar-view {
     height: calc(100vh - 112px);
+    height: calc(100dvh - 112px);
     margin: 0;
     max-width: none;
     min-width: 0;
