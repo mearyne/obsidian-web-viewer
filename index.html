@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Obsidian Web Viewer</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebarPanel" aria-label="Vault navigation">
+        <div class="brand">
+          <div>
+            <h1>Vault Viewer</h1>
+            <p id="vaultStatus">Sample vault</p>
+          </div>
+        </div>
+
+        <label class="search-box">
+          <span>검색</span>
+          <input id="searchInput" type="search" placeholder="파일명 검색" autocomplete="off" />
+        </label>
+
+        <div class="search-options" aria-label="검색 옵션">
+          <label><input id="caseSearchToggle" type="checkbox" /> 대소문자 구분</label>
+          <label><input id="regexSearchToggle" type="checkbox" /> 정규식</label>
+        </div>
+
+        <div class="tree-sort" aria-label="트리 정렬">
+          <select id="treeSortSelect" aria-label="정렬 기준">
+            <option value="name">이름순</option>
+            <option value="updated">업데이트순</option>
+            <option value="created" selected>생성순</option>
+            <option value="size">크기순</option>
+            <option value="type">종류순</option>
+          </select>
+          <button id="treeSortDirectionButton" type="button" aria-label="정렬 방향: 역배" title="정렬 방향: 역배">↓</button>
+        </div>
+
+        <div class="tree-actions" aria-label="트리 제어">
+          <button id="expandTreeButton" type="button">모두 펼치기</button>
+          <button id="revealCurrentButton" type="button">현재 위치</button>
+          <button id="collapseTreeButton" type="button">모두 접기</button>
+        </div>
+
+        <nav id="fileTree" class="file-tree" aria-label="Vault files"></nav>
+
+        <div class="sidebar-options">
+          <button id="optionsButton" type="button" aria-haspopup="dialog" aria-expanded="false">옵션</button>
+        </div>
+        <div id="sidebarResizeHandle" class="sidebar-resize-handle" role="separator" aria-orientation="vertical" aria-label="사이드바 크기 조절"></div>
+      </aside>
+
+      <main class="content-pane">
+        <header class="note-header">
+          <div class="header-left">
+            <button id="sidebarToggle" class="icon-button" type="button" aria-label="문서 목록 열기" aria-expanded="false">
+              <span aria-hidden="true">☰</span>
+            </button>
+            <div>
+              <p id="notePath" class="note-path">문서를 선택하세요</p>
+              <h2 id="noteTitle">Obsidian Markdown Viewer</h2>
+            </div>
+          </div>
+          <div class="view-controls">
+            <button id="markdownToggleButton" class="icon-button active" type="button" aria-pressed="true" aria-label="Markdown 렌더링 켜짐" title="Markdown 렌더링 켜짐">
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M4 5h16v14H4z" />
+                <path d="M7 15V9l3 4 3-4v6" />
+                <path d="M17 9v6" />
+                <path d="m15 13 2 2 2-2" />
+              </svg>
+            </button>
+            <button id="webEditButton" class="icon-button" type="button" disabled aria-label="웹에서 편집" title="웹에서 편집">
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+              </svg>
+            </button>
+            <button id="randomFileButton" class="icon-button" type="button" aria-label="랜덤 Markdown 열기" title="랜덤 Markdown 열기">
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M16 3h5v5" />
+                <path d="M4 20 21 3" />
+                <path d="M21 16v5h-5" />
+                <path d="M15 15l6 6" />
+                <path d="M4 4l5 5" />
+              </svg>
+            </button>
+            <button id="calendarButton" class="icon-button" type="button" aria-label="캘린더 열기" title="캘린더">
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" />
+              </svg>
+            </button>
+            <button id="editButton" class="icon-button" type="button" disabled aria-label="Obsidian에서 열기" title="Obsidian에서 열기">
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="m12 2 8 6-3 12H7L4 8l8-6Z" />
+                <path d="m4 8 8 4 8-4M12 12v10M7 20l5-8 5 8" />
+              </svg>
+            </button>
+          </div>
+        </header>
+
+        <section class="viewer-wrap">
+          <div id="loadingOverlay" class="loading-overlay" hidden>
+            <div class="loading-box">
+              <div class="loading-spinner" aria-hidden="true"></div>
+              <p id="loadingText">로딩 중...</p>
+            </div>
+          </div>
+          <article id="markdownView" class="markdown-body empty-state">
+            <h3>왼쪽 문서 목록에서 Markdown 파일을 선택하세요</h3>
+            <p>Obsidian 폴더 구조, wiki link, 이미지 embed, callout, frontmatter를 기본적으로 표시합니다.</p>
+          </article>
+          <section id="editorShell" class="editor-shell" hidden>
+            <div class="editor-toolbar">
+              <span id="editorStatus">편집 중</span>
+              <button id="saveEditButton" type="button">저장</button>
+            </div>
+            <textarea id="markdownEditor" class="markdown-editor" spellcheck="false"></textarea>
+          </section>
+          <article id="calendarView" class="calendar-view" hidden></article>
+        </section>
+      </main>
+    </div>
+
+    <div id="optionsBackdrop" class="options-backdrop" hidden></div>
+    <section id="optionsMenu" class="options-modal" role="dialog" aria-modal="true" aria-labelledby="optionsTitle" hidden>
+      <header class="options-header">
+        <h2 id="optionsTitle">옵션</h2>
+        <button id="optionsCloseButton" class="icon-button" type="button" aria-label="옵션 닫기">×</button>
+      </header>
+
+      <details class="option-node" open>
+        <summary>Vault</summary>
+        <div class="option-node-body">
+          <button id="openVaultButton" type="button">폴더 열기</button>
+          <div class="saved-vaults">
+            <div class="saved-vaults-title">저장된 Vault</div>
+            <div id="savedVaultList" class="saved-vault-list"></div>
+          </div>
+          <p class="option-help">브라우저가 허용한 읽기 권한으로만 파일을 읽습니다. 파일 생성, 수정, 삭제는 하지 않습니다.</p>
+        </div>
+      </details>
+
+      <details class="option-node">
+        <summary>표시</summary>
+        <div class="option-node-body">
+          <button id="themeButton" type="button">Dark</button>
+        </div>
+      </details>
+
+      <details class="option-node">
+        <summary>캘린더</summary>
+        <div class="option-node-body">
+          <label class="option-field">
+            <span>캘린더 경로</span>
+            <textarea id="calendarPathInput" rows="4" placeholder="Tasks/Work&#10;Daily"></textarea>
+          </label>
+          <p class="option-help">여러 경로를 줄바꿈 또는 쉼표로 지정하면 해당 경로의 Markdown task만 캘린더에 표시합니다.</p>
+        </div>
+      </details>
+    </section>
+
+    <div id="imageLightbox" class="image-lightbox" hidden>
+      <button id="imageLightboxClose" class="image-lightbox-close" type="button" aria-label="이미지 닫기">×</button>
+      <img id="imageLightboxImg" alt="" />
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

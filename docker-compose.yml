@@ -1,0 +1,8 @@
+services:
+  obsidian-web-viewer:
+    build: .
+    ports:
+      - "8088:8088"
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8088

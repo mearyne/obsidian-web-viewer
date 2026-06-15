@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="420" height="300" viewBox="0 0 420 300">
+  <rect width="420" height="300" rx="8" fill="#eef9f4"/>
+  <rect x="142" y="76" width="136" height="112" rx="10" fill="#3c9c78"/>
+  <text x="210" y="238" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700" fill="#1f1f1f">Image 2</text>
+</svg>

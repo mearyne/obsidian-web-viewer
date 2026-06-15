@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="420" height="300" viewBox="0 0 420 300">
+  <rect width="420" height="300" rx="8" fill="#fff4e8"/>
+  <path d="M210 70 285 188H135Z" fill="#d66b4d"/>
+  <text x="210" y="238" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700" fill="#1f1f1f">Image 3</text>
+</svg>

@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="300" viewBox="0 0 720 300" role="img" aria-labelledby="title desc">
+  <title id="title">Sample vault flow</title>
+  <desc id="desc">A simple diagram showing Docker serving a read-only vault to the browser.</desc>
+  <rect width="720" height="300" rx="8" fill="#f7f7f7"/>
+  <g fill="#ffffff" stroke="#d4d4d4" stroke-width="2">
+    <rect x="48" y="92" width="150" height="116" rx="8"/>
+    <rect x="285" y="92" width="150" height="116" rx="8"/>
+    <rect x="522" y="92" width="150" height="116" rx="8"/>
+  </g>
+  <g fill="none" stroke="#6f6bdc" stroke-linecap="round" stroke-width="4">
+    <path d="M210 150h62"/>
+    <path d="m262 138 14 12-14 12"/>
+    <path d="M447 150h62"/>
+    <path d="m499 138 14 12-14 12"/>
+  </g>
+  <g fill="#1f1f1f" font-family="Segoe UI, Arial, sans-serif" text-anchor="middle">
+    <text x="123" y="140" font-size="18" font-weight="700">Vault</text>
+    <text x="123" y="166" font-size="13" fill="#777777">Markdown files</text>
+    <text x="360" y="140" font-size="18" font-weight="700">Docker</text>
+    <text x="360" y="166" font-size="13" fill="#777777">Read-only server</text>
+    <text x="597" y="140" font-size="18" font-weight="700">Browser</text>
+    <text x="597" y="166" font-size="13" fill="#777777">Fast viewer</text>
+  </g>
+</svg>

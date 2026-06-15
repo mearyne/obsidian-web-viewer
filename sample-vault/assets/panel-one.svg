@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="420" height="300" viewBox="0 0 420 300">
+  <rect width="420" height="300" rx="8" fill="#eef2ff"/>
+  <circle cx="116" cy="132" r="54" fill="#6f6bdc"/>
+  <text x="210" y="238" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700" fill="#1f1f1f">Image 1</text>
+</svg>
