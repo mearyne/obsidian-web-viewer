@@ -73,7 +73,7 @@ body {
   min-height: 100vh;
   background: var(--bg);
   color: var(--text);
-  font-size: 22.5px;
+  font-size: 15px;
 }
 
 button,
@@ -832,7 +832,7 @@ button:disabled {
   border: 0;
   border-radius: 0;
   box-shadow: none;
-  font-size: 24px;
+  font-size: 16px;
   line-height: 1.7;
   margin: 0 auto;
   max-width: var(--line-width);
@@ -855,7 +855,7 @@ button:disabled {
   border-radius: 0;
   color: var(--text);
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  font-size: 21px;
+  font-size: 14px;
   line-height: 1.65;
   margin: 0;
   overflow: visible;
@@ -977,7 +977,7 @@ button:disabled {
   color: var(--text);
   display: block;
   font-family: inherit;
-  font-size: 24px;
+  font-size: 16px;
   line-height: 1.7;
   min-height: calc(100vh - 184px);
   outline: 0;
@@ -1156,25 +1156,25 @@ button:disabled {
 }
 
 .markdown-body h1 {
-  font-size: 45px;
+  font-size: 30px;
 }
 
 .markdown-body h2 {
   border-bottom: 0;
-  font-size: 34px;
+  font-size: 23px;
 }
 
 .markdown-body h3 {
-  font-size: 29px;
+  font-size: 19px;
 }
 
 .markdown-body h4 {
-  font-size: 26px;
+  font-size: 17px;
 }
 
 .markdown-body h5,
 .markdown-body h6 {
-  font-size: 23px;
+  font-size: 15px;
 }
 
 .markdown-body .heading-level-2 {
@@ -1689,7 +1689,7 @@ button:disabled {
   border: 1px solid var(--line);
   border-radius: 5px;
   display: grid;
-  font-size: 12px;
+  font-size: 18px;
   gap: 4px;
   grid-template-columns: auto minmax(0, 1fr);
   height: 100%;
@@ -1999,7 +1999,7 @@ button.calendar-more {
     border-width: 0;
     border-left-width: 2px;
     border-radius: 3px;
-    font-size: clamp(6px, 1.65vw, 9px);
+    font-size: clamp(9px, 2.45vw, 13.5px);
     gap: 1px;
     grid-template-columns: minmax(0, 1fr);
     line-height: 0.92;
@@ -2075,7 +2075,7 @@ button.calendar-more {
   }
 
   .calendar-more {
-    font-size: clamp(6px, 1.65vw, 9px);
+    font-size: clamp(9px, 2.45vw, 13.5px);
   }
 }
 

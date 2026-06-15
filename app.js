@@ -2787,6 +2787,11 @@ function renderMarkdown(source) {
       continue;
     }
 
+    if (/^#{1,6}\s*$/.test(line)) {
+      i += 1;
+      continue;
+    }
+
     if (line.startsWith("> [!")) {
       const title = line.replace(/^>\s*\[!(.+?)\]\s*/, "$1 ");
       const bodyLines = [];
@@ -2850,6 +2855,7 @@ function renderMarkdown(source) {
       i < lines.length &&
       lines[i].trim() &&
       !/^(#{1,6})\s+/.test(lines[i]) &&
+      !/^#{1,6}\s*$/.test(lines[i]) &&
       !lines[i].startsWith(">") &&
       !lines[i].startsWith("```") &&
       !/^\s*---+\s*$/.test(lines[i]) &&
