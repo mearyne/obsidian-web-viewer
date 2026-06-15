@@ -18,6 +18,7 @@
   --line-width: 760px;
   --sidebar-width: 320px;
   --app-font: "Inter", "Segoe UI", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --content-font-size: 16px;
   --range-bg-0: #efeaff;
   --range-border-0: #7057d6;
   --range-bg-1: #e5f7ed;
@@ -420,7 +421,7 @@ button:disabled {
 }
 
 .tree-children {
-  margin-left: 18px;
+  margin-left: 9px;
 }
 
 .tree-group.collapsed > .tree-children {
@@ -572,6 +573,17 @@ button:disabled {
 .view-controls button.active {
   background: var(--surface-3);
   border-color: var(--line-strong);
+}
+
+.fullscreen-fallback .app-shell {
+  height: 100dvh;
+  min-height: 100dvh;
+  overflow: hidden;
+}
+
+.fullscreen-fallback .content-pane {
+  height: 100dvh;
+  min-height: 100dvh;
 }
 
 .sidebar-options {
@@ -832,7 +844,7 @@ button:disabled {
   border: 0;
   border-radius: 0;
   box-shadow: none;
-  font-size: 16px;
+  font-size: var(--content-font-size);
   line-height: 1.7;
   margin: 0 auto;
   max-width: var(--line-width);
@@ -1689,7 +1701,7 @@ button:disabled {
   border: 1px solid var(--line);
   border-radius: 5px;
   display: grid;
-  font-size: 18px;
+  font-size: 14.4px;
   gap: 4px;
   grid-template-columns: auto minmax(0, 1fr);
   height: 100%;
@@ -1999,7 +2011,7 @@ button.calendar-more {
     border-width: 0;
     border-left-width: 2px;
     border-radius: 3px;
-    font-size: clamp(9px, 2.45vw, 13.5px);
+    font-size: clamp(7.2px, 1.96vw, 10.8px);
     gap: 1px;
     grid-template-columns: minmax(0, 1fr);
     line-height: 0.92;
@@ -2075,7 +2087,7 @@ button.calendar-more {
   }
 
   .calendar-more {
-    font-size: clamp(9px, 2.45vw, 13.5px);
+    font-size: clamp(7.2px, 1.96vw, 10.8px);
   }
 }
 

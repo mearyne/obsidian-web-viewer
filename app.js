@@ -47,6 +47,8 @@ const state = {
   calendarSwipe: null,
   calendarWheelAt: 0,
   fullscreenAttempted: false,
+  fullscreenFallback: false,
+  fontDeviceKey: "",
 };
 
 const EXCALIDRAW_PREVIEW_ENABLED = false;
@@ -70,6 +72,7 @@ const els = {
   calendarPathInput: document.querySelector("#calendarPathInput"),
   dailyNotePathInput: document.querySelector("#dailyNotePathInput"),
   fontSelect: document.querySelector("#fontSelect"),
+  contentFontSizeInput: document.querySelector("#contentFontSizeInput"),
   vaultStatus: document.querySelector("#vaultStatus"),
   notePath: document.querySelector("#notePath"),
   noteTitle: document.querySelector("#noteTitle"),
@@ -170,6 +173,7 @@ els.folderPathInput?.addEventListener("input", renderTree);
 els.calendarPathInput?.addEventListener("input", handleCalendarFilterInput);
 els.dailyNotePathInput?.addEventListener("input", updateDailyNotePath);
 els.fontSelect?.addEventListener("change", updateAppFont);
+els.contentFontSizeInput?.addEventListener("input", updateContentFontSize);
 els.viewerWrap.addEventListener("click", closeSidebarFromMain);
 els.calendarView.addEventListener("wheel", handleCalendarWheel, { passive: false });
 els.calendarView.addEventListener("pointerdown", handleCalendarSwipeStart, true);
@@ -200,6 +204,8 @@ document.addEventListener("pointercancel", clearCalendarDragIfActive);
 window.addEventListener("resize", handleCalendarResize, { passive: true });
 document.addEventListener("pointerdown", requestFullscreenOnce, { once: true });
 document.addEventListener("keydown", requestFullscreenOnce, { once: true });
+document.addEventListener("fullscreenchange", () => setFullscreenFallback(false));
+document.addEventListener("webkitfullscreenchange", () => setFullscreenFallback(false));
 
 function handleGlobalKeydown(event) {
   if (event.altKey && !event.ctrlKey && !event.metaKey && event.code === "Digit1") {
@@ -1077,6 +1083,7 @@ function initOptions() {
   const savedFont = localStorage.getItem("obsidian-web-viewer-font") || "default";
   const appliedFont = setAppFont(savedFont);
   if (els.fontSelect) els.fontSelect.value = appliedFont;
+  applyDeviceContentFontSize();
 }
 
 function updateDailyNotePath() {
@@ -1101,6 +1108,34 @@ function setAppFont(fontKey) {
   document.documentElement.style.setProperty("--app-font", fonts[nextFont]);
   localStorage.setItem("obsidian-web-viewer-font", nextFont);
   return nextFont;
+}
+
+function currentFontDeviceKey() {
+  return window.matchMedia("(max-width: 780px)").matches ? "mobile" : "desktop";
+}
+
+function contentFontStorageKey(deviceKey = currentFontDeviceKey()) {
+  return `obsidian-web-viewer-content-font-size-${deviceKey}`;
+}
+
+function applyDeviceContentFontSize() {
+  const deviceKey = currentFontDeviceKey();
+  state.fontDeviceKey = deviceKey;
+  const saved = Number(localStorage.getItem(contentFontStorageKey(deviceKey)));
+  const size = Number.isFinite(saved) && saved >= 10 && saved <= 28 ? saved : 16;
+  setContentFontSize(size, { persist: false });
+}
+
+function updateContentFontSize() {
+  const value = Number(els.contentFontSizeInput?.value || 16);
+  const size = Math.max(10, Math.min(28, Number.isFinite(value) ? value : 16));
+  setContentFontSize(size, { persist: true });
+}
+
+function setContentFontSize(size, { persist }) {
+  document.documentElement.style.setProperty("--content-font-size", `${size}px`);
+  if (els.contentFontSizeInput) els.contentFontSizeInput.value = String(size);
+  if (persist) localStorage.setItem(contentFontStorageKey(), String(size));
 }
 
 function handleCalendarFilterInput() {
@@ -2148,6 +2183,8 @@ function syncCalendarRowLimit() {
 }
 
 function handleCalendarResize() {
+  const nextFontDeviceKey = currentFontDeviceKey();
+  if (state.fontDeviceKey && state.fontDeviceKey !== nextFontDeviceKey) applyDeviceContentFontSize();
   if (state.activeView !== "calendar" || state.calendarMode !== "month") return;
   window.clearTimeout(handleCalendarResize.timer);
   handleCalendarResize.timer = window.setTimeout(syncCalendarRowLimit, 80);
@@ -2395,16 +2432,43 @@ function clearCalendarSwipe() {
   state.calendarSwipe = null;
 }
 
-function requestFullscreenOnce() {
+function requestFullscreenOnce(event) {
+  if (event?.target?.closest?.("#fullscreenButton")) return;
   if (state.fullscreenAttempted || document.fullscreenElement) return;
   state.fullscreenAttempted = true;
   enterFullscreen();
 }
 
-function enterFullscreen() {
-  document.documentElement.requestFullscreen?.().catch(() => {});
+async function enterFullscreen() {
+  if (document.fullscreenElement || document.webkitFullscreenElement) {
+    await (document.exitFullscreen?.() || document.webkitExitFullscreen?.())?.catch?.(() => {});
+    setFullscreenFallback(false);
+    return;
+  }
+  const target = document.documentElement;
+  try {
+    if (target.requestFullscreen) {
+      await target.requestFullscreen();
+      setFullscreenFallback(false);
+      return;
+    }
+    if (target.webkitRequestFullscreen) {
+      target.webkitRequestFullscreen();
+      setFullscreenFallback(false);
+      return;
+    }
+  } catch {
+    // Mobile browsers can reject fullscreen unless installed as an app.
+  }
+  setFullscreenFallback(!state.fullscreenFallback);
   window.moveTo?.(0, 0);
   window.resizeTo?.(screen.availWidth || screen.width, screen.availHeight || screen.height);
+}
+
+function setFullscreenFallback(enabled) {
+  state.fullscreenFallback = enabled;
+  document.body.classList.toggle("fullscreen-fallback", enabled);
+  els.fullscreenButton?.classList.toggle("active", enabled || Boolean(document.fullscreenElement || document.webkitFullscreenElement));
 }
 
 function parseDateKey(value) {
