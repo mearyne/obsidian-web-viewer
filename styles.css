@@ -1759,21 +1759,31 @@ button:disabled {
   line-height: 1.1;
 }
 
+.calendar-holiday-name {
+  color: #d94848;
+  display: block;
+  flex: 1 1 auto;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .calendar-holiday.compact {
-  background: color-mix(in srgb, #d94848 14%, var(--surface));
-  border: 1px solid color-mix(in srgb, #d94848 52%, transparent);
+  background: #d94848;
+  border: 1px solid #d94848;
   border-radius: 4px;
   box-shadow: 0 1px 2px color-mix(in srgb, #000 10%, transparent);
-  max-width: calc(100% - 30px);
-  overflow: hidden;
+  color: #fff;
   font-size: 10px;
   line-height: 1;
   padding: 2px 4px;
   position: absolute;
   right: 4px;
-  text-overflow: ellipsis;
   top: 4px;
-  white-space: nowrap;
   z-index: 2;
 }
 

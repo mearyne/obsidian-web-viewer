@@ -2430,7 +2430,7 @@ function renderCalendar() {
     if (holidays.length) classes.push("holiday");
     cells.push(`
       <div class="${classes.join(" ")}" data-calendar-date="${dateKey}">
-        <div class="calendar-day"><span>${date.getDate()}</span></div>
+        <div class="calendar-day"><span>${date.getDate()}</span>${renderHolidayNames(holidays)}</div>
         ${renderHolidayBadges(holidays, true)}
         <div class="calendar-tasks">
           ${
@@ -2616,7 +2616,13 @@ function renderRecentAgendaDay(date, files, isToday, field, holidays = []) {
 function renderHolidayBadges(holidays, compact = false) {
   if (!holidays.length) return "";
   const label = holidays.map((holiday) => holiday.name).join(", ");
-  return `<span class="${compact ? "calendar-holiday compact" : "calendar-holiday"}" title="${escapeAttribute(label)}">${compact ? `휴 ${escapeHtml(label)}` : escapeHtml(label)}</span>`;
+  return `<span class="${compact ? "calendar-holiday compact" : "calendar-holiday"}" title="${escapeAttribute(label)}">${compact ? "휴" : escapeHtml(label)}</span>`;
+}
+
+function renderHolidayNames(holidays) {
+  if (!holidays.length) return "";
+  const label = holidays.map((holiday) => holiday.name).join(", ");
+  return `<span class="calendar-holiday-name" title="${escapeAttribute(label)}">${escapeHtml(label)}</span>`;
 }
 
 function ensureVisibleHolidays() {
