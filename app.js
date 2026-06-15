@@ -20,6 +20,7 @@ const state = {
   calendarMode: "month",
   calendarRefreshInFlight: false,
   calendarRefreshTimer: null,
+  calendarFilterTimer: null,
   calendarRefreshing: false,
   calendarCacheState: "empty",
   calendarSyncedAt: 0,
@@ -237,6 +238,15 @@ function registerServiceWorker() {
 }
 
 function handleGlobalKeydown(event) {
+  if (!els.optionsMenu.hidden) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      closeOptionsMenu();
+    }
+    return;
+  }
+
   if (event.altKey && !event.ctrlKey && !event.metaKey && event.code === "Digit1") {
     event.preventDefault();
     event.stopPropagation();
@@ -1255,7 +1265,15 @@ function setContentAlign(align, { persist }) {
 
 function handleCalendarFilterInput() {
   if (state.activeView !== "calendar") return;
-  loadCalendarCache().finally(() => scheduleCalendarRefreshIfStale(250));
+  window.clearTimeout(state.calendarFilterTimer);
+  state.calendarFilterTimer = window.setTimeout(() => {
+    state.calendarFilterTimer = null;
+    window.clearTimeout(state.calendarRefreshTimer);
+    state.calendarRefreshTimer = null;
+    state.calendarSyncedAt = 0;
+    state.calendarCacheState = "refreshing";
+    loadCalendarCache().finally(() => scheduleCalendarRefreshIfStale(250));
+  }, 700);
 }
 
 function toggleMarkdownMode() {
