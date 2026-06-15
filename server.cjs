@@ -215,6 +215,7 @@ function writeVaultFile(requestedPath, body, res) {
 
   try {
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    const previousCreatedAt = fs.existsSync(filePath) ? createdAtFromStat(fs.statSync(filePath)) : 0;
     if (fs.existsSync(filePath) && payload.backup !== false) {
       fs.copyFileSync(filePath, `${filePath}.bak`);
     }
@@ -224,7 +225,7 @@ function writeVaultFile(requestedPath, body, res) {
       path: safePath,
       size: stat.size,
       updatedAt: stat.mtimeMs,
-      createdAt: createdAtFromStat(stat),
+      createdAt: previousCreatedAt || createdAtFromStat(stat),
     });
   } catch (error) {
     sendJson(res, 500, { error: error.message || "Write failed" });

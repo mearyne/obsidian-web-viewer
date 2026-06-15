@@ -1522,7 +1522,7 @@ function markdownLineContinuation(line) {
   const unorderedTask = line.match(/^(\s*)([-*+])\s+\[([ xX-])\]\s+(.*)$/);
   if (unorderedTask) {
     if (!unorderedTask[4].trim()) return { exitList: true, removePattern: /^(\s*)([-*+])\s+\[[ xX-]\]\s*$/ };
-    const date = taskDateFromText(unorderedTask[4]) || formatDate(new Date());
+    const date = taskDateTokenFromText(unorderedTask[4]) || `\u{1F4C5} ${formatDate(new Date())}`;
     const prefix = `${unorderedTask[1]}${unorderedTask[2]} [ ] `;
     return { text: `${prefix}${date}`, cursorOffset: prefix.length };
   }
@@ -1614,8 +1614,18 @@ function toggleEditorTaskCheckbox(editor = els.markdownEditor) {
 }
 
 function taskDateFromText(text) {
-  const match = text.match(/(?:📅|⏳|✅|➕)?\s*(\d{4}-\d{2}-\d{2})/);
-  return match?.[1] || "";
+  const dates = extractTaskDates(text);
+  return dates.due || dates.end || dates.scheduled || dates.start || dates.done || dates.cancelled || "";
+}
+
+function taskDateTokenFromText(text) {
+  const dates = extractTaskDates(text);
+  if (dates.start) return `\u{1F6EB} ${dates.start}`;
+  if (dates.scheduled) return `\u{23F3} ${dates.scheduled}`;
+  if (dates.due || dates.end) return `\u{1F4C5} ${dates.due || dates.end}`;
+  if (dates.done) return `\u{2705} ${dates.done}`;
+  if (dates.cancelled) return `\u{274C} ${dates.cancelled}`;
+  return "";
 }
 
 function markEditorDirty() {
@@ -1675,14 +1685,20 @@ async function writeNodeContent(node, content, { backup = true, previousContent 
   if (node.handle) {
     if (backup) await writeBackupFile(node, previousContent);
     await writeFileHandle(node.handle, content);
-    return readFileMetadata(node.handle, node.path);
+    return preserveCreatedAt(node, await readFileMetadata(node.handle, node.path));
   }
 
   if (node.serverBacked && state.serverVaultWritable) {
-    return writeServerFile(node.path, content, { backup });
+    return preserveCreatedAt(node, await writeServerFile(node.path, content, { backup }));
   }
 
   throw new Error("File is not writable");
+}
+
+function preserveCreatedAt(node, metadata) {
+  const createdAt = Number(node?.createdAt);
+  if (!Number.isFinite(createdAt) || createdAt <= 0) return metadata;
+  return { ...metadata, createdAt };
 }
 
 async function writeServerFile(path, content, { backup = true } = {}) {
@@ -2657,11 +2673,11 @@ async function toggleCalendarTask(path, lineNumber, button) {
     const index = lineNumber - 1;
     if (!lines[index] || !/^\s*[-*+]\s+\[[ xX-]\]/.test(lines[index])) return;
 
-    const taskDate = taskDateFromText(lines[index]) || formatDate(new Date());
+    const taskDate = formatDate(new Date());
     const nextLine = lines[index].replace(/^(\s*[-*+]\s+\[)([ xX-])(\])(.*)$/, (_, head, checked, tail, rest) => {
       const isDone = checked.toLowerCase() === "x" || checked === "-";
-      const cleanRest = rest.replace(/\s*✅\s*\d{4}-\d{2}-\d{2}/gu, "");
-      return `${head}${isDone ? " " : "x"}${tail}${cleanRest}${isDone ? "" : ` ✅ ${taskDate}`}`;
+      const cleanRest = rest.replace(/\s*\u{2705}\s*\d{4}-\d{2}-\d{2}/gu, "");
+      return `${head}${isDone ? " " : "x"}${tail}${cleanRest}${isDone ? "" : ` \u{2705} ${taskDate}`}`;
     });
     lines[index] = nextLine;
     const nextContent = lines.join("\n");
