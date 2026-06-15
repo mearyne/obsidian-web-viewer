@@ -223,6 +223,18 @@ function handleGlobalKeydown(event) {
       openNextCalendarKind();
       return;
     }
+    if (event.key.toLowerCase() === "d") {
+      event.preventDefault();
+      event.stopPropagation();
+      scrollViewerByPageFraction(1);
+      return;
+    }
+    if (event.key.toLowerCase() === "u") {
+      event.preventDefault();
+      event.stopPropagation();
+      scrollViewerByPageFraction(-1);
+      return;
+    }
   }
 
   if (isShortcut(event, "KeyE", "e")) {
@@ -1019,6 +1031,11 @@ function scrollViewerTop() {
   els.viewerWrap.scrollTo({ top: 0, behavior: "auto" });
 }
 
+function scrollViewerByPageFraction(direction) {
+  const amount = Math.max(120, els.viewerWrap.clientHeight / 3);
+  els.viewerWrap.scrollBy({ top: amount * direction, behavior: "smooth" });
+}
+
 async function readFileNode(node) {
   if (typeof node.content === "string") return node.content;
   if (node.serverBacked) {
@@ -1201,6 +1218,7 @@ function handleEditorKeydown(event) {
 }
 
 function handleEditorInput() {
+  resizeEditorToContent();
   markEditorDirty();
 }
 
@@ -1210,6 +1228,12 @@ function editorValue() {
 
 function setEditorValue(value) {
   els.markdownEditor.value = value;
+  resizeEditorToContent();
+}
+
+function resizeEditorToContent() {
+  els.markdownEditor.style.height = "auto";
+  els.markdownEditor.style.height = `${Math.max(els.markdownEditor.scrollHeight, els.viewerWrap.clientHeight - 184)}px`;
 }
 
 function renderEditorPreview() {
@@ -1386,6 +1410,7 @@ function taskDateFromText(text) {
 
 function markEditorDirty() {
   if (!state.editMode) return;
+  resizeEditorToContent();
   state.editorDirty = editorValue() !== state.currentContent;
   updateEditorStatus();
 }
@@ -1999,7 +2024,7 @@ function renderCalendar() {
         <div class="calendar-tasks">
           ${
             showingTasks
-              ? `${dayTasks.slice(0, 5).map(renderCalendarTask).join("")}${dayTasks.length > 5 ? `<button class="calendar-more" type="button" data-calendar-more="${dateKey}">+${dayTasks.length - 5}</button>` : ""}`
+              ? `${dayTasks.slice(0, 5).map((task) => renderCalendarTask(task, dateKey)).join("")}${dayTasks.length > 5 ? `<button class="calendar-more" type="button" data-calendar-more="${dateKey}">+${dayTasks.length - 5}</button>` : ""}`
               : `${dayFiles.slice(0, 5).map((item) => renderCalendarFile(item, recentField)).join("")}${dayFiles.length > 5 ? `<button class="calendar-more" type="button" data-calendar-more="${dateKey}">+${dayFiles.length - 5}</button>` : ""}`
           }
         </div>
@@ -2110,7 +2135,7 @@ function renderAgendaDay(date, tasks, isToday) {
         <span>${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][date.getDay()]}</span>
       </div>
       <div class="calendar-agenda-tasks">
-        ${tasks.length ? tasks.map(renderCalendarTask).join("") : '<div class="calendar-empty">No tasks</div>'}
+        ${tasks.length ? tasks.map((task) => renderCalendarTask(task, formatDate(date))).join("") : '<div class="calendar-empty">No tasks</div>'}
       </div>
     </section>
   `;
@@ -2132,14 +2157,31 @@ function renderRecentAgendaDay(date, files, isToday, field) {
   `;
 }
 
-function renderCalendarTask(task) {
+function renderCalendarTask(task, dateKey = task.date) {
   const title = `${task.path}: ${task.text}`;
+  const range = taskRangePosition(task, dateKey);
+  const label = range && range !== "single" && range !== "start" ? "" : escapeHtml(task.text);
+  const ariaLabel = range && range !== "single" && range !== "start" ? `Continuation: ${task.text}` : task.text;
   return `
-    <button class="calendar-task ${task.checked ? "done" : ""} ${task.type}" type="button" data-path="${escapeAttribute(task.path)}" data-line="${task.line}" title="${escapeAttribute(title)}">
+    <button class="calendar-task ${task.checked ? "done" : ""} ${task.type} ${range ? `range-task range-${range}` : ""}" type="button" data-path="${escapeAttribute(task.path)}" data-line="${task.line}" title="${escapeAttribute(title)}" aria-label="${escapeAttribute(ariaLabel)}">
       <span>${taskTypeIcon(task.type)}</span>
-      <span>${escapeHtml(task.text)}</span>
+      <span>${label}</span>
     </button>
   `;
+}
+
+function taskRangePosition(task, dateKey) {
+  const startKey = task.dates?.start || "";
+  const endKey = task.dates?.end || task.dates?.due || "";
+  if (!startKey || !endKey || startKey === endKey) return "";
+  const start = parseDateKey(startKey);
+  const end = parseDateKey(endKey);
+  if (!start || !end) return "";
+  const fromKey = formatDate(start <= end ? start : end);
+  const toKey = formatDate(start <= end ? end : start);
+  if (dateKey === fromKey) return "start";
+  if (dateKey === toKey) return "end";
+  return "middle";
 }
 
 function renderCalendarFile(file, field) {
@@ -2687,7 +2729,7 @@ function renderFrontmatter(raw) {
     const renderedValue = key.toLowerCase() === "source" ? renderSourceFrontmatterValue(value) : escapeHtml(value);
     return `<div class="frontmatter-row"><span class="frontmatter-key">${escapeHtml(key)}</span><span>${renderedValue}</span></div>`;
   });
-  return `<div class="frontmatter">${rows.join("")}</div>`;
+  return `<details class="frontmatter"><summary>Frontmatter</summary>${rows.join("")}</details>`;
 }
 
 function renderSourceFrontmatterValue(value) {
