@@ -521,7 +521,7 @@ async function loadVaultFromHandle(handle) {
     els.vaultStatus.textContent = handle.name;
     renderTree();
     state.calendarDate = new Date();
-    showInitialCalendarView();
+    showNoteView();
     loadCalendarCache().finally(scheduleCalendarRefreshIfStale);
     loadRecentFilesCache().finally(refreshRecentFilesCache);
   } finally {
@@ -645,7 +645,7 @@ function hydrateServerVault(vaultName, files, writable = false) {
   els.vaultStatus.textContent = vaultName;
   renderTree();
   state.calendarDate = new Date();
-  showInitialCalendarView();
+  showNoteView();
   loadCalendarCache().finally(scheduleCalendarRefreshIfStale);
   loadRecentFilesCache().finally(refreshRecentFilesCache);
 }
@@ -1091,7 +1091,7 @@ function renderCurrentDocument() {
     bindWikiLinks(els.markdownView);
     hydrateVaultImages(els.markdownView);
     hydrateEmbeddedDocuments(els.markdownView);
-    hydrateExcalidrawPackagePreviews(els.markdownView);
+    if (EXCALIDRAW_PREVIEW_ENABLED) hydrateExcalidrawPackagePreviews(els.markdownView);
     return;
   }
 
@@ -1102,7 +1102,7 @@ function renderCurrentDocument() {
     bindImageLightbox(els.markdownView);
     hydrateVaultImages(els.markdownView);
     hydrateEmbeddedDocuments(els.markdownView);
-    hydrateExcalidrawPackagePreviews(els.markdownView);
+    if (EXCALIDRAW_PREVIEW_ENABLED) hydrateExcalidrawPackagePreviews(els.markdownView);
     return;
   }
 
@@ -1223,7 +1223,7 @@ function renderEditorPreview() {
   bindImageLightbox(els.editorPreview);
   hydrateVaultImages(els.editorPreview);
   hydrateEmbeddedDocuments(els.editorPreview);
-  hydrateExcalidrawPackagePreviews(els.editorPreview);
+  if (EXCALIDRAW_PREVIEW_ENABLED) hydrateExcalidrawPackagePreviews(els.editorPreview);
 }
 
 function focusEditor() {
@@ -1621,6 +1621,7 @@ function scheduleCalendarRefresh(delay = 0) {
 }
 
 function scheduleCalendarRefreshIfStale(delay = 0) {
+  if (state.activeView !== "calendar" || state.calendarKind !== "tasks") return;
   if (state.calendarSyncedAt && Date.now() - state.calendarSyncedAt < CALENDAR_REFRESH_INTERVAL) {
     state.calendarCacheState = "fresh";
     renderCalendar();
@@ -1631,15 +1632,17 @@ function scheduleCalendarRefreshIfStale(delay = 0) {
 
 async function refreshCalendarTasks({ showLoading }) {
   if (state.calendarRefreshInFlight) return;
+  if (state.activeView !== "calendar" || state.calendarKind !== "tasks") return;
   state.calendarRefreshInFlight = true;
   const refreshView = state.activeView;
+  const refreshKind = state.calendarKind;
   state.calendarRefreshing = true;
   state.calendarCacheState = state.tasks.length ? "stale" : "refreshing";
   if (state.activeView === "calendar") renderCalendar();
 
   try {
     const pathPrefixes = parsePathList(els.calendarPathInput.value);
-    if (refreshView !== "calendar" || state.activeView !== "calendar") return;
+    if (refreshView !== "calendar" || refreshKind !== "tasks" || state.activeView !== "calendar" || state.calendarKind !== "tasks") return;
     if (showLoading) {
       showLoadingOverlay("캘린더 불러오는 중...");
     }
@@ -1664,7 +1667,7 @@ async function refreshCalendarTasks({ showLoading }) {
       }
     }
 
-    if (state.activeView !== "calendar") return;
+    if (state.activeView !== "calendar" || state.calendarKind !== "tasks") return;
     state.tasks = parsed;
     state.calendarSyncedAt = Date.now();
     state.calendarCacheState = "fresh";
@@ -1672,7 +1675,7 @@ async function refreshCalendarTasks({ showLoading }) {
   } finally {
     state.calendarRefreshInFlight = false;
     state.calendarRefreshing = false;
-    if (state.activeView === "calendar") renderCalendar();
+    if (state.activeView === "calendar" && state.calendarKind === "tasks") renderCalendar();
     if (showLoading) hideLoading();
   }
 }
@@ -1683,13 +1686,14 @@ function calendarCacheKey() {
 }
 
 async function loadCalendarCache() {
+  const shouldRender = () => state.activeView === "calendar" && state.calendarKind === "tasks";
   try {
     const response = await fetch(`/api/calendar-cache?key=${encodeURIComponent(calendarCacheKey())}`, { cache: "no-store" });
     if (response.status === 404) {
       state.tasks = [];
       state.calendarCacheState = "refreshing";
       state.calendarSyncedAt = 0;
-      renderCalendar();
+      if (shouldRender()) renderCalendar();
       return;
     }
     if (!response.ok) throw new Error("Calendar cache failed");
@@ -1701,12 +1705,12 @@ async function loadCalendarCache() {
     state.tasks = cached.tasks;
     state.calendarSyncedAt = syncedAt;
     state.calendarCacheState = "stale";
-    renderCalendar();
+    if (shouldRender()) renderCalendar();
   } catch {
     state.tasks = [];
     state.calendarCacheState = "refreshing";
     state.calendarSyncedAt = 0;
-    renderCalendar();
+    if (shouldRender()) renderCalendar();
   }
 }
 
@@ -2722,7 +2726,7 @@ async function hydrateEmbeddedDocuments(root) {
       bindWikiLinks(embed);
       hydrateVaultImages(embed);
       hydrateEmbeddedDocuments(embed);
-      hydrateExcalidrawPackagePreviews(embed);
+      if (EXCALIDRAW_PREVIEW_ENABLED) hydrateExcalidrawPackagePreviews(embed);
     }),
   );
 }
