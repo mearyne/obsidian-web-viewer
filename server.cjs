@@ -77,6 +77,22 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (requestPath === "/api/settings") {
+    if (req.method === "PUT") {
+      receiveBody(req, (error, body) => {
+        if (error) {
+          sendJson(res, 400, { error: "Invalid request body" });
+          return;
+        }
+        writeSettings(body, res);
+      });
+      return;
+    }
+
+    sendSettings(res);
+    return;
+  }
+
   if (requestPath === "/api/holidays") {
     sendHolidays(url.searchParams.get("year"), res);
     return;
@@ -297,6 +313,52 @@ function writeCalendarCache(key, body, res) {
   } catch (error) {
     sendJson(res, 500, { error: error.message || "Calendar cache write failed" });
   }
+}
+
+function sendSettings(res) {
+  fs.readFile(settingsFilePath(), "utf8", (error, data) => {
+    if (error) {
+      sendJson(res, 200, { version: 1, calendarPaths: "" });
+      return;
+    }
+
+    try {
+      const settings = JSON.parse(data);
+      sendJson(res, 200, normalizeSettings(settings));
+    } catch {
+      sendJson(res, 200, { version: 1, calendarPaths: "" });
+    }
+  });
+}
+
+function writeSettings(body, res) {
+  let payload;
+  try {
+    payload = JSON.parse(body || "{}");
+  } catch {
+    sendJson(res, 400, { error: "Invalid JSON" });
+    return;
+  }
+
+  const settings = normalizeSettings(payload);
+  try {
+    fs.mkdirSync(calendarCacheRoot, { recursive: true });
+    fs.writeFileSync(settingsFilePath(), JSON.stringify(settings), "utf8");
+    sendJson(res, 200, settings);
+  } catch (error) {
+    sendJson(res, 500, { error: error.message || "Settings write failed" });
+  }
+}
+
+function normalizeSettings(settings) {
+  return {
+    version: 1,
+    calendarPaths: typeof settings?.calendarPaths === "string" ? settings.calendarPaths.slice(0, 4096) : "",
+  };
+}
+
+function settingsFilePath() {
+  return path.join(calendarCacheRoot, "settings.json");
 }
 
 async function sendHolidays(yearValue, res) {

@@ -21,6 +21,7 @@ const state = {
   calendarRefreshInFlight: false,
   calendarRefreshTimer: null,
   calendarFilterTimer: null,
+  settingsSaveTimer: null,
   calendarRefreshing: false,
   calendarCacheState: "empty",
   calendarSyncedAt: 0,
@@ -324,6 +325,7 @@ function isTypingTarget(target) {
 
 initTheme();
 initOptions();
+loadServerSettings();
 updateMarkdownToggleButton();
 updateTreeSortDirectionButton();
 initSidebarWidth();
@@ -1167,6 +1169,21 @@ function initOptions() {
   applyDeviceDisplayOptions();
 }
 
+async function loadServerSettings() {
+  try {
+    const response = await fetch("/api/settings", { cache: "no-store" });
+    if (!response.ok) throw new Error("Settings load failed");
+    const settings = await response.json();
+    if (typeof settings.calendarPaths === "string" && els.calendarPathInput && settings.calendarPaths !== els.calendarPathInput.value) {
+      els.calendarPathInput.value = settings.calendarPaths;
+      localStorage.setItem("obsidian-web-viewer-calendar-paths", settings.calendarPaths);
+      refreshCalendarForFilterChange();
+    }
+  } catch {
+    // Local storage remains the fallback for file:// or unavailable server settings.
+  }
+}
+
 function updateDailyNotePath() {
   const nextPath = normalizeDailyNotePath(els.dailyNotePathInput?.value || state.dailyNotePath);
   state.dailyNotePath = nextPath;
@@ -1266,17 +1283,44 @@ function setContentAlign(align, { persist }) {
 }
 
 function handleCalendarFilterInput() {
-  localStorage.setItem("obsidian-web-viewer-calendar-paths", els.calendarPathInput?.value || "");
+  const value = els.calendarPathInput?.value || "";
+  localStorage.setItem("obsidian-web-viewer-calendar-paths", value);
+  scheduleSettingsSave(value);
   if (state.activeView !== "calendar") return;
   window.clearTimeout(state.calendarFilterTimer);
   state.calendarFilterTimer = window.setTimeout(() => {
     state.calendarFilterTimer = null;
-    window.clearTimeout(state.calendarRefreshTimer);
-    state.calendarRefreshTimer = null;
-    state.calendarSyncedAt = 0;
-    state.calendarCacheState = "refreshing";
-    loadCalendarCache().finally(() => scheduleCalendarRefreshIfStale(250));
+    refreshCalendarForFilterChange();
   }, 700);
+}
+
+function refreshCalendarForFilterChange() {
+  if (state.activeView !== "calendar") return;
+  window.clearTimeout(state.calendarRefreshTimer);
+  state.calendarRefreshTimer = null;
+  state.calendarSyncedAt = 0;
+  state.calendarCacheState = "refreshing";
+  loadCalendarCache().finally(() => scheduleCalendarRefreshIfStale(250));
+}
+
+function scheduleSettingsSave(calendarPaths) {
+  window.clearTimeout(state.settingsSaveTimer);
+  state.settingsSaveTimer = window.setTimeout(() => {
+    state.settingsSaveTimer = null;
+    saveServerSettings(calendarPaths);
+  }, 700);
+}
+
+async function saveServerSettings(calendarPaths) {
+  try {
+    await fetch("/api/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ calendarPaths }),
+    });
+  } catch {
+    // Server settings are best-effort; localStorage already has the same value.
+  }
 }
 
 function toggleMarkdownMode() {
