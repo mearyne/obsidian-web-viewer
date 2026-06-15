@@ -310,11 +310,11 @@ function normalizeVaultPath(value) {
 }
 
 function isIndexedFile(name) {
-  return /\.(md|excalidraw|txt|py|bat|sh|js|ts|json|yaml|yml|css|html|xml|csv|log|png|jpe?g|gif|webp|svg|bmp|pdf|zip)$/i.test(name);
+  return /\.(md|excalidraw|txt|py|bat|cmd|sh|js|ts|json|yaml|yml|css|html|xml|csv|log|ahk|java|png|jpe?g|gif|webp|svg|bmp|pdf|zip)$/i.test(name);
 }
 
 function isTextVaultFile(name) {
-  return /\.(md|excalidraw|txt|py|bat|sh|js|ts|json|yaml|yml|css|html|xml|csv|log)$/i.test(name);
+  return /\.(md|excalidraw|txt|py|bat|cmd|sh|js|ts|json|yaml|yml|css|html|xml|csv|log|ahk|java)$/i.test(name);
 }
 
 function sendJson(res, status, value) {

@@ -536,7 +536,7 @@ async function loadVaultFromHandle(handle) {
     els.vaultStatus.textContent = handle.name;
     renderTree();
     state.calendarDate = new Date();
-    showNoteView();
+    showInitialCalendarView();
     loadCalendarCache().finally(scheduleCalendarRefreshIfStale);
     loadRecentFilesCache().finally(refreshRecentFilesCache);
   } finally {
@@ -660,7 +660,7 @@ function hydrateServerVault(vaultName, files, writable = false) {
   els.vaultStatus.textContent = vaultName;
   renderTree();
   state.calendarDate = new Date();
-  showNoteView();
+  showInitialCalendarView();
   loadCalendarCache().finally(scheduleCalendarRefreshIfStale);
   loadRecentFilesCache().finally(refreshRecentFilesCache);
 }
@@ -697,11 +697,11 @@ function makeDirNode(name, path) {
 }
 
 function isIndexedFile(name) {
-  return /\.(md|excalidraw|txt|py|bat|sh|js|ts|json|yaml|yml|css|html|xml|csv|log|png|jpe?g|gif|webp|svg|bmp|pdf|zip)$/i.test(name);
+  return /\.(md|excalidraw|txt|py|bat|cmd|sh|js|ts|json|yaml|yml|css|html|xml|csv|log|ahk|java|png|jpe?g|gif|webp|svg|bmp|pdf|zip)$/i.test(name);
 }
 
 function isTextVaultFilePath(name) {
-  return /\.(md|excalidraw|txt|py|bat|sh|js|ts|json|yaml|yml|css|html|xml|csv|log)$/i.test(name);
+  return /\.(md|excalidraw|txt|py|bat|cmd|sh|js|ts|json|yaml|yml|css|html|xml|csv|log|ahk|java)$/i.test(name);
 }
 
 function isMarkdownDocument(name) {
@@ -1033,7 +1033,10 @@ function scrollViewerTop() {
 
 function scrollViewerByPageFraction(direction) {
   const amount = Math.max(120, els.viewerWrap.clientHeight / 3);
-  els.viewerWrap.scrollBy({ top: amount * direction, behavior: "smooth" });
+  const maxTop = Math.max(0, els.viewerWrap.scrollHeight - els.viewerWrap.clientHeight);
+  const nextTop = Math.max(0, Math.min(maxTop, els.viewerWrap.scrollTop + amount * direction));
+  if (Math.abs(nextTop - els.viewerWrap.scrollTop) < 1) return;
+  els.viewerWrap.scrollTo({ top: nextTop, behavior: "auto" });
 }
 
 async function readFileNode(node) {
@@ -1100,7 +1103,7 @@ function updateMarkdownToggleButton() {
 }
 
 function renderCurrentDocument() {
-  els.markdownView.classList.remove("empty-state", "plain-text-mode");
+  els.markdownView.classList.remove("empty-state", "plain-text-mode", "code-document");
   els.editorShell.hidden = true;
   els.markdownView.hidden = false;
 
@@ -1118,6 +1121,10 @@ function renderCurrentDocument() {
   }
 
   if (state.markdownEnabled) {
+    if (!isMarkdownDocument(state.currentPath || "")) {
+      renderCodeDocument(state.currentContent, state.currentPath || "");
+      return;
+    }
     els.markdownView.innerHTML = renderMarkdown(state.currentContent);
     bindWikiLinks(els.markdownView);
     arrangeImageGroups(els.markdownView);
@@ -1136,6 +1143,37 @@ function renderPlainTextDocument(content) {
   const pre = document.createElement("pre");
   pre.textContent = content;
   els.markdownView.replaceChildren(pre);
+}
+
+function renderCodeDocument(content, path) {
+  els.markdownView.classList.add("plain-text-mode", "code-document");
+  const pre = document.createElement("pre");
+  pre.dataset.language = codeLanguageFromPath(path);
+  const code = document.createElement("code");
+  code.className = `language-${pre.dataset.language}`;
+  code.textContent = content;
+  pre.append(code);
+  els.markdownView.replaceChildren(pre);
+}
+
+function codeLanguageFromPath(path) {
+  const ext = (path.split(".").pop() || "").toLowerCase();
+  return {
+    ahk: "autohotkey",
+    bat: "batch",
+    cmd: "batch",
+    css: "css",
+    html: "html",
+    java: "java",
+    js: "javascript",
+    json: "json",
+    py: "python",
+    sh: "shell",
+    ts: "typescript",
+    xml: "xml",
+    yaml: "yaml",
+    yml: "yaml",
+  }[ext] || "text";
 }
 
 async function enterEditMode() {
@@ -2017,6 +2055,8 @@ function renderCalendar() {
     const classes = ["calendar-cell"];
     if (formatMonth(date) !== monthKey) classes.push("outside-month");
     if (dateKey === todayKey) classes.push("today");
+    const rangePositions = calendarRangeClasses(dayTasks, dateKey);
+    classes.push(...rangePositions);
 
     cells.push(`
       <div class="${classes.join(" ")}" data-calendar-date="${dateKey}">
@@ -2168,6 +2208,15 @@ function renderCalendarTask(task, dateKey = task.date) {
       <span>${label}</span>
     </button>
   `;
+}
+
+function calendarRangeClasses(tasks, dateKey) {
+  const positions = new Set();
+  tasks.forEach((task) => {
+    const position = taskRangePosition(task, dateKey);
+    if (position) positions.add(`has-range-${position}`);
+  });
+  return [...positions];
 }
 
 function taskRangePosition(task, dateKey) {
@@ -2618,7 +2667,7 @@ function renderMarkdown(source) {
     const heading = line.match(/^(#{1,6})\s+(.+)$/);
     if (heading) {
       const level = heading[1].length;
-      html.push(`<h${level} class="heading-level heading-level-${level}">${renderInline(heading[2])}</h${level}>`);
+      html.push(`<h${level} class="heading-level heading-level-${level}" data-heading-label="h${level}">${renderInline(heading[2])}</h${level}>`);
       currentDepth = level;
       i += 1;
       continue;
