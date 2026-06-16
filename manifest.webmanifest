@@ -9,7 +9,7 @@
   "display_override": ["fullscreen", "standalone", "minimal-ui", "browser"],
   "background_color": "#15171a",
   "theme_color": "#15171a",
-  "orientation": "any",
+  "orientation": "portrait-primary",
   "icons": [
     {
       "src": "./icons/icon-192.svg",

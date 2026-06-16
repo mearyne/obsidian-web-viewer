@@ -447,6 +447,7 @@ button:disabled {
   height: 100vh;
   min-height: 100vh;
   min-width: 0;
+  padding-bottom: 44px;
 }
 
 .note-header {
@@ -480,6 +481,7 @@ button:disabled {
   align-items: center;
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
   min-width: 0;
 }
 
@@ -521,21 +523,44 @@ button:disabled {
   color: #c4903f;
 }
 
+.save-edit-button {
+  align-items: center;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 12px;
+  justify-content: center;
+  min-height: 28px;
+  padding: 0 10px;
+  width: auto;
+}
+
+.app-status-bar {
+  align-items: center;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  bottom: 0;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  left: 0;
+  padding: 6px 12px;
+  position: fixed;
+  right: 0;
+  z-index: 45;
+}
+
+.status-history {
+  display: flex;
+  gap: 8px;
+}
+
 @keyframes sync-spin {
   to {
     transform: rotate(360deg);
   }
-}
-
-.sync-status-bar {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  bottom: 12px;
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.16);
-  min-width: 30px;
-  position: fixed;
-  right: 12px;
-  z-index: 45;
 }
 
 .header-left > div {
@@ -623,7 +648,7 @@ button:disabled {
   border-top: 1px solid var(--line);
   display: grid;
   gap: 8px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   margin-top: auto;
   padding: 10px;
   position: relative;
@@ -1732,6 +1757,34 @@ button:disabled {
 
 .calendar-cell.holiday .calendar-day,
 .calendar-agenda-day.holiday .calendar-agenda-date strong {
+  color: #d94848;
+}
+
+.calendar-cell .calendar-day > span.has-daily-note,
+.calendar-agenda-date strong.has-daily-note {
+  align-items: center;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  display: inline-flex;
+  height: 1.55em;
+  justify-content: center;
+  line-height: 1;
+  min-width: 1.55em;
+  padding: 0 0.35em;
+  border-color: var(--accent);
+}
+
+.calendar-cell.holiday .calendar-day > span:first-child,
+.calendar-agenda-day.holiday .calendar-agenda-date strong {
+  align-items: center;
+  border-color: #d94848;
+  border-radius: 999px;
+  display: inline-flex;
+  height: 1.55em;
+  justify-content: center;
+  line-height: 1;
+  min-width: 1.55em;
+  padding: 0 0.35em;
   color: #d94848;
 }
 

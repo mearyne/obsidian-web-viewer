@@ -260,7 +260,8 @@ function writeVaultFile(requestedPath, body, res) {
   try {
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
     const createdTimes = readCreatedTimes();
-    const previousCreatedAt = Number(createdTimes[safePath]) || (fs.existsSync(filePath) ? createdAtFromStat(fs.statSync(filePath)) : 0);
+    const existingStat = fs.existsSync(filePath) ? fs.statSync(filePath) : null;
+    const previousCreatedAt = Number(createdTimes[safePath]) || (existingStat ? createdAtFromStat(existingStat) : 0);
     if (fs.existsSync(filePath) && payload.backup !== false) {
       fs.copyFileSync(filePath, `${filePath}.bak`);
     }

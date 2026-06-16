@@ -1,4 +1,12 @@
 const CALENDAR_REFRESH_INTERVAL = 5 * 60 * 1000;
+const CALENDAR_GESTURE_RULES = globalThis.CalendarGestureRules || {
+  thresholds: {
+    dragDistance: 10,
+    longPressMs: 650,
+  },
+};
+const CALENDAR_DRAG_DISTANCE = CALENDAR_GESTURE_RULES.thresholds.dragDistance;
+const CALENDAR_LONG_PRESS_MS = CALENDAR_GESTURE_RULES.thresholds.longPressMs;
 
 const state = {
   files: new Map(),
@@ -54,11 +62,14 @@ const state = {
   calendarDragHandled: false,
   calendarDragPointer: null,
   calendarTaskDrag: null,
+  calendarTaskPendingStates: new Map(),
+  calendarTaskWriteQueues: new Map(),
   noteTitlePressTimer: null,
   noteTitleDeleteSuppressedUntil: 0,
   calendarSwipe: null,
   calendarWheelAt: 0,
   calendarTaskOpenSuppressedUntil: 0,
+  calendarDateOpenSuppressedUntil: 0,
   fullscreenAttempted: false,
   fullscreenFallback: false,
   fontDeviceKey: "",
@@ -234,13 +245,24 @@ document.addEventListener("pointerdown", closeSidebarFromOutside);
 document.addEventListener("pointerup", clearCalendarDragIfActive);
 document.addEventListener("pointercancel", clearCalendarDragIfActive);
 window.addEventListener("resize", handleCalendarResize, { passive: true });
+window.addEventListener("orientationchange", () => {
+  lockPreferredOrientation();
+  handleCalendarResize();
+}, { passive: true });
 if (shouldAutoRequestFullscreen()) {
   document.addEventListener("pointerdown", requestFullscreenOnce, { once: true });
   document.addEventListener("keydown", requestFullscreenOnce, { once: true });
 }
-document.addEventListener("fullscreenchange", () => setFullscreenFallback(false));
-document.addEventListener("webkitfullscreenchange", () => setFullscreenFallback(false));
+document.addEventListener("fullscreenchange", () => {
+  setFullscreenFallback(false);
+  lockPreferredOrientation();
+});
+document.addEventListener("webkitfullscreenchange", () => {
+  setFullscreenFallback(false);
+  lockPreferredOrientation();
+});
 registerServiceWorker();
+lockPreferredOrientation();
 
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator) || !window.isSecureContext) return;
@@ -249,6 +271,16 @@ function registerServiceWorker() {
       // PWA support is optional; the viewer must keep working as a normal page.
     });
   });
+}
+
+async function lockPreferredOrientation() {
+  if (!isTouchPrimaryDevice() && !isStandaloneDisplayMode()) return;
+  if (!screen.orientation?.lock) return;
+  try {
+    await screen.orientation.lock("portrait-primary");
+  } catch {
+    // Some browsers only allow locking after fullscreen or when installed.
+  }
 }
 
 function handleGlobalKeydown(event) {
@@ -280,6 +312,24 @@ function handleGlobalKeydown(event) {
   }
 
   if (!event.ctrlKey && !event.metaKey && !event.altKey) {
+    if (state.activeView === "calendar" && event.key === "1") {
+      event.preventDefault();
+      event.stopPropagation();
+      setCalendarMode("month");
+      return;
+    }
+    if (state.activeView === "calendar" && event.key === "2") {
+      event.preventDefault();
+      event.stopPropagation();
+      setCalendarMode("week");
+      return;
+    }
+    if (state.activeView === "calendar" && event.key === "3") {
+      event.preventDefault();
+      event.stopPropagation();
+      setCalendarMode("day");
+      return;
+    }
     if (event.key.toLowerCase() === "e") {
       event.preventDefault();
       event.stopPropagation();
@@ -347,6 +397,7 @@ initSidebarWidth();
 initSidebarPin();
 loadSavedVaults();
 loadSampleVault();
+arrangeChromeControls();
 setInterval(refreshCalendarIfVisible, CALENDAR_REFRESH_INTERVAL);
 
 function closeSidebarFromMain(event) {
@@ -781,6 +832,8 @@ function resetVault() {
   state.metadataSyncedAt = 0;
   state.recentFiles = { updated: [], created: [] };
   state.calendarKind = "tasks";
+  state.calendarTaskOpenSuppressedUntil = 0;
+  state.calendarDateOpenSuppressedUntil = 0;
   if (state.calendarRefreshTimer) {
     window.clearTimeout(state.calendarRefreshTimer);
     state.calendarRefreshTimer = null;
@@ -1869,7 +1922,7 @@ function toggleEditorTaskCheckbox(editor = els.markdownEditor) {
 
 function taskDateFromText(text) {
   const dates = extractTaskDates(text);
-  return dates.due || dates.end || dates.scheduled || dates.start || dates.done || dates.cancelled || "";
+  return dates.due || dates.end || dates.scheduled || dates.start || "";
 }
 
 function taskDateTokenFromText(text) {
@@ -1877,8 +1930,6 @@ function taskDateTokenFromText(text) {
   if (dates.start) return `\u{1F6EB} ${dates.start}`;
   if (dates.scheduled) return `\u{23F3} ${dates.scheduled}`;
   if (dates.due || dates.end) return `\u{1F4C5} ${dates.due || dates.end}`;
-  if (dates.done) return `\u{2705} ${dates.done}`;
-  if (dates.cancelled) return `\u{274C} ${dates.cancelled}`;
   return "";
 }
 
@@ -1976,6 +2027,40 @@ function updateEditButtons() {
   els.webEditButton.disabled = !canEdit || state.editMode;
   els.webEditButton.hidden = state.activeView !== "note";
   els.markdownToggleButton.disabled = state.editMode;
+  if (els.saveEditButton) els.saveEditButton.hidden = !(state.activeView === "note" && state.editMode);
+}
+
+function arrangeChromeControls() {
+  const sidebarOptions = document.querySelector(".sidebar-options");
+  const noteTitleRow = document.querySelector(".note-title-row");
+  const editorToolbar = document.querySelector(".editor-toolbar");
+  if (sidebarOptions && els.fullscreenButton && els.fullscreenButton.parentElement !== sidebarOptions) {
+    sidebarOptions.insertBefore(els.fullscreenButton, sidebarOptions.querySelector("#themeButton") || sidebarOptions.firstChild);
+  }
+  if (noteTitleRow && els.saveEditButton && els.saveEditButton.parentElement !== noteTitleRow) {
+    noteTitleRow.insertBefore(els.saveEditButton, noteTitleRow.querySelector(".heading-controls") || null);
+  }
+  if (editorToolbar && els.editorStatus && els.editorStatus.parentElement !== editorToolbar) {
+    editorToolbar.insertBefore(els.editorStatus, editorToolbar.firstChild);
+  }
+  let statusBar = document.querySelector(".app-status-bar");
+  if (!statusBar) {
+    statusBar = document.createElement("footer");
+    statusBar.className = "app-status-bar";
+    statusBar.setAttribute("aria-label", "History and sync status");
+    const historyWrap = document.createElement("div");
+    historyWrap.className = "status-history";
+    historyWrap.append(els.historyBackButton, els.historyForwardButton);
+    statusBar.append(historyWrap, els.syncStatus);
+    document.body.append(statusBar);
+    return;
+  }
+  const historyWrap = statusBar.querySelector(".status-history") || document.createElement("div");
+  historyWrap.className = "status-history";
+  if (els.historyBackButton && els.historyBackButton.parentElement !== historyWrap) historyWrap.append(els.historyBackButton);
+  if (els.historyForwardButton && els.historyForwardButton.parentElement !== historyWrap) historyWrap.append(els.historyForwardButton);
+  if (!historyWrap.parentElement) statusBar.append(historyWrap);
+  if (els.syncStatus && els.syncStatus.parentElement !== statusBar) statusBar.append(els.syncStatus);
 }
 
 function openCurrentFileInObsidian() {
@@ -2265,11 +2350,19 @@ async function saveCalendarCache() {
 function updateTasksForFile(path, content) {
   if (!path || !path.toLowerCase().endsWith(".md")) return;
   state.tasks = state.tasks.filter((task) => task.path !== path).concat(parseTasks(content, path));
+  applyPendingTaskStates();
   const node = state.files.get(path);
   if (node) state.calendarTaskFiles.set(path, calendarTaskFileMeta(node));
   state.calendarSyncedAt = Date.now();
   state.calendarCacheState = "fresh";
   saveCalendarCache();
+  if (state.activeView === "calendar") renderCalendar();
+}
+
+function setCalendarMode(mode) {
+  if (!["month", "week", "day"].includes(mode)) return;
+  if (state.calendarMode === mode) return;
+  state.calendarMode = mode;
   if (state.activeView === "calendar") renderCalendar();
 }
 
@@ -2323,8 +2416,10 @@ async function loadRecentFilesCache() {
     if (!response.ok) return;
     const cached = await response.json();
     if (!Array.isArray(cached.updated) || !Array.isArray(cached.created)) return;
+    const syncedAt = Number(cached.syncedAt || 0);
+    if (state.metadataSyncedAt && syncedAt < state.metadataSyncedAt) return;
     state.recentFiles = { updated: cached.updated, created: cached.created };
-    state.metadataSyncedAt = Number(cached.syncedAt || 0);
+    state.metadataSyncedAt = syncedAt;
     if (state.activeView === "calendar" && state.calendarKind !== "tasks") renderCalendar();
   } catch {
     // Metadata cache is best-effort.
@@ -2441,11 +2536,11 @@ function parseTasks(content, path) {
       const rawText = match[2].trim();
       const dates = extractTaskDates(rawText);
       const implicitDailyDate = dailyDateFromPath(path);
-      if (!dates.due && !dates.end && !dates.scheduled && !dates.start && !dates.done && !dates.cancelled && implicitDailyDate) {
+      if (!dates.due && !dates.end && !dates.scheduled && !dates.start && implicitDailyDate) {
         dates.due = implicitDailyDate;
         dates.end = implicitDailyDate;
       }
-      const displayDate = dates.due || dates.end || dates.scheduled || dates.start || dates.done || dates.cancelled;
+      const displayDate = dates.due || dates.end || dates.scheduled || dates.start;
       if (!displayDate) return [];
 
       return [
@@ -2456,7 +2551,7 @@ function parseTasks(content, path) {
           text: cleanTaskText(rawText),
           rawText,
           date: displayDate,
-          type: dates.due || dates.end ? "due" : dates.scheduled ? "scheduled" : dates.start ? "start" : dates.done ? "done" : "cancelled",
+          type: dates.due || dates.end ? "due" : dates.scheduled ? "scheduled" : "start",
           dates,
         },
       ];
@@ -2574,6 +2669,7 @@ function renderCalendar() {
     const dayTasks = tasksByDate.get(dateKey) || [];
     const dayFiles = recentByDate.get(dateKey) || [];
     const holidays = state.holidays.get(dateKey) || [];
+    const hasDailyNote = hasDailyNoteForDate(dateKey);
     const classes = ["calendar-cell"];
     if (formatMonth(date) !== monthKey) classes.push("outside-month");
     if (dateKey === todayKey) classes.push("today");
@@ -2581,7 +2677,7 @@ function renderCalendar() {
     if (holidays.length) classes.push("holiday");
     cells.push(`
       <div class="${classes.join(" ")}" data-calendar-date="${dateKey}">
-        <div class="calendar-day"><span>${date.getDate()}</span>${renderHolidayNames(holidays)}</div>
+        <div class="calendar-day"><span class="${hasDailyNote ? "has-daily-note" : ""}">${date.getDate()}</span>${renderHolidayNames(holidays)}</div>
         ${renderHolidayBadges(holidays, true)}
         <div class="calendar-tasks">
           ${
@@ -2673,7 +2769,7 @@ function updateSyncStatus() {
   }
 
   els.syncStatus.hidden = false;
-  els.syncStatus.className = `sync-status sync-status-bar ${state.calendarRefreshing ? "refreshing" : state.calendarCacheState}`;
+  els.syncStatus.className = `sync-status ${state.calendarRefreshing ? "refreshing" : state.calendarCacheState}`;
 
   if (state.calendarRefreshing) {
     els.syncStatus.textContent = "⟳";
@@ -2734,10 +2830,11 @@ function renderAgendaDay(date, tasks, isToday, holidays = []) {
   if (isToday) classes.push("today");
   if (date.getDay() === 0) classes.push("sunday");
   if (holidays.length) classes.push("holiday");
+  const hasDailyNote = hasDailyNoteForDate(formatDate(date));
   return `
     <section class="${classes.join(" ")}" data-calendar-date="${formatDate(date)}">
       <div class="calendar-agenda-date">
-        <strong>${date.getDate()}</strong>
+        <strong class="${hasDailyNote ? "has-daily-note" : ""}">${date.getDate()}</strong>
         <span>${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][date.getDay()]}</span>
         ${renderHolidayBadges(holidays)}
       </div>
@@ -2753,10 +2850,11 @@ function renderRecentAgendaDay(date, files, isToday, field, holidays = []) {
   if (isToday) classes.push("today");
   if (date.getDay() === 0) classes.push("sunday");
   if (holidays.length) classes.push("holiday");
+  const hasDailyNote = hasDailyNoteForDate(formatDate(date));
   return `
     <section class="${classes.join(" ")}" data-calendar-date="${formatDate(date)}">
       <div class="calendar-agenda-date">
-        <strong>${date.getDate()}</strong>
+        <strong class="${hasDailyNote ? "has-daily-note" : ""}">${date.getDate()}</strong>
         <span>${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][date.getDay()]}</span>
         ${renderHolidayBadges(holidays)}
       </div>
@@ -2777,6 +2875,12 @@ function renderHolidayNames(holidays) {
   if (!holidays.length) return "";
   const label = holidays.map((holiday) => holiday.name).join(", ");
   return `<span class="calendar-holiday-name" title="${escapeAttribute(label)}">${escapeHtml(label)}</span>`;
+}
+
+function hasDailyNoteForDate(dateKey) {
+  const dailyPath = normalizeDailyNotePath(state.dailyNotePath || els.dailyNotePathInput?.value || "");
+  if (!dailyPath || !dateKey) return false;
+  return state.files.has(`${dailyPath}/${dateKey}.md`);
 }
 
 function ensureVisibleHolidays() {
@@ -2922,7 +3026,14 @@ function bindCalendarEvents() {
         return;
       }
       const path = button.getAttribute("data-path");
-      if (path) await openFile(path);
+      const line = Number(button.getAttribute("data-line"));
+      if (path && Number.isInteger(line)) {
+        event.preventDefault();
+        event.stopPropagation();
+        await openFile(path);
+      } else if (path) {
+        await openFile(path);
+      }
     });
   });
 
@@ -3064,7 +3175,7 @@ function bindTaskDrag(button) {
     const drag = state.calendarTaskDrag;
     if (!drag || drag.pointerId !== event.pointerId) return;
     const distance = Math.hypot(event.clientX - drag.x, event.clientY - drag.y);
-    if (!drag.active && distance < 10) return;
+    if (!drag.active && distance < CALENDAR_DRAG_DISTANCE) return;
     if (!drag.active) {
       drag.active = true;
       button.dataset.dragged = "true";
@@ -3126,11 +3237,11 @@ function bindCalendarRowLongPressGuard(button) {
       timer = null;
       button.dataset.longPressed = "true";
       suppressCalendarRowOpen();
-    }, 520);
+    }, CALENDAR_LONG_PRESS_MS);
   });
   button.addEventListener("pointermove", (event) => {
     if (!timer) return;
-    if (Math.hypot(event.clientX - startX, event.clientY - startY) > 10) clear();
+    if (Math.hypot(event.clientX - startX, event.clientY - startY) > CALENDAR_DRAG_DISTANCE) clear();
   });
   button.addEventListener("pointerup", () => {
     if (button.dataset.longPressed === "true") suppressCalendarRowOpen();
@@ -3160,7 +3271,7 @@ function handleWindowCalendarTaskDragMove(event) {
   const drag = state.calendarTaskDrag;
   if (!drag || drag.pointerId !== event.pointerId) return;
   const distance = Math.hypot(event.clientX - drag.x, event.clientY - drag.y);
-  if (!drag.active && distance < 10) return;
+    if (!drag.active && distance < CALENDAR_DRAG_DISTANCE) return;
   if (!drag.active) {
     drag.active = true;
     drag.button?.classList.add("dragging");
@@ -3249,12 +3360,12 @@ function bindTaskLongPress(button) {
       button.dataset.longPressed = "true";
       suppressCalendarRowOpen();
       await toggleCalendarTask(path, line, button);
-    }, 650);
+    }, CALENDAR_LONG_PRESS_MS);
   });
   button.addEventListener("pointermove", (event) => {
     if (!timer) return;
     const distance = Math.hypot(event.clientX - startX, event.clientY - startY);
-    if (distance > 10) clear();
+    if (distance > CALENDAR_DRAG_DISTANCE) clear();
   });
   button.addEventListener("pointerup", () => {
     if (button.dataset.longPressed === "true") suppressCalendarRowOpen();
@@ -3277,46 +3388,89 @@ async function toggleCalendarTask(path, lineNumber, button) {
     return;
   }
 
-  try {
-    const content = await readFileNode(node);
-    const lines = content.replace(/\r\n/g, "\n").split("\n");
-    const index = lineNumber - 1;
-    if (!lines[index] || !/^\s*[-*+]\s+\[[ xX-]\]/.test(lines[index])) return;
+  const desiredChecked = nextCalendarTaskChecked(path, lineNumber, button);
+  const queueKey = `${path}:${lineNumber}`;
+  state.calendarTaskPendingStates.set(queueKey, desiredChecked);
+  applyTaskTogglePreview(path, lineNumber, desiredChecked, button);
+  if (state.activeView === "calendar" && state.calendarKind === "tasks") renderCalendar();
 
-    const taskDate = formatDate(new Date());
-    const nextLine = lines[index].replace(/^(\s*[-*+]\s+\[)([ xX-])(\])(.*)$/, (_, head, checked, tail, rest) => {
-      const isDone = checked.toLowerCase() === "x" || checked === "-";
-      const cleanRest = rest.replace(/\s*\u{2705}\s*\d{4}-\d{2}-\d{2}/gu, "");
-      return `${head}${isDone ? " " : "x"}${tail}${cleanRest}${isDone ? "" : ` \u{2705} ${taskDate}`}`;
-    });
-    lines[index] = nextLine;
-    const nextContent = lines.join("\n");
-    const nextChecked = /\[[xX-]\]/.test(nextLine);
-    if ("checked" in button) button.checked = nextChecked;
-    button.classList.toggle("done", nextChecked);
-    button.closest?.(".task-list-item")?.classList.toggle("done", nextChecked);
-    button.disabled = true;
-
-    const metadata = await writeNodeContent(node, nextContent, { backup: false, previousContent: content });
-    Object.assign(node, metadata);
-    refreshDirectoryMetadata();
-    if (typeof node.content === "string") node.content = nextContent;
-    updateTasksForFile(path, nextContent);
-
-    if (state.currentPath === path) {
-      state.currentContent = nextContent;
-      if (state.editMode) {
-        setEditorValue(nextContent);
-        markEditorDirty();
-      } else {
-        renderCurrentDocument();
+  const previousWrite = state.calendarTaskWriteQueues.get(queueKey) || Promise.resolve();
+  const nextWrite = previousWrite
+    .catch(() => {})
+    .then(async () => {
+      const content = await readFileNode(node);
+      await persistTaskCheckedState(node, path, lineNumber, desiredChecked, content);
+    })
+    .catch((error) => {
+      console.error("Task toggle failed", error);
+      alert("Task 상태를 저장하지 못했습니다.");
+    })
+    .finally(() => {
+      if (state.calendarTaskWriteQueues.get(queueKey) === nextWrite) {
+        state.calendarTaskWriteQueues.delete(queueKey);
+        state.calendarTaskPendingStates.delete(queueKey);
       }
-    }
+    });
+  state.calendarTaskWriteQueues.set(queueKey, nextWrite);
+  return nextWrite;
+}
 
-    if (state.activeView === "calendar" && state.calendarKind === "tasks") renderCalendar();
-  } finally {
-    button.disabled = false;
+function nextCalendarTaskChecked(path, lineNumber, button) {
+  if (button && "checked" in button) return Boolean(button.checked);
+  const task = state.tasks.find((item) => item.path === path && item.line === lineNumber);
+  if (task) return !task.checked;
+  return !button?.classList?.contains("done");
+}
+
+function applyTaskTogglePreview(path, lineNumber, checked, button) {
+  state.tasks = state.tasks.map((task) => (task.path === path && task.line === lineNumber ? { ...task, checked } : task));
+  if (button && "checked" in button) button.checked = checked;
+  button?.classList?.toggle("done", checked);
+  button?.closest?.(".task-list-item")?.classList.toggle("done", checked);
+}
+
+function applyPendingTaskStates() {
+  if (!state.calendarTaskPendingStates.size) return;
+  state.tasks = state.tasks.map((task) => {
+    const key = `${task.path}:${task.line}`;
+    return state.calendarTaskPendingStates.has(key) ? { ...task, checked: state.calendarTaskPendingStates.get(key) } : task;
+  });
+}
+
+async function persistTaskCheckedState(node, path, lineNumber, checked, content) {
+  const queueKey = `${path}:${lineNumber}`;
+  const lines = content.replace(/\r\n/g, "\n").split("\n");
+  const index = lineNumber - 1;
+  if (!lines[index] || !/^\s*[-*+]\s+\[[ xX-]\]/.test(lines[index])) return;
+
+  const taskDate = formatDate(new Date());
+  const nextLine = lines[index].replace(/^(\s*[-*+]\s+\[)([ xX-])(\])(.*)$/, (_, head, currentChecked, tail, rest) => {
+    const cleanRest = rest.replace(/\s*\u{2705}\s*\d{4}-\d{2}-\d{2}/gu, "");
+    return `${head}${checked ? "x" : " "}${tail}${cleanRest}${checked ? ` \u{2705} ${taskDate}` : ""}`;
+  });
+  if (nextLine === lines[index]) return;
+
+  lines[index] = nextLine;
+  const nextContent = lines.join("\n");
+  const metadata = await writeNodeContent(node, nextContent, { backup: false, previousContent: content });
+  Object.assign(node, metadata);
+  refreshDirectoryMetadata();
+  if (typeof node.content === "string") node.content = nextContent;
+  updateTasksForFile(path, nextContent);
+
+  const pendingChecked = state.calendarTaskPendingStates.get(queueKey);
+  const hasNewerPendingState = pendingChecked !== undefined && pendingChecked !== checked;
+  if (state.currentPath === path && !hasNewerPendingState) {
+    state.currentContent = nextContent;
+    if (state.editMode) {
+      setEditorValue(nextContent);
+      markEditorDirty();
+    } else {
+      renderCurrentDocument();
+    }
   }
+
+  if (state.activeView === "calendar" && state.calendarKind === "tasks") renderCalendar();
 }
 
 async function moveCalendarTaskDate(path, lineNumber, targetDate, sourceDate = "") {
@@ -3368,8 +3522,6 @@ async function moveCalendarTaskDate(path, lineNumber, targetDate, sourceDate = "
 function taskDateMarkerForMove(task, sourceDate) {
   if (task?.dates?.start && sourceDate === task.dates.start) return "\u{1F6EB}";
   if (task?.dates?.scheduled) return "\u{23F3}";
-  if (task?.dates?.done) return "\u{2705}";
-  if (task?.dates?.cancelled) return "\u{274C}";
   if (task?.dates?.start && !task?.dates?.due && !task?.dates?.end) return "\u{1F6EB}";
   return "\u{1F4C5}";
 }
@@ -3421,23 +3573,46 @@ function replaceTaskLineDate(line, targetDate, marker = "\u{1F4C5}") {
 }
 
 function bindDateClick(target) {
+  let timer = null;
+  let startX = 0;
+  let startY = 0;
+  const clearLongPress = () => {
+    if (timer) window.clearTimeout(timer);
+    timer = null;
+  };
+
+  const suppressDateOpen = (duration = 2500) => {
+    state.calendarDateOpenSuppressedUntil = Math.max(state.calendarDateOpenSuppressedUntil, Date.now() + duration);
+  };
+
   target.addEventListener("pointerdown", (event) => {
     if (event.target.closest(".calendar-task, .calendar-more")) return;
     const isAgendaDate = target.classList.contains("calendar-agenda-day");
+    startX = event.clientX;
+    startY = event.clientY;
     if (!isAgendaDate) event.preventDefault();
     if (!isAgendaDate) target.setPointerCapture?.(event.pointerId);
     state.calendarDragStartDate = target.getAttribute("data-calendar-date") || "";
     state.calendarDragCurrentDate = state.calendarDragStartDate;
     state.calendarDragPointer = { id: event.pointerId, x: event.clientX, y: event.clientY, agenda: isAgendaDate };
     updateCalendarDragHighlight();
+    timer = window.setTimeout(async () => {
+      timer = null;
+      target.dataset.longPressed = "true";
+      suppressDateOpen();
+      const date = target.getAttribute("data-calendar-date");
+      if (!date) return;
+      await openDateEditor(date);
+    }, CALENDAR_LONG_PRESS_MS);
   });
 
   target.addEventListener("pointermove", (event) => {
+    if (timer && Math.hypot(event.clientX - startX, event.clientY - startY) > CALENDAR_DRAG_DISTANCE) clearLongPress();
     if (!state.calendarDragStartDate) return;
     if (state.calendarDragPointer?.agenda) {
       const dx = event.clientX - state.calendarDragPointer.x;
       const dy = event.clientY - state.calendarDragPointer.y;
-      if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) {
+      if (Math.abs(dy) > CALENDAR_DRAG_DISTANCE && Math.abs(dy) > Math.abs(dx)) {
         clearCalendarDragState();
         return;
       }
@@ -3453,6 +3628,7 @@ function bindDateClick(target) {
   target.addEventListener("pointerup", async (event) => {
     if (event.target.closest(".calendar-task, .calendar-more")) return;
     target.releasePointerCapture?.(event.pointerId);
+    clearLongPress();
     const startDate = state.calendarDragStartDate;
     const endDate = state.calendarDragCurrentDate || target.getAttribute("data-calendar-date") || "";
     state.calendarDragPointer = null;
@@ -3465,18 +3641,27 @@ function bindDateClick(target) {
       window.setTimeout(() => {
         state.calendarDragHandled = false;
       }, 0);
+      suppressDateOpen();
     }
   });
 
   target.addEventListener("pointercancel", (event) => {
     target.releasePointerCapture?.(event.pointerId);
+    clearLongPress();
+    target.dataset.longPressed = "";
   });
+  target.addEventListener("pointerleave", clearLongPress);
 
   target.addEventListener("click", async (event) => {
     if (event.target.closest(".calendar-task, .calendar-more")) return;
-    if (state.calendarDragHandled) return;
+    if (state.calendarDragHandled || Date.now() < state.calendarDateOpenSuppressedUntil || target.dataset.longPressed === "true") {
+      target.dataset.longPressed = "";
+      return;
+    }
     const date = target.getAttribute("data-calendar-date");
-    await openDateEditor(date);
+    if (!date) return;
+    const node = await getOrCreateDailyNote(date);
+    await openFile(node.path);
   });
 }
 
@@ -3645,22 +3830,18 @@ function calendarPreviewTasks() {
         dates.start = drag.previewDate;
       } else if (marker === "\u{23F3}") {
         dates.scheduled = drag.previewDate;
-      } else if (marker === "\u{2705}") {
-        dates.done = drag.previewDate;
-      } else if (marker === "\u{274C}") {
-        dates.cancelled = drag.previewDate;
       } else {
         dates.due = drag.previewDate;
         dates.end = drag.previewDate;
       }
     }
-    const date = dates.due || dates.end || dates.scheduled || dates.start || dates.done || dates.cancelled || drag.previewDate;
+    const date = dates.due || dates.end || dates.scheduled || dates.start || drag.previewDate;
     return {
       ...task,
       date,
       dates,
       draggingPreview: true,
-      type: dates.due || dates.end ? "due" : dates.scheduled ? "scheduled" : dates.start ? "start" : dates.done ? "done" : "cancelled",
+      type: dates.due || dates.end ? "due" : dates.scheduled ? "scheduled" : "start",
     };
   });
 }
@@ -3906,6 +4087,13 @@ function bindRenderedTaskCheckboxes(root) {
   root.querySelectorAll(".task-list-checkbox[data-task-path][data-task-line]").forEach((checkbox) => {
     checkbox.addEventListener("click", (event) => {
       event.stopPropagation();
+    });
+    checkbox.addEventListener("input", () => {
+      const path = checkbox.getAttribute("data-task-path");
+      const line = Number(checkbox.getAttribute("data-task-line"));
+      if (!path || !Number.isInteger(line)) return;
+      state.tasks = state.tasks.map((task) => (task.path === path && task.line === line ? { ...task, checked: checkbox.checked } : task));
+      if (state.activeView === "calendar" && state.calendarKind === "tasks") renderCalendar();
     });
     checkbox.addEventListener("change", async () => {
       const path = checkbox.getAttribute("data-task-path");

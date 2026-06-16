@@ -1,6 +1,9 @@
 {
   "scripts": {
     "build:excalidraw": "esbuild vendor-src/excalidraw-preview.jsx --bundle --format=esm --splitting --outdir=vendor --conditions=production --loader:.woff2=file --jsx=automatic --minify",
+    "prebuild:excalidraw": "node --test tests/calendar-gesture-rules.test.cjs",
+    "test": "node --test tests/calendar-gesture-rules.test.cjs",
+    "predev": "node --test tests/calendar-gesture-rules.test.cjs",
     "dev": "node server.cjs"
   },
   "dependencies": {
