@@ -2051,7 +2051,7 @@ function arrangeChromeControls() {
     const historyWrap = document.createElement("div");
     historyWrap.className = "status-history";
     historyWrap.append(els.historyBackButton, els.historyForwardButton);
-    statusBar.append(historyWrap, els.syncStatus);
+    statusBar.append(historyWrap, els.notePath, els.syncStatus);
     document.body.append(statusBar);
     return;
   }
@@ -2060,6 +2060,7 @@ function arrangeChromeControls() {
   if (els.historyBackButton && els.historyBackButton.parentElement !== historyWrap) historyWrap.append(els.historyBackButton);
   if (els.historyForwardButton && els.historyForwardButton.parentElement !== historyWrap) historyWrap.append(els.historyForwardButton);
   if (!historyWrap.parentElement) statusBar.append(historyWrap);
+  if (els.notePath && els.notePath.parentElement !== statusBar) statusBar.insertBefore(els.notePath, els.syncStatus);
   if (els.syncStatus && els.syncStatus.parentElement !== statusBar) statusBar.append(els.syncStatus);
 }
 
@@ -2168,6 +2169,7 @@ async function buildCalendarView() {
   closeOptionsMenu();
   closeSidebar();
   state.calendarKind = "tasks";
+  state.calendarMode = "month";
   showCalendarView();
   renderCalendar();
   scheduleCalendarRefreshIfStale();
@@ -2178,6 +2180,7 @@ async function buildRecentCalendarView(type) {
   closeOptionsMenu();
   closeSidebar();
   state.calendarKind = type === "created" ? "created" : "updated";
+  state.calendarMode = "week";
   showCalendarView();
   renderCalendar();
   loadRecentFilesCache().finally(refreshRecentFilesCache);
@@ -2745,7 +2748,7 @@ function syncCalendarRowLimit() {
   const dayHeight = day.offsetHeight + parseFloat(getComputedStyle(day).marginBottom || 0);
   const available = Math.max(0, cell.clientHeight - verticalPadding - dayHeight);
   const gap = parseFloat(tasksStyles.rowGap || tasksStyles.gap || 0);
-  const rowHeight = window.matchMedia("(max-width: 780px)").matches ? 11 : 18;
+  const rowHeight = window.matchMedia("(max-width: 780px)").matches ? 13 : 21;
   const nextLimit = Math.max(1, Math.min(5, Math.floor((available + gap) / (rowHeight + gap))));
   if (nextLimit !== state.calendarRowLimit) {
     state.calendarRowLimit = nextLimit;
@@ -3660,7 +3663,9 @@ function bindDateClick(target) {
     }
     const date = target.getAttribute("data-calendar-date");
     if (!date) return;
-    const node = await getOrCreateDailyNote(date);
+    const dailyPath = normalizeDailyNotePath(state.dailyNotePath || els.dailyNotePathInput?.value || "");
+    const node = state.files.get(`${dailyPath}/${date}.md`);
+    if (!node) return;
     await openFile(node.path);
   });
 }
