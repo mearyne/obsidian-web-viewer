@@ -406,6 +406,28 @@ button:disabled {
   color: var(--accent);
 }
 
+.tree-content-snippet {
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1.45;
+  margin: 0 6px 4px 32px;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.tree-content-snippet:hover {
+  color: var(--text);
+}
+
+.tree-content-snippet mark {
+  background: color-mix(in srgb, var(--accent) 25%, transparent);
+  border-radius: 2px;
+  color: var(--accent);
+}
+
 .tree-group {
   margin: 1px 0;
 }
@@ -1483,6 +1505,15 @@ button:disabled {
 
 .task-create-dialog::backdrop {
   background: rgba(0, 0, 0, 0.4);
+}
+
+@media (max-width: 768px) {
+  .task-create-dialog {
+    margin-top: 10px;
+    margin-bottom: auto;
+    max-height: calc(100dvh - 20px);
+    overflow-y: auto;
+  }
 }
 
 .task-create-form {

@@ -49,6 +49,8 @@ const state = {
   searchExcludePaths: [],
   contentSearchTimer: null,
   contentSearchQuery: "",
+  contentSearchMatches: null,
+  vaultLoaded: false,
   taskDialogActiveField: null,
   taskDialogPickerMonth: null,
   connectionLost: false,
@@ -109,7 +111,6 @@ const els = {
   imagePathInput: document.querySelector("#imagePathInput"),
   searchExcludeInput: document.querySelector("#searchExcludeInput"),
   searchStatus: document.querySelector("#searchStatus"),
-  contentSearchResults: document.querySelector("#contentSearchResults"),
   taskCreateDialog: document.querySelector("#taskCreateDialog"),
   taskTitleInput: document.querySelector("#taskTitleInput"),
   taskStartDateBtn: document.querySelector("#taskStartDateBtn"),
@@ -866,8 +867,12 @@ function hydrateServerVault(vaultName, files, writable = false) {
   refreshDirectoryMetadata();
   els.vaultStatus.textContent = vaultName;
   renderTree();
-  state.calendarDate = new Date();
-  showInitialCalendarView();
+  const firstLoad = !state.vaultLoaded;
+  state.vaultLoaded = true;
+  if (firstLoad) {
+    state.calendarDate = new Date();
+    showInitialCalendarView();
+  }
   loadCalendarCache().finally(scheduleCalendarRefreshIfStale);
   loadRecentFilesCache().finally(refreshRecentFilesCache);
   window.dispatchEvent(new CustomEvent("vaultReady"));
@@ -895,6 +900,8 @@ function resetVault() {
   state.calendarKind = "tasks";
   state.calendarTaskOpenSuppressedUntil = 0;
   state.calendarDateOpenSuppressedUntil = 0;
+  state.vaultLoaded = false;
+  state.contentSearchMatches = null;
   if (state.calendarRefreshTimer) {
     window.clearTimeout(state.calendarRefreshTimer);
     state.calendarRefreshTimer = null;
@@ -943,10 +950,10 @@ function renderTree() {
   const previousScrollTop = els.fileTree.scrollTop;
   els.fileTree.replaceChildren();
   const query = els.searchInput.value;
-  const matcher = createSearchMatcher(query, {
+  const matcher = query.length >= 2 ? createSearchMatcher(query, {
     regexMode: els.regexSearchToggle.checked,
     caseSensitive: els.caseSearchToggle.checked,
-  });
+  }) : null;
   const folderPaths = parsePathList(els.folderPathInput?.value || "");
   const excludePaths = matcher ? state.searchExcludePaths : [];
   const rootFragment = document.createDocumentFragment();
@@ -958,76 +965,54 @@ function renderTree() {
 
 function updateSearchStatus(query, matchCount) {
   if (!els.searchStatus) return;
-  if (!query) {
+  if (!query || query.length < 2) {
     els.searchStatus.hidden = true;
-    if (els.contentSearchResults) els.contentSearchResults.hidden = true;
+    state.contentSearchMatches = null;
+    state.contentSearchQuery = "";
+    window.clearTimeout(state.contentSearchTimer);
     return;
   }
   els.searchStatus.hidden = false;
-  if (matchCount === 0) {
-    els.searchStatus.textContent = "파일명 결과 없음";
+  const contentCount = state.contentSearchMatches ? state.contentSearchMatches.size : null;
+  const contentPart = contentCount === null ? " | 내용 검색 중…" : contentCount > 0 ? ` | 내용 ${contentCount}개` : "";
+  if (matchCount === 0 && !contentCount) {
+    els.searchStatus.textContent = "결과 없음" + contentPart;
     els.searchStatus.dataset.state = "empty";
   } else {
-    els.searchStatus.textContent = `파일명 ${matchCount}개`;
+    els.searchStatus.textContent = `파일명 ${matchCount}개${contentPart}`;
     els.searchStatus.dataset.state = "found";
   }
   scheduleContentSearch(query);
 }
 
 function scheduleContentSearch(query) {
-  if (!state.serverVaultWritable) return;
-  window.clearTimeout(state.contentSearchTimer);
-  if (query.length < 2) {
-    if (els.contentSearchResults) els.contentSearchResults.hidden = true;
+  if (!state.serverVaultWritable) {
+    state.contentSearchMatches = new Map();
     return;
   }
+  if (query === state.contentSearchQuery && state.contentSearchMatches !== null) return;
+  window.clearTimeout(state.contentSearchTimer);
+  if (query !== state.contentSearchQuery) {
+    state.contentSearchMatches = null;
+  }
   state.contentSearchQuery = query;
-  showContentSearchLoading();
-  state.contentSearchTimer = window.setTimeout(() => runContentSearch(query), 300);
-}
-
-function showContentSearchLoading() {
-  if (!els.contentSearchResults) return;
-  els.contentSearchResults.hidden = false;
-  els.contentSearchResults.innerHTML = `<div class="csr-header">내용 검색 중…</div>`;
+  state.contentSearchTimer = window.setTimeout(() => runContentSearch(query), 350);
 }
 
 async function runContentSearch(query) {
   if (query !== state.contentSearchQuery) return;
   try {
-    const res = await fetch(`/api/search?q=${encodeURIComponent(query)}&limit=30`, { cache: "no-store", signal: AbortSignal.timeout(8000) });
+    const res = await fetch(`/api/search?q=${encodeURIComponent(query)}&limit=50`, { cache: "no-store", signal: AbortSignal.timeout(8000) });
     if (!res.ok) throw new Error();
     const results = await res.json();
     if (query !== state.contentSearchQuery) return;
-    renderContentSearchResults(query, results);
+    state.contentSearchMatches = new Map(results.map((r) => [r.path, r.snippet]));
+    renderTree();
   } catch {
     if (query !== state.contentSearchQuery) return;
-    if (els.contentSearchResults) els.contentSearchResults.hidden = true;
+    state.contentSearchMatches = new Map();
+    renderTree();
   }
-}
-
-function renderContentSearchResults(query, results) {
-  if (!els.contentSearchResults) return;
-  if (!results.length) {
-    els.contentSearchResults.innerHTML = `<div class="csr-header">내용 결과 없음</div>`;
-    return;
-  }
-  const highlight = (text) => {
-    const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    return escapeHtml(text).replace(new RegExp(`(${escaped})`, "gi"), `<mark>$1</mark>`);
-  };
-  const items = results.map((r) => {
-    const name = r.path.split("/").pop() || r.path;
-    return `<button class="csr-item" type="button" data-path="${escapeAttribute(r.path)}">
-      <span class="csr-name">${highlight(name)}</span>
-      <span class="csr-snippet">${highlight(r.snippet)}</span>
-    </button>`;
-  }).join("");
-  els.contentSearchResults.innerHTML = `<div class="csr-header">내용 ${results.length}개</div>${items}`;
-  els.contentSearchResults.hidden = false;
-  els.contentSearchResults.querySelectorAll(".csr-item").forEach((btn) => {
-    btn.addEventListener("click", () => openFile(btn.dataset.path));
-  });
 }
 
 function updateTreeSortMode() {
@@ -1108,7 +1093,8 @@ function renderDirChildren(dir, parent, matcher, folderPaths, excludePaths = [])
   entries.forEach((node) => {
     if (folderPaths.length && !nodeInAnyPath(node, folderPaths)) return;
     if (matcher && excludePaths.length && nodeIsExcluded(node, excludePaths)) return;
-    if (matcher && node.kind === "file" && !matcher(node.path)) return;
+    const hasContentMatch = node.kind === "file" && state.contentSearchMatches?.has(node.path);
+    if (matcher && node.kind === "file" && !matcher(node.path) && !hasContentMatch) return;
     if (matcher && node.kind === "directory" && !dirHasMatch(node, matcher, folderPaths, excludePaths)) return;
 
     const group = document.createElement("div");
@@ -1153,6 +1139,16 @@ function renderDirChildren(dir, parent, matcher, folderPaths, excludePaths = [])
     });
     group.append(row);
 
+    if (hasContentMatch) {
+      const snippet = state.contentSearchMatches.get(node.path);
+      const snippetEl = document.createElement("div");
+      snippetEl.className = "tree-content-snippet";
+      const escaped = state.contentSearchQuery.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      snippetEl.innerHTML = escapeHtml(snippet).replace(new RegExp(`(${escaped})`, "gi"), `<mark>$1</mark>`);
+      snippetEl.addEventListener("click", () => openFile(node.path));
+      group.append(snippetEl);
+    }
+
     if (node.kind === "directory") {
       const children = document.createElement("div");
       children.className = "tree-children";
@@ -1170,7 +1166,7 @@ function dirHasMatch(dir, matcher, folderPaths, excludePaths = []) {
   return [...dir.children.values()].some((node) => {
     if (folderPaths.length && !nodeInAnyPath(node, folderPaths)) return false;
     if (excludePaths.length && nodeIsExcluded(node, excludePaths)) return false;
-    if (node.kind === "file") return matcher(node.path);
+    if (node.kind === "file") return matcher(node.path) || state.contentSearchMatches?.has(node.path);
     return dirHasMatch(node, matcher, folderPaths, excludePaths);
   });
 }
@@ -2119,10 +2115,34 @@ async function handleEditorPaste(event) {
     textarea.selectionStart = textarea.selectionEnd = start + wikiLink.length;
     resizeEditorToContent();
     markEditorDirty();
-    await loadSampleVault();
+    registerUploadedFileInVault(filePath, blob.size);
   } catch {
     alert("이미지 업로드에 실패했습니다.");
   }
+}
+
+function registerUploadedFileInVault(filePath, size = 0) {
+  const parts = filePath.split("/");
+  const fileName = parts[parts.length - 1];
+  let dir = state.root;
+  let dirPath = "";
+  for (const part of parts.slice(0, -1)) {
+    const nextPath = dirPath ? `${dirPath}/${part}` : part;
+    if (!state.directories.has(nextPath)) {
+      const node = makeDirNode(part, nextPath);
+      state.directories.set(nextPath, node);
+      dir.children.set(part, node);
+    }
+    dir = state.directories.get(nextPath);
+    dirPath = nextPath;
+  }
+  if (!state.files.has(filePath)) {
+    const fileNode = { name: fileName, path: filePath, url: "", serverBacked: true, kind: "file", size, updatedAt: Date.now(), createdAt: Date.now() };
+    state.files.set(filePath, fileNode);
+    dir.children.set(fileName, fileNode);
+  }
+  refreshDirectoryMetadata();
+  renderTree();
 }
 
 function editorValue() {
