@@ -2105,9 +2105,9 @@ button:disabled {
 }
 
 .calendar-shell {
-  display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
-  gap: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   height: 100%;
   min-height: 0;
 }
@@ -2357,6 +2357,8 @@ button:disabled {
 .calendar-grid {
   border-left: 1px solid var(--line);
   border-top: 1px solid var(--line);
+  flex: 1;
+  min-height: 0;
   grid-template-rows: repeat(6, minmax(0, 1fr));
   height: 100%;
   min-height: 0;
@@ -2575,23 +2577,42 @@ button:disabled {
   outline-offset: -2px;
 }
 
-.calendar-task.cat-회사 { background: color-mix(in srgb, #4a9eff 7%, var(--surface-2)); }
-.calendar-task.cat-개인 { background: color-mix(in srgb, #4ac97e 7%, var(--surface-2)); }
-.calendar-task.cat-기타 { background: color-mix(in srgb, #aaa 5%, var(--surface-2)); }
+/* Priority — background tint on task button (via parent wrap) */
+.calendar-task-wrap.pri-상 .calendar-task { background: color-mix(in srgb, #e74c3c 13%, var(--surface-2)); }
+.calendar-task-wrap.pri-중 .calendar-task { background: color-mix(in srgb, #e6a20f 11%, var(--surface-2)); }
+.calendar-task-wrap.pri-하 .calendar-task { background: var(--surface-2); }
 
+/* Category — right-edge strip */
+.calendar-task-wrap.cat-회사::after,
+.calendar-task-wrap.cat-개인::after,
+.calendar-task-wrap.cat-기타::after {
+  border-radius: 0 4px 4px 0;
+  bottom: 0;
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 3px;
+}
+.calendar-task-wrap { position: relative; }
+.calendar-task-wrap.cat-회사::after { background: rgba(74, 158, 255, 0.55); }
+.calendar-task-wrap.cat-개인::after { background: rgba(74, 201, 126, 0.55); }
+.calendar-task-wrap.cat-기타::after { background: rgba(153, 153, 153, 0.4); }
+
+/* Priority dot — small colored circle before text */
 .task-pri-dot {
   border-radius: 50%;
   display: inline-block;
   flex-shrink: 0;
-  height: 6px;
-  margin-right: 3px;
+  height: 7px;
+  margin-right: 4px;
   vertical-align: middle;
-  width: 6px;
+  width: 7px;
 }
-
 .task-pri-dot.pri-dot-상 { background: #e74c3c; }
 .task-pri-dot.pri-dot-중 { background: #e6a20f; }
-.task-pri-dot.pri-dot-하 { background: #3498db; }
+.task-pri-dot.pri-dot-하 { background: #4a9eff; }
 
 .calendar-cell.task-drop-target,
 .calendar-agenda-day.task-drop-target {
@@ -2654,7 +2675,9 @@ button.calendar-more {
 .calendar-mode-week .calendar-agenda,
 .calendar-mode-day .calendar-agenda {
   display: grid;
+  flex: 1;
   gap: 8px;
+  min-height: 0;
 }
 
 .calendar-agenda-day {

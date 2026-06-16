@@ -3627,7 +3627,7 @@ function renderCalendarTask(task, dateKey = task.date, showDelete = false) {
   const inlineSubItems = hasSubItems && showDelete
     ? `<div class="task-sub-items-inline">${renderSubItemsHtml(task.subItems)}</div>`
     : "";
-  const metaClasses = [
+  const wrapMetaClasses = [
     task.category ? `cat-${task.category}` : "",
     task.priority ? `pri-${task.priority}` : "",
   ].filter(Boolean).join(" ");
@@ -3635,8 +3635,8 @@ function renderCalendarTask(task, dateKey = task.date, showDelete = false) {
     ? `<span class="task-pri-dot pri-dot-${task.priority}" aria-hidden="true"></span>`
     : "";
   return `
-    <div class="calendar-task-wrap${showDelete ? " has-delete" : ""}${hasSubItems ? " has-sub" : ""}"${wrapIndentStyle}>
-      <button class="calendar-task ${task.checked ? "done" : ""} ${task.type} ${range ? `range-task ${colorClass}` : ""} ${task.draggingPreview ? "drag-preview" : ""} ${metaClasses}" type="button" data-path="${escapeAttribute(task.path)}" data-line="${task.line}" data-date="${escapeAttribute(dateKey)}" title="${escapeAttribute(title)}">
+    <div class="calendar-task-wrap${showDelete ? " has-delete" : ""}${hasSubItems ? " has-sub" : ""} ${wrapMetaClasses}"${wrapIndentStyle}>
+      <button class="calendar-task ${task.checked ? "done" : ""} ${task.type} ${range ? `range-task ${colorClass}` : ""} ${task.draggingPreview ? "drag-preview" : ""}" type="button" data-path="${escapeAttribute(task.path)}" data-line="${task.line}" data-date="${escapeAttribute(dateKey)}" title="${escapeAttribute(title)}">
         <span>${icon}</span>
         <span>${priDot}${escapeHtml(task.text)}</span>
       </button>
