@@ -2527,7 +2527,7 @@ button.calendar-more {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 4px 8px 6px 26px;
+  padding: 4px 8px 6px 33px;
 }
 
 .task-sub-bullet {
