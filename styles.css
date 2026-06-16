@@ -1509,8 +1509,6 @@ button:disabled {
 
 @media (max-width: 768px) {
   .task-create-dialog {
-    margin-top: 10px;
-    margin-bottom: auto;
     max-height: calc(100dvh - 20px);
     overflow-y: auto;
   }
@@ -2267,6 +2265,7 @@ button:disabled {
 }
 
 .calendar-tasks {
+  align-items: start;
   display: grid;
   grid-template-rows: repeat(var(--calendar-row-count, 5), minmax(0, 1fr));
   gap: 4px;
@@ -2286,10 +2285,10 @@ button:disabled {
   font-size: var(--calendar-row-font-size);
   gap: 6px;
   grid-template-columns: 1em minmax(0, 1fr);
-  height: 100%;
+  height: auto;
   justify-items: start;
   line-height: 1.3;
-  max-height: 100%;
+  max-height: none;
   min-height: 0;
   overflow: hidden;
   padding: 2px 5px 2px 1px;

@@ -3562,11 +3562,6 @@ function bindTaskSubItemsTooltip() {
     tooltip.className = "cal-sub-tooltip";
     tooltip.hidden = true;
     document.body.append(tooltip);
-    document.addEventListener("pointermove", (e) => {
-      if (!tooltip.hidden && !e.target?.closest?.(".calendar-task[data-sub]")) {
-        tooltip.hidden = true;
-      }
-    });
   }
 
   els.calendarView.querySelectorAll(".calendar-task[data-sub]").forEach((btn) => {
@@ -3583,6 +3578,9 @@ function bindTaskSubItemsTooltip() {
         tooltip.style.left = `${Math.max(4, left)}px`;
         tooltip.hidden = false;
       } catch { /* ignore parse errors */ }
+    });
+    btn.addEventListener("mouseleave", () => {
+      tooltip.hidden = true;
     });
   });
 }
@@ -4316,14 +4314,36 @@ async function showTaskCreateDialog(dueDate, startDate = "") {
   renderTaskDatePicker(null);
 
   els.taskCreateDialog.showModal();
+  positionTaskCreateDialog();
+
+  const vv = window.visualViewport;
+  if (vv) vv.addEventListener("resize", positionTaskCreateDialog);
 
   await new Promise((resolve) => {
     const onClose = () => {
       els.taskCreateDialog.removeEventListener("close", onClose);
+      if (vv) vv.removeEventListener("resize", positionTaskCreateDialog);
+      els.taskCreateDialog.style.marginTop = "";
+      els.taskCreateDialog.style.marginBottom = "";
       resolve();
     };
     els.taskCreateDialog.addEventListener("close", onClose);
   });
+}
+
+function positionTaskCreateDialog() {
+  const dialog = els.taskCreateDialog;
+  if (!dialog || !isTouchPrimaryDevice()) return;
+  const vv = window.visualViewport;
+  if (!vv) return;
+  const keyboardHeight = window.innerHeight - vv.height - vv.offsetTop;
+  if (keyboardHeight > 80) {
+    dialog.style.marginTop = `${Math.max(8, vv.offsetTop + 8)}px`;
+    dialog.style.marginBottom = "auto";
+  } else {
+    dialog.style.marginTop = "";
+    dialog.style.marginBottom = "";
+  }
 }
 
 function setTaskDialogDate(field, value) {
