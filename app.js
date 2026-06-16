@@ -3011,11 +3011,14 @@ function updateCalendarTitle() {
   updateSyncStatus();
 }
 
+function normalizeLineIndent(line) {
+  return (line.match(/^(\s*)/)?.[1] || "").replace(/\t/g, "  ");
+}
+
 function parseTasks(content, path) {
   const lines = content.replace(/\r\n/g, "\n").split("\n");
   return lines.flatMap((line, index) => {
-      const indentMatch = line.match(/^(\s*)/);
-      const taskIndentLen = indentMatch ? indentMatch[1].length : 0;
+      const taskIndentLen = normalizeLineIndent(line).length;
       const match = line.match(/^\s*[-*+]\s+\[([ xX-])\]\s*(.*)$/);
       if (!match) return [];
 
@@ -3034,8 +3037,7 @@ function parseTasks(content, path) {
       for (let i = index + 1; i < lines.length; i++) {
         const subLine = lines[i];
         if (subLine.trim() === "") break;
-        const subIndentMatch = subLine.match(/^(\s*)/);
-        const subIndent = subIndentMatch ? subIndentMatch[1].length : 0;
+        const subIndent = normalizeLineIndent(subLine).length;
         if (subIndent <= taskIndentLen) break;
         subItems.push(subLine.trim());
       }
