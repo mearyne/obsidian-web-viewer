@@ -2461,8 +2461,87 @@ button.calendar-more {
 
 .calendar-task-wrap {
   display: flex;
-  align-items: stretch;
+  flex-direction: column;
   min-width: 0;
+}
+
+.calendar-task-wrap > .calendar-task,
+.calendar-task-wrap > .agenda-delete-btn {
+  align-self: auto;
+}
+
+.calendar-task-wrap.has-delete {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: stretch;
+}
+
+.calendar-task-wrap.has-delete > .calendar-task {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.calendar-task-wrap.has-delete > .task-sub-items-inline {
+  flex: 0 0 100%;
+  order: 3;
+}
+
+.task-sub-items-inline {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 8px 6px 24px;
+}
+
+.task-sub-bullet {
+  align-items: flex-start;
+  color: var(--muted);
+  display: flex;
+  font-size: 11.5px;
+  gap: 5px;
+  line-height: 1.4;
+}
+
+.task-sub-bullet span:first-child {
+  flex: 0 0 auto;
+  font-size: 10px;
+  opacity: 0.6;
+  padding-top: 1px;
+}
+
+.task-sub-text {
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.4;
+  padding-left: 10px;
+}
+
+.task-sub-img {
+  border-radius: 4px;
+  display: block;
+  max-height: 120px;
+  max-width: 100%;
+  object-fit: contain;
+  margin: 2px 0;
+}
+
+.cal-sub-tooltip {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 220px;
+  padding: 8px 10px;
+  position: fixed;
+  z-index: 500;
+}
+
+.cal-sub-tooltip .task-sub-img {
+  max-height: 160px;
+  max-width: 200px;
 }
 
 .calendar-task-wrap .calendar-task {

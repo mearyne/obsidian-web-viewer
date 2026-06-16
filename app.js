@@ -2944,10 +2944,10 @@ function updateCalendarTitle() {
 }
 
 function parseTasks(content, path) {
-  return content
-    .replace(/\r\n/g, "\n")
-    .split("\n")
-    .flatMap((line, index) => {
+  const lines = content.replace(/\r\n/g, "\n").split("\n");
+  return lines.flatMap((line, index) => {
+      const indentMatch = line.match(/^(\s*)/);
+      const taskIndentLen = indentMatch ? indentMatch[1].length : 0;
       const match = line.match(/^\s*[-*+]\s+\[([ xX-])\]\s*(.*)$/);
       if (!match) return [];
 
@@ -2962,6 +2962,16 @@ function parseTasks(content, path) {
       const displayDate = dates.due || dates.end || dates.scheduled || dates.start;
       if (!displayDate) return [];
 
+      const subItems = [];
+      for (let i = index + 1; i < lines.length; i++) {
+        const subLine = lines[i];
+        if (subLine.trim() === "") break;
+        const subIndentMatch = subLine.match(/^(\s*)/);
+        const subIndent = subIndentMatch ? subIndentMatch[1].length : 0;
+        if (subIndent <= taskIndentLen) break;
+        subItems.push(subLine.trim());
+      }
+
       return [
         {
           path,
@@ -2972,6 +2982,8 @@ function parseTasks(content, path) {
           date: displayDate,
           type: dates.due || dates.end ? "due" : dates.scheduled ? "scheduled" : "start",
           dates,
+          indent: Math.floor(taskIndentLen / 2),
+          subItems,
         },
       ];
     });
@@ -3361,6 +3373,31 @@ function scheduleHolidayRender() {
   }, 50);
 }
 
+function renderSubItemsHtml(subItems) {
+  if (!subItems || !subItems.length) return "";
+  return subItems.map((item) => {
+    const wikiEmbed = item.match(/^!\[\[([^\]]+)\]\]$/);
+    if (wikiEmbed) {
+      const target = wikiEmbed[1].split("|")[0].trim();
+      const path = resolveVaultPath(target);
+      if (path && isImageDocument(path)) {
+        const src = `/api/vault-image-thumb?path=${encodeURIComponent(path)}&width=240`;
+        return `<img class="task-sub-img" src="${escapeAttribute(src)}" alt="${escapeAttribute(target)}" loading="lazy">`;
+      }
+      return `<div class="task-sub-bullet"><span>•</span><span>${escapeHtml(target)}</span></div>`;
+    }
+    const mdImg = item.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
+    if (mdImg) {
+      return `<img class="task-sub-img" src="${escapeAttribute(mdImg[2])}" alt="${escapeAttribute(mdImg[1])}" loading="lazy">`;
+    }
+    const listItem = item.match(/^[-*+]\s+(.*)$/);
+    if (listItem) {
+      return `<div class="task-sub-bullet"><span>•</span><span>${escapeHtml(listItem[1])}</span></div>`;
+    }
+    return `<div class="task-sub-text">${escapeHtml(item)}</div>`;
+  }).join("");
+}
+
 function renderCalendarTask(task, dateKey = task.date, showDelete = false) {
   const title = `${task.path}: ${task.text}`;
   const range = taskRangePosition(task, dateKey);
@@ -3369,13 +3406,22 @@ function renderCalendarTask(task, dateKey = task.date, showDelete = false) {
   const deleteBtn = showDelete
     ? `<button class="agenda-delete-btn" type="button" data-agenda-delete data-path="${escapeAttribute(task.path)}" data-line="${task.line}" aria-label="삭제" title="삭제">🗑️</button>`
     : "";
+  const indentPx = (task.indent || 0) * 12;
+  const indentStyle = indentPx > 0 ? ` style="padding-left: calc(1px + ${indentPx}px)"` : "";
+  const hasSubItems = task.subItems && task.subItems.length > 0;
+  const subItemsEncoded = hasSubItems ? escapeAttribute(JSON.stringify(task.subItems)) : "";
+  const subAttr = hasSubItems && !showDelete ? ` data-sub="${subItemsEncoded}"` : "";
+  const inlineSubItems = hasSubItems && showDelete
+    ? `<div class="task-sub-items-inline">${renderSubItemsHtml(task.subItems)}</div>`
+    : "";
   return `
-    <div class="calendar-task-wrap${showDelete ? " has-delete" : ""}">
-      <button class="calendar-task ${task.checked ? "done" : ""} ${task.type} ${range ? `range-task ${colorClass}` : ""} ${task.draggingPreview ? "drag-preview" : ""}" type="button" data-path="${escapeAttribute(task.path)}" data-line="${task.line}" data-date="${escapeAttribute(dateKey)}" title="${escapeAttribute(title)}">
+    <div class="calendar-task-wrap${showDelete ? " has-delete" : ""}${hasSubItems ? " has-sub" : ""}">
+      <button class="calendar-task ${task.checked ? "done" : ""} ${task.type} ${range ? `range-task ${colorClass}` : ""} ${task.draggingPreview ? "drag-preview" : ""}" type="button" data-path="${escapeAttribute(task.path)}" data-line="${task.line}" data-date="${escapeAttribute(dateKey)}" title="${escapeAttribute(title)}"${subAttr}${indentStyle}>
         <span>${icon}</span>
         <span>${escapeHtml(task.text)}</span>
       </button>
       ${deleteBtn}
+      ${inlineSubItems}
     </div>
   `;
 }
@@ -3499,8 +3545,45 @@ function bindCalendarEvents() {
     });
   });
 
+  bindTaskSubItemsTooltip();
+
   els.calendarView.querySelectorAll("[data-calendar-date]").forEach((target) => {
     bindDateClick(target);
+  });
+}
+
+function bindTaskSubItemsTooltip() {
+  let tooltip = document.getElementById("calTaskSubTooltip");
+  if (!tooltip) {
+    tooltip = document.createElement("div");
+    tooltip.id = "calTaskSubTooltip";
+    tooltip.className = "cal-sub-tooltip";
+    tooltip.hidden = true;
+    document.body.append(tooltip);
+  }
+  const hide = () => { tooltip.hidden = true; };
+  tooltip.addEventListener("mouseleave", hide);
+
+  els.calendarView.querySelectorAll(".calendar-task[data-sub]").forEach((btn) => {
+    btn.addEventListener("mouseenter", () => {
+      if (state.calendarTaskDrag?.active) return;
+      const raw = btn.getAttribute("data-sub");
+      if (!raw) return;
+      try {
+        const subItems = JSON.parse(raw);
+        tooltip.innerHTML = renderSubItemsHtml(subItems);
+        const rect = btn.getBoundingClientRect();
+        const left = Math.min(rect.left, window.innerWidth - 220);
+        const top = rect.bottom + 4;
+        tooltip.style.top = `${top}px`;
+        tooltip.style.left = `${left}px`;
+        tooltip.hidden = false;
+      } catch { /* ignore parse errors */ }
+    });
+    btn.addEventListener("mouseleave", (e) => {
+      if (e.relatedTarget === tooltip || tooltip.contains(e.relatedTarget)) return;
+      hide();
+    });
   });
 }
 
@@ -3697,12 +3780,13 @@ function bindTaskDrag(button) {
     if (!drag.active) return;
     event.preventDefault();
     event.stopPropagation();
+    suppressCalendarRowOpen();
+    button.dataset.dragged = "true";
     if (targetDate && targetDate !== drag.sourceDate) {
       await moveCalendarTaskDate(drag.path, drag.line, targetDate, drag.sourceDate);
     } else if (state.activeView === "calendar" && state.calendarKind === "tasks") {
       renderCalendar();
     }
-    suppressCalendarRowOpen();
     window.setTimeout(() => {
       button.dataset.dragged = "";
     }, 0);
@@ -3792,12 +3876,13 @@ async function handleWindowCalendarTaskDragEnd(event) {
   if (!drag.active) return;
   event.preventDefault();
   event.stopPropagation();
+  suppressCalendarRowOpen();
+  if (drag.button) drag.button.dataset.dragged = "true";
   if (targetDate && targetDate !== drag.sourceDate) {
     await moveCalendarTaskDate(drag.path, drag.line, targetDate, drag.sourceDate);
   } else if (state.activeView === "calendar" && state.calendarKind === "tasks") {
     renderCalendar();
   }
-  suppressCalendarRowOpen();
   window.setTimeout(() => {
     if (drag.button) drag.button.dataset.dragged = "";
   }, 0);
