@@ -562,6 +562,8 @@ function normalizeSettings(settings) {
     randomPaths: typeof settings?.randomPaths === "string" ? settings.randomPaths.slice(0, 4096) : "",
     dailyNotePath: typeof settings?.dailyNotePath === "string" ? settings.dailyNotePath.slice(0, 512) : "",
     newNotePath: typeof settings?.newNotePath === "string" ? settings.newNotePath.slice(0, 512) : "",
+    imagePath: typeof settings?.imagePath === "string" ? settings.imagePath.slice(0, 512) : "",
+    searchExclude: typeof settings?.searchExclude === "string" ? settings.searchExclude.slice(0, 4096) : "",
   };
 }
 

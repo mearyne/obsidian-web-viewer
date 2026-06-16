@@ -1534,6 +1534,21 @@ async function loadServerSettings() {
         localStorage.setItem("obsidian-web-viewer-new-note-path", settings.newNotePath);
       }
     }
+    if (typeof settings.imagePath === "string") {
+      if (settings.imagePath !== state.imageSavePath) {
+        state.imageSavePath = settings.imagePath;
+        if (els.imagePathInput) els.imagePathInput.value = settings.imagePath;
+        localStorage.setItem("obsidian-web-viewer-image-path", settings.imagePath);
+      }
+    }
+    if (typeof settings.searchExclude === "string") {
+      const current = els.searchExcludeInput?.value || "";
+      if (settings.searchExclude !== current) {
+        if (els.searchExcludeInput) els.searchExcludeInput.value = settings.searchExclude;
+        state.searchExcludePaths = parsePathList(settings.searchExclude);
+        localStorage.setItem("obsidian-web-viewer-search-exclude", settings.searchExclude);
+      }
+    }
   } catch {
     // Local storage remains the fallback for file:// or unavailable server settings.
   }
@@ -1557,11 +1572,13 @@ function handleImagePathInput() {
   const value = normalizeVaultPath(els.imagePathInput?.value || "");
   state.imageSavePath = value;
   localStorage.setItem("obsidian-web-viewer-image-path", value);
+  scheduleSettingsSave();
 }
 
 function handleSearchExcludeInput() {
   state.searchExcludePaths = parsePathList(els.searchExcludeInput?.value || "");
   localStorage.setItem("obsidian-web-viewer-search-exclude", els.searchExcludeInput?.value || "");
+  scheduleSettingsSave();
   renderTree();
 }
 
@@ -1853,6 +1870,8 @@ async function saveServerSettings() {
         randomPaths: els.randomPathInput?.value || "",
         dailyNotePath: state.dailyNotePath || "",
         newNotePath: state.newNotePath || "",
+        imagePath: state.imageSavePath || "",
+        searchExclude: els.searchExcludeInput?.value || "",
       }),
     });
   } catch {
