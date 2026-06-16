@@ -3617,7 +3617,7 @@ function renderCalendarTask(task, dateKey = task.date, showDelete = false) {
   const title = `${task.path}: ${task.text}`;
   const range = taskRangePosition(task, dateKey);
   const colorClass = range ? `range-color-${rangeColorIndex(task)}` : "";
-  const icon = range && range !== "start" ? taskContinuationIcon(range) : taskTypeIcon(task.type);
+  const icon = range && range !== "start" ? taskContinuationIcon(range) : taskDisplayIcon(task);
   const deleteBtn = showDelete
     ? `<button class="agenda-delete-btn" type="button" data-agenda-delete data-path="${escapeAttribute(task.path)}" data-line="${task.line}" aria-label="삭제" title="삭제">🗑️</button>`
     : "";
@@ -4884,6 +4884,27 @@ function taskTypeIcon(type) {
     done: "✅",
     cancelled: "❌",
   }[type] || "•";
+}
+
+const TAG_EMOJI_MAP = {
+  게임: "🎮", 가족: "👨‍👩‍👧", 공부: "📚",
+  운동: "💪", 건강: "🏥", 여행: "✈️",
+  쇼핑: "🛒", 음식: "🍽️", 영화: "🎬",
+  음악: "🎵", 독서: "📖", 취미: "🎨",
+  약속: "🤝", 친구: "👥", 데이트: "💕",
+  병원: "🏥", 청소: "🧹", 요리: "👨‍🍳",
+  스포츠: "⚽", 산책: "🚶", 회의: "📋",
+  업무: "💼", 프로젝트: "🗂️", 독서: "📖",
+  뉴스: "📰", 일기: "✏️", 쇼핑몰: "🏬",
+};
+
+function taskDisplayIcon(task) {
+  if (task.tags && task.tags.length > 0) {
+    return TAG_EMOJI_MAP[task.tags[0]] || "🏷️";
+  }
+  if (task.kind === "일정") return "🗓";
+  if (task.kind === "할일") return "☑";
+  return "·";
 }
 
 function normalizeVaultPath(path) {
