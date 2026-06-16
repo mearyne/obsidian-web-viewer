@@ -3244,7 +3244,7 @@ function renderCalendar() {
 
 function scrollAgendaToToday() {
   const todayEl = els.calendarView.querySelector(".calendar-agenda-day.today");
-  if (todayEl) todayEl.scrollIntoView({ behavior: "smooth", block: "start" });
+  if (todayEl) todayEl.scrollIntoView({ behavior: "instant", block: "start" });
 }
 
 function renderCalendarRows(items, context, rowLimit, renderer) {
