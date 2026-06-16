@@ -36,6 +36,12 @@ const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://localhost:${port}`);
   const requestPath = decodeURIComponent(url.pathname);
 
+  if (requestPath === "/api/health") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ ok: true }));
+    return;
+  }
+
   if (requestPath === "/api/vault") {
     sendVault(res, vaultRoot, vaultName);
     return;

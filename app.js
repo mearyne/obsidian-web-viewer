@@ -44,6 +44,8 @@ const state = {
   mobileCalendarMode: "agenda",
   calendarRowLimit: 5,
   dailyNotePath: "1. Daily",
+  newNotePath: "",
+  connectionLost: false,
   sidebarResize: null,
   sidebarPinned: false,
   activeTabId: "main",
@@ -96,6 +98,9 @@ const els = {
   calendarPathInput: document.querySelector("#calendarPathInput"),
   randomPathInput: document.querySelector("#randomPathInput"),
   dailyNotePathInput: document.querySelector("#dailyNotePathInput"),
+  newNotePathInput: document.querySelector("#newNotePathInput"),
+  newNoteButton: document.querySelector("#newNoteButton"),
+  connectionBanner: document.querySelector("#connectionBanner"),
   fontSelect: document.querySelector("#fontSelect"),
   fontResetButton: document.querySelector("#fontResetButton"),
   contentFontSizeInput: document.querySelector("#contentFontSizeInput"),
@@ -204,6 +209,7 @@ els.folderPathInput?.addEventListener("input", renderTree);
 els.calendarPathInput?.addEventListener("input", handleCalendarFilterInput);
 els.randomPathInput?.addEventListener("input", handleRandomPathInput);
 els.dailyNotePathInput?.addEventListener("input", updateDailyNotePath);
+els.newNotePathInput?.addEventListener("input", handleNewNotePathInput);
 els.fontSelect?.addEventListener("change", updateAppFont);
 els.fontResetButton?.addEventListener("click", resetFontOptions);
 els.contentFontSizeInput?.addEventListener("input", updateContentFontSize);
@@ -225,8 +231,11 @@ els.webEditButton.addEventListener("click", enterEditMode);
 els.saveEditButton.addEventListener("click", saveCurrentEdit);
 els.markdownEditor.addEventListener("keydown", handleEditorKeydown);
 els.markdownEditor.addEventListener("input", handleEditorInput);
+els.newNoteButton?.addEventListener("click", openNewNote);
 els.randomFileButton.addEventListener("click", openRandomMarkdown);
 els.calendarButton.addEventListener("click", openNextCalendarKind);
+els.syncStatus?.addEventListener("click", handleSyncStatusClick);
+document.addEventListener("visibilitychange", handleVisibilityChange);
 els.optionsButton.addEventListener("click", toggleOptionsMenu);
 els.optionsCloseButton.addEventListener("click", closeOptionsMenu);
 els.optionsBackdrop.addEventListener("click", closeOptionsMenu);
@@ -398,7 +407,17 @@ initSidebarPin();
 loadSavedVaults();
 loadSampleVault();
 arrangeChromeControls();
+handleUrlAction();
 setInterval(refreshCalendarIfVisible, CALENDAR_REFRESH_INTERVAL);
+
+function handleUrlAction() {
+  const params = new URLSearchParams(window.location.search);
+  const action = params.get("action");
+  if (action === "new-note") {
+    window.history.replaceState(null, "", window.location.pathname);
+    window.addEventListener("vaultReady", () => openNewNote(), { once: true });
+  }
+}
 
 function closeSidebarFromMain(event) {
   if (event.target.closest("button, a, input, textarea, select, summary, details, .loading-overlay")) return;
@@ -810,6 +829,7 @@ function hydrateServerVault(vaultName, files, writable = false) {
   showInitialCalendarView();
   loadCalendarCache().finally(scheduleCalendarRefreshIfStale);
   loadRecentFilesCache().finally(refreshRecentFilesCache);
+  window.dispatchEvent(new CustomEvent("vaultReady"));
 }
 
 function resetVault() {
@@ -1344,6 +1364,9 @@ function initOptions() {
   const savedDailyPath = normalizeDailyNotePath(localStorage.getItem("obsidian-web-viewer-daily-note-path") || state.dailyNotePath);
   state.dailyNotePath = savedDailyPath;
   if (els.dailyNotePathInput) els.dailyNotePathInput.value = savedDailyPath;
+  const savedNewNotePath = localStorage.getItem("obsidian-web-viewer-new-note-path") || "";
+  state.newNotePath = savedNewNotePath;
+  if (els.newNotePathInput) els.newNotePathInput.value = savedNewNotePath;
   const savedFont = localStorage.getItem("obsidian-web-viewer-font") || "default";
   const appliedFont = setAppFont(savedFont);
   if (els.fontSelect) els.fontSelect.value = appliedFont;
@@ -1373,6 +1396,100 @@ function updateDailyNotePath() {
   const nextPath = normalizeDailyNotePath(els.dailyNotePathInput?.value || state.dailyNotePath);
   state.dailyNotePath = nextPath;
   localStorage.setItem("obsidian-web-viewer-daily-note-path", nextPath);
+}
+
+function handleNewNotePathInput() {
+  const value = normalizeVaultPath(els.newNotePathInput?.value || "");
+  state.newNotePath = value;
+  localStorage.setItem("obsidian-web-viewer-new-note-path", value);
+}
+
+async function openNewNote() {
+  if (!state.rootHandle && !state.serverVaultWritable) {
+    alert("vault를 먼저 열어야 새 노트를 만들 수 있습니다.");
+    return;
+  }
+  const dirPath = normalizeVaultPath(state.newNotePath || els.newNotePathInput?.value || "");
+  const now = new Date();
+  const date = formatDate(now);
+  const time = now.toTimeString().slice(0, 5).replace(":", "");
+  const fileName = `${date} ${time}.md`;
+  const path = dirPath ? `${dirPath}/${fileName}` : fileName;
+
+  if (state.files.has(path)) {
+    await openFile(path);
+    return;
+  }
+  const initialContent = `# ${date}\n\n`;
+
+  if (!state.rootHandle && state.serverVaultWritable) {
+    const metadata = await writeServerFile(path, initialContent, { backup: false });
+    if (dirPath) ensureDirectoryNodePath(dirPath);
+    const node = { name: fileName, path, content: initialContent, serverBacked: true, kind: "file", ...metadata };
+    state.files.set(path, node);
+    const dir = state.directories.get(dirPath || "");
+    if (dir) dir.children.set(node.name, node);
+    refreshDirectoryMetadata();
+    renderTree();
+    await openFile(path);
+    await enterEditMode();
+    return;
+  }
+
+  const dirHandle = await getOrCreateDirectoryHandle(dirPath || "");
+  const handle = await dirHandle.getFileHandle(fileName, { create: true });
+  await writeFileHandle(handle, initialContent);
+  if (dirPath) ensureDirectoryNodePath(dirPath);
+  const metadata = await readFileMetadata(handle, path);
+  const node = { name: fileName, path, handle, dirHandle, kind: "file", ...metadata };
+  state.files.set(path, node);
+  const dir = state.directories.get(dirPath || "");
+  if (dir) dir.children.set(node.name, node);
+  refreshDirectoryMetadata();
+  renderTree();
+  await openFile(path);
+  await enterEditMode();
+}
+
+function handleSyncStatusClick() {
+  if (state.activeView !== "calendar" || state.calendarKind !== "tasks") return;
+  state.calendarSyncedAt = 0;
+  state.calendarCacheState = "empty";
+  refreshCalendarTasks({ showLoading: true });
+}
+
+async function handleVisibilityChange() {
+  if (document.visibilityState !== "visible") return;
+  if (state.activeView === "calendar" && state.calendarKind === "tasks") {
+    scheduleCalendarRefreshIfStale();
+  }
+  if (!state.serverVaultWritable) return;
+  try {
+    const res = await fetch("/api/health", { cache: "no-store", signal: AbortSignal.timeout(5000) });
+    if (!res.ok) throw new Error();
+    if (state.connectionLost) {
+      state.connectionLost = false;
+      showConnectionBanner("서버에 재연결됐습니다.", "reconnected");
+    }
+  } catch {
+    if (!state.connectionLost) {
+      state.connectionLost = true;
+      showConnectionBanner("서버 연결이 끊겼습니다. 새로고침하세요.");
+    }
+  }
+}
+
+function showConnectionBanner(message, type = "error") {
+  if (!els.connectionBanner) return;
+  els.connectionBanner.textContent = message;
+  els.connectionBanner.className = `connection-banner connection-banner-${type}`;
+  els.connectionBanner.hidden = false;
+  if (type === "reconnected") {
+    window.clearTimeout(showConnectionBanner._timer);
+    showConnectionBanner._timer = window.setTimeout(() => {
+      if (els.connectionBanner) els.connectionBanner.hidden = true;
+    }, 3000);
+  }
 }
 
 function updateAppFont() {
@@ -2839,6 +2956,7 @@ function renderAgendaDay(date, tasks, isToday, holidays = []) {
       <div class="calendar-agenda-date">
         <strong class="${hasDailyNote ? "has-daily-note" : ""}">${date.getDate()}</strong>
         <span>${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][date.getDay()]}</span>
+        ${tasks.length ? `<span class="agenda-day-count">${tasks.length}</span>` : ""}
         ${renderHolidayBadges(holidays)}
       </div>
       <div class="calendar-agenda-tasks">
@@ -2859,6 +2977,7 @@ function renderRecentAgendaDay(date, files, isToday, field, holidays = []) {
       <div class="calendar-agenda-date">
         <strong class="${hasDailyNote ? "has-daily-note" : ""}">${date.getDate()}</strong>
         <span>${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][date.getDay()]}</span>
+        ${files.length ? `<span class="agenda-day-count">${files.length}</span>` : ""}
         ${renderHolidayBadges(holidays)}
       </div>
       <div class="calendar-agenda-tasks">
@@ -3878,6 +3997,7 @@ function groupRecentFilesByDate(files, field) {
     if (!map.has(date)) map.set(date, []);
     map.get(date).push(file);
   });
+  map.forEach((group) => group.sort((a, b) => (b[field] || 0) - (a[field] || 0)));
   return map;
 }
 

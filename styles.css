@@ -558,6 +558,28 @@ button:disabled {
   text-align: center;
 }
 
+.sync-status {
+  cursor: pointer;
+}
+
+.connection-banner {
+  background: #b23b3b;
+  bottom: 44px;
+  color: white;
+  font-size: 13px;
+  font-weight: 600;
+  left: 0;
+  padding: 8px 16px;
+  position: fixed;
+  right: 0;
+  text-align: center;
+  z-index: 46;
+}
+
+.connection-banner-reconnected {
+  background: #3f9f69;
+}
+
 .status-history {
   display: flex;
   gap: 8px;
@@ -2049,6 +2071,18 @@ button.calendar-more {
 
 .calendar-agenda-date span {
   font-size: 12px;
+}
+
+.agenda-day-count {
+  background: var(--accent);
+  border-radius: 999px;
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  min-width: 16px;
+  padding: 2px 4px;
+  text-align: center;
 }
 
 .calendar-agenda-tasks {
