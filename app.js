@@ -45,7 +45,9 @@ const state = {
   calendarRowLimit: 5,
   dailyNotePath: "1. Daily",
   newNotePath: "",
+  imageSavePath: "",
   connectionLost: false,
+  connectionRetryTimer: null,
   sidebarResize: null,
   sidebarPinned: false,
   activeTabId: "main",
@@ -99,6 +101,7 @@ const els = {
   randomPathInput: document.querySelector("#randomPathInput"),
   dailyNotePathInput: document.querySelector("#dailyNotePathInput"),
   newNotePathInput: document.querySelector("#newNotePathInput"),
+  imagePathInput: document.querySelector("#imagePathInput"),
   newNoteButton: document.querySelector("#newNoteButton"),
   newNoteDialog: document.querySelector("#newNoteDialog"),
   newNoteTitleInput: document.querySelector("#newNoteTitleInput"),
@@ -235,11 +238,14 @@ els.webEditButton.addEventListener("click", enterEditMode);
 els.saveEditButton.addEventListener("click", saveCurrentEdit);
 els.markdownEditor.addEventListener("keydown", handleEditorKeydown);
 els.markdownEditor.addEventListener("input", handleEditorInput);
+els.markdownEditor.addEventListener("paste", handleEditorPaste);
+els.imagePathInput?.addEventListener("input", handleImagePathInput);
 els.newNoteButton?.addEventListener("click", openNewNote);
 els.randomFileButton.addEventListener("click", openRandomMarkdown);
 els.calendarButton.addEventListener("click", openNextCalendarKind);
 els.syncStatus?.addEventListener("click", handleSyncStatusClick);
 document.addEventListener("visibilitychange", handleVisibilityChange);
+els.connectionBanner?.addEventListener("click", () => { if (state.connectionLost) window.location.reload(); });
 els.optionsButton.addEventListener("click", toggleOptionsMenu);
 els.optionsCloseButton.addEventListener("click", closeOptionsMenu);
 els.optionsBackdrop.addEventListener("click", closeOptionsMenu);
@@ -303,6 +309,20 @@ function handleGlobalKeydown(event) {
       event.stopPropagation();
       closeOptionsMenu();
     }
+    return;
+  }
+
+  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.code === "KeyN") {
+    event.preventDefault();
+    event.stopPropagation();
+    openNewNote();
+    return;
+  }
+
+  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key === ",") {
+    event.preventDefault();
+    event.stopPropagation();
+    toggleOptionsMenu();
     return;
   }
 
@@ -1371,6 +1391,9 @@ function initOptions() {
   const savedNewNotePath = localStorage.getItem("obsidian-web-viewer-new-note-path") || "";
   state.newNotePath = savedNewNotePath;
   if (els.newNotePathInput) els.newNotePathInput.value = savedNewNotePath;
+  const savedImagePath = localStorage.getItem("obsidian-web-viewer-image-path") || "";
+  state.imageSavePath = savedImagePath;
+  if (els.imagePathInput) els.imagePathInput.value = savedImagePath;
   const savedFont = localStorage.getItem("obsidian-web-viewer-font") || "default";
   const appliedFont = setAppFont(savedFont);
   if (els.fontSelect) els.fontSelect.value = appliedFont;
@@ -1391,6 +1414,21 @@ async function loadServerSettings() {
       els.randomPathInput.value = settings.randomPaths;
       localStorage.setItem("obsidian-web-viewer-random-paths", settings.randomPaths);
     }
+    if (typeof settings.dailyNotePath === "string" && settings.dailyNotePath) {
+      const normalized = normalizeDailyNotePath(settings.dailyNotePath);
+      if (normalized !== state.dailyNotePath) {
+        state.dailyNotePath = normalized;
+        if (els.dailyNotePathInput) els.dailyNotePathInput.value = normalized;
+        localStorage.setItem("obsidian-web-viewer-daily-note-path", normalized);
+      }
+    }
+    if (typeof settings.newNotePath === "string") {
+      if (settings.newNotePath !== state.newNotePath) {
+        state.newNotePath = settings.newNotePath;
+        if (els.newNotePathInput) els.newNotePathInput.value = settings.newNotePath;
+        localStorage.setItem("obsidian-web-viewer-new-note-path", settings.newNotePath);
+      }
+    }
   } catch {
     // Local storage remains the fallback for file:// or unavailable server settings.
   }
@@ -1400,12 +1438,20 @@ function updateDailyNotePath() {
   const nextPath = normalizeDailyNotePath(els.dailyNotePathInput?.value || state.dailyNotePath);
   state.dailyNotePath = nextPath;
   localStorage.setItem("obsidian-web-viewer-daily-note-path", nextPath);
+  scheduleSettingsSave();
 }
 
 function handleNewNotePathInput() {
   const value = normalizeVaultPath(els.newNotePathInput?.value || "");
   state.newNotePath = value;
   localStorage.setItem("obsidian-web-viewer-new-note-path", value);
+  scheduleSettingsSave();
+}
+
+function handleImagePathInput() {
+  const value = normalizeVaultPath(els.imagePathInput?.value || "");
+  state.imageSavePath = value;
+  localStorage.setItem("obsidian-web-viewer-image-path", value);
 }
 
 async function openNewNote() {
@@ -1507,18 +1553,42 @@ async function handleVisibilityChange() {
     scheduleCalendarRefreshIfStale();
   }
   if (!state.serverVaultWritable) return;
+  await checkServerConnection();
+}
+
+async function checkServerConnection() {
   try {
     const res = await fetch("/api/health", { cache: "no-store", signal: AbortSignal.timeout(5000) });
     if (!res.ok) throw new Error();
     if (state.connectionLost) {
       state.connectionLost = false;
+      stopConnectionRetry();
       showConnectionBanner("서버에 재연결됐습니다.", "reconnected");
     }
   } catch {
     if (!state.connectionLost) {
       state.connectionLost = true;
-      showConnectionBanner("서버 연결이 끊겼습니다. 새로고침하세요.");
+      showConnectionBanner("서버 연결이 끊겼습니다. 탭하면 새로고침합니다.");
+      startConnectionRetry();
     }
+  }
+}
+
+function startConnectionRetry() {
+  if (state.connectionRetryTimer) return;
+  state.connectionRetryTimer = window.setInterval(async () => {
+    if (!state.connectionLost) {
+      stopConnectionRetry();
+      return;
+    }
+    await checkServerConnection();
+  }, 8000);
+}
+
+function stopConnectionRetry() {
+  if (state.connectionRetryTimer) {
+    window.clearInterval(state.connectionRetryTimer);
+    state.connectionRetryTimer = null;
   }
 }
 
@@ -1670,6 +1740,8 @@ async function saveServerSettings() {
       body: JSON.stringify({
         calendarPaths: els.calendarPathInput?.value || "",
         randomPaths: els.randomPathInput?.value || "",
+        dailyNotePath: state.dailyNotePath || "",
+        newNotePath: state.newNotePath || "",
       }),
     });
   } catch {
@@ -1887,6 +1959,50 @@ function handleEditorKeydown(event) {
 function handleEditorInput() {
   resizeEditorToContent();
   markEditorDirty();
+}
+
+async function handleEditorPaste(event) {
+  if (!state.serverVaultWritable) return;
+  const items = event.clipboardData?.items;
+  if (!items) return;
+  const imageItem = Array.from(items).find((item) => item.type.startsWith("image/"));
+  if (!imageItem) return;
+  event.preventDefault();
+
+  const blob = imageItem.getAsFile();
+  if (!blob) return;
+
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  const dateStr = formatDate(now);
+  const timeStr = `${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
+  const rand = Math.random().toString(36).slice(2, 7);
+  const ext = imageItem.type === "image/png" ? "png" : "jpg";
+  const filename = `${dateStr} ${timeStr} ${rand}.${ext}`;
+  const dir = normalizeVaultPath(state.imageSavePath || els.imagePathInput?.value || "");
+  const filePath = dir ? `${dir}/${filename}` : filename;
+
+  try {
+    const arrayBuffer = await blob.arrayBuffer();
+    const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+    const res = await fetch(`/api/vault-binary-file?path=${encodeURIComponent(filePath)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ base64, mimeType: imageItem.type }),
+    });
+    if (!res.ok) throw new Error("upload failed");
+    const wikiLink = `![[${filePath}]]`;
+    const textarea = els.markdownEditor;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    textarea.value = textarea.value.slice(0, start) + wikiLink + textarea.value.slice(end);
+    textarea.selectionStart = textarea.selectionEnd = start + wikiLink.length;
+    resizeEditorToContent();
+    markEditorDirty();
+    await loadSampleVault();
+  } catch {
+    alert("이미지 업로드에 실패했습니다.");
+  }
 }
 
 function editorValue() {
@@ -3003,7 +3119,7 @@ function renderAgendaDay(date, tasks, isToday, holidays = []) {
         ${renderHolidayBadges(holidays)}
       </div>
       <div class="calendar-agenda-tasks">
-        ${tasks.length ? tasks.map((task) => renderCalendarTask(task, formatDate(date))).join("") : '<div class="calendar-empty">No tasks</div>'}
+        ${tasks.length ? tasks.map((task) => renderCalendarTask(task, formatDate(date), true)).join("") : '<div class="calendar-empty">No tasks</div>'}
       </div>
     </section>
   `;
@@ -3024,7 +3140,7 @@ function renderRecentAgendaDay(date, files, isToday, field, holidays = []) {
         ${renderHolidayBadges(holidays)}
       </div>
       <div class="calendar-agenda-tasks">
-        ${files.length ? files.map((file) => renderCalendarFile(file, field)).join("") : '<div class="calendar-empty">No files</div>'}
+        ${files.length ? files.map((file) => renderCalendarFile(file, field, true)).join("") : '<div class="calendar-empty">No files</div>'}
       </div>
     </section>
   `;
@@ -3098,16 +3214,22 @@ function scheduleHolidayRender() {
   }, 50);
 }
 
-function renderCalendarTask(task, dateKey = task.date) {
+function renderCalendarTask(task, dateKey = task.date, showDelete = false) {
   const title = `${task.path}: ${task.text}`;
   const range = taskRangePosition(task, dateKey);
   const colorClass = range ? `range-color-${rangeColorIndex(task)}` : "";
   const icon = range && range !== "start" ? taskContinuationIcon(range) : taskTypeIcon(task.type);
+  const deleteBtn = showDelete
+    ? `<button class="agenda-delete-btn" type="button" data-agenda-delete data-path="${escapeAttribute(task.path)}" data-line="${task.line}" aria-label="삭제" title="삭제">🗑️</button>`
+    : "";
   return `
-    <button class="calendar-task ${task.checked ? "done" : ""} ${task.type} ${range ? `range-task ${colorClass}` : ""} ${task.draggingPreview ? "drag-preview" : ""}" type="button" data-path="${escapeAttribute(task.path)}" data-line="${task.line}" data-date="${escapeAttribute(dateKey)}" title="${escapeAttribute(title)}">
-      <span>${icon}</span>
-      <span>${escapeHtml(task.text)}</span>
-    </button>
+    <div class="calendar-task-wrap${showDelete ? " has-delete" : ""}">
+      <button class="calendar-task ${task.checked ? "done" : ""} ${task.type} ${range ? `range-task ${colorClass}` : ""} ${task.draggingPreview ? "drag-preview" : ""}" type="button" data-path="${escapeAttribute(task.path)}" data-line="${task.line}" data-date="${escapeAttribute(dateKey)}" title="${escapeAttribute(title)}">
+        <span>${icon}</span>
+        <span>${escapeHtml(task.text)}</span>
+      </button>
+      ${deleteBtn}
+    </div>
   `;
 }
 
@@ -3136,13 +3258,19 @@ function rangeColorIndex(task) {
   return hash % 6;
 }
 
-function renderCalendarFile(file, field) {
+function renderCalendarFile(file, field, showDelete = false) {
   const title = `${file.path}: ${file[field] ? new Date(file[field]).toLocaleString() : ""}`;
+  const deleteBtn = showDelete
+    ? `<button class="agenda-delete-btn" type="button" data-agenda-delete-file data-path="${escapeAttribute(file.path)}" aria-label="삭제" title="삭제">🗑️</button>`
+    : "";
   return `
-    <button class="calendar-task calendar-file" type="button" data-path="${escapeAttribute(file.path)}" title="${escapeAttribute(title)}">
-      <span class="${field === "createdAt" ? "calendar-file-icon created" : "calendar-file-icon"}">${field === "createdAt" ? "➕" : "✏️"}</span>
-      <span>${escapeHtml(displayDocumentTitle(file.name || file.path.split("/").pop() || file.path))}</span>
-    </button>
+    <div class="calendar-task-wrap${showDelete ? " has-delete" : ""}">
+      <button class="calendar-task calendar-file" type="button" data-path="${escapeAttribute(file.path)}" title="${escapeAttribute(title)}">
+        <span class="${field === "createdAt" ? "calendar-file-icon created" : "calendar-file-icon"}">${field === "createdAt" ? "➕" : "✏️"}</span>
+        <span>${escapeHtml(displayDocumentTitle(file.name || file.path.split("/").pop() || file.path))}</span>
+      </button>
+      ${deleteBtn}
+    </div>
   `;
 }
 
@@ -3202,9 +3330,68 @@ function bindCalendarEvents() {
     });
   });
 
+  els.calendarView.querySelectorAll("[data-agenda-delete]").forEach((btn) => {
+    btn.addEventListener("click", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const filePath = btn.getAttribute("data-path");
+      const line = Number(btn.getAttribute("data-line"));
+      if (!filePath) return;
+      await deleteCalendarTaskLine(filePath, line);
+    });
+  });
+
+  els.calendarView.querySelectorAll("[data-agenda-delete-file]").forEach((btn) => {
+    btn.addEventListener("click", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const filePath = btn.getAttribute("data-path");
+      if (!filePath) return;
+      if (!confirm(`"${filePath.split("/").pop()}" 파일을 삭제할까요?`)) return;
+      await deleteVaultFileByPath(filePath);
+    });
+  });
+
   els.calendarView.querySelectorAll("[data-calendar-date]").forEach((target) => {
     bindDateClick(target);
   });
+}
+
+async function deleteCalendarTaskLine(filePath, lineNumber) {
+  try {
+    const res = await fetch(`/api/vault-file?path=${encodeURIComponent(filePath)}`, { cache: "no-store" });
+    if (!res.ok) throw new Error("fetch failed");
+    const text = await res.text();
+    const lines = text.split("\n");
+    const idx = lineNumber - 1;
+    if (idx < 0 || idx >= lines.length) return;
+    lines.splice(idx, 1);
+    const updated = lines.join("\n");
+    await fetch(`/api/vault-file?path=${encodeURIComponent(filePath)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: updated }),
+    });
+    await loadSampleVault();
+    renderCalendar();
+  } catch {
+    alert("삭제에 실패했습니다.");
+  }
+}
+
+async function deleteVaultFileByPath(filePath) {
+  try {
+    const res = await fetch(`/api/vault-file?path=${encodeURIComponent(filePath)}`, { method: "DELETE" });
+    if (!res.ok) throw new Error("delete failed");
+    await loadSampleVault();
+    if (state.currentPath === filePath) {
+      state.currentPath = "";
+      els.markdownView.innerHTML = "<h3>파일이 삭제됐습니다.</h3>";
+    }
+    renderCalendar();
+  } catch {
+    alert("삭제에 실패했습니다.");
+  }
 }
 
 function shiftCalendarDate(direction) {

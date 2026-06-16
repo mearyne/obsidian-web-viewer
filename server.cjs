@@ -73,6 +73,21 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (requestPath === "/api/vault-binary-file") {
+    if (req.method === "PUT") {
+      receiveBody(req, (error, body) => {
+        if (error) {
+          sendJson(res, 400, { error: "Invalid request body" });
+          return;
+        }
+        writeBinaryVaultFile(url.searchParams.get("path"), body, res);
+      });
+      return;
+    }
+    sendJson(res, 405, { error: "Method not allowed" });
+    return;
+  }
+
   if (requestPath === "/api/vault-image-thumb") {
     sendVaultImageThumbnail(url.searchParams.get("path"), url.searchParams.get("width"), res);
     return;
@@ -308,6 +323,48 @@ function sendCalendarCache(key, res) {
   });
 }
 
+function writeBinaryVaultFile(requestedPath, body, res) {
+  if (readOnly) {
+    sendJson(res, 403, { error: "Vault is read-only" });
+    return;
+  }
+
+  const safePath = normalizeVaultPath(requestedPath || "");
+  if (!safePath || !/\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(safePath)) {
+    sendJson(res, 403, { error: "Invalid image file path" });
+    return;
+  }
+
+  const filePath = resolveVaultFilePath(safePath);
+  if (!filePath) {
+    sendJson(res, 403, { error: "Forbidden path" });
+    return;
+  }
+
+  let payload;
+  try {
+    payload = JSON.parse(body || "{}");
+  } catch {
+    sendJson(res, 400, { error: "Invalid JSON" });
+    return;
+  }
+
+  if (typeof payload.base64 !== "string") {
+    sendJson(res, 400, { error: "Missing base64" });
+    return;
+  }
+
+  try {
+    const buffer = Buffer.from(payload.base64, "base64");
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, buffer);
+    const stat = fs.statSync(filePath);
+    sendJson(res, 200, { path: safePath, size: stat.size });
+  } catch (error) {
+    sendJson(res, 500, { error: error.message || "Write failed" });
+  }
+}
+
 function writeCalendarCache(key, body, res) {
   const filePath = calendarCacheFilePath(key);
   if (!filePath) {
@@ -454,6 +511,8 @@ function normalizeSettings(settings) {
     version: 1,
     calendarPaths: typeof settings?.calendarPaths === "string" ? settings.calendarPaths.slice(0, 4096) : "",
     randomPaths: typeof settings?.randomPaths === "string" ? settings.randomPaths.slice(0, 4096) : "",
+    dailyNotePath: typeof settings?.dailyNotePath === "string" ? settings.dailyNotePath.slice(0, 512) : "",
+    newNotePath: typeof settings?.newNotePath === "string" ? settings.newNotePath.slice(0, 512) : "",
   };
 }
 

@@ -566,6 +566,7 @@ button:disabled {
   background: #b23b3b;
   bottom: 44px;
   color: white;
+  cursor: pointer;
   font-size: 13px;
   font-weight: 600;
   left: 0;
@@ -573,11 +574,21 @@ button:disabled {
   position: fixed;
   right: 0;
   text-align: center;
+  user-select: none;
   z-index: 46;
 }
 
 .connection-banner-reconnected {
+  cursor: default;
+}
+
+.connection-banner-error {
+  background: #b23b3b;
+}
+
+.connection-banner-reconnected {
   background: #3f9f69;
+  cursor: default;
 }
 
 .status-history {
@@ -2156,6 +2167,40 @@ button.calendar-more {
   display: grid;
   gap: 5px;
   min-width: 0;
+}
+
+.calendar-task-wrap {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.calendar-task-wrap .calendar-task {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.agenda-delete-btn {
+  background: none;
+  border: none;
+  border-radius: 0 4px 4px 0;
+  color: var(--muted);
+  cursor: pointer;
+  flex: 0 0 auto;
+  font-size: 13px;
+  opacity: 0;
+  padding: 0 6px;
+  transition: opacity 0.15s;
+}
+
+.calendar-task-wrap:hover .agenda-delete-btn,
+.calendar-task-wrap:focus-within .agenda-delete-btn {
+  opacity: 1;
+}
+
+.agenda-delete-btn:hover {
+  color: var(--danger, #e05252);
+  opacity: 1;
 }
 
 @media (max-width: 780px) {
