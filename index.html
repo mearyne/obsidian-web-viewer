@@ -50,6 +50,7 @@
         </div>
 
         <nav id="fileTree" class="file-tree" aria-label="Vault files"></nav>
+        <div id="contentSearchResults" class="content-search-results" hidden></div>
 
         <div class="sidebar-options">
           <button id="editButton" type="button" disabled aria-label="Obsidian에서 열기" title="Obsidian">
@@ -243,6 +244,31 @@
         </div>
       </details>
     </section>
+
+    <dialog id="taskCreateDialog" class="task-create-dialog">
+      <div class="task-create-form">
+        <h3>태스크 추가</h3>
+        <div class="task-create-field">
+          <label>제목</label>
+          <input id="taskTitleInput" type="text" placeholder="할 일을 입력하세요" autocomplete="off" />
+        </div>
+        <div class="task-create-dates">
+          <div class="task-create-field">
+            <label>시작일 <span class="task-date-optional">(선택)</span></label>
+            <button type="button" id="taskStartDateBtn" class="date-picker-btn" data-date="">날짜 없음</button>
+          </div>
+          <div class="task-create-field">
+            <label>종료일</label>
+            <button type="button" id="taskDueDateBtn" class="date-picker-btn" data-date="">날짜 선택</button>
+          </div>
+        </div>
+        <div id="taskDatePickerCal" class="task-date-picker-cal" hidden></div>
+        <div class="dialog-buttons">
+          <button type="button" id="taskCreateCancelBtn">취소</button>
+          <button type="button" id="taskCreateConfirmBtn">만들기</button>
+        </div>
+      </div>
+    </dialog>
 
     <dialog id="newNoteDialog" class="new-note-dialog">
       <form method="dialog" class="new-note-form">

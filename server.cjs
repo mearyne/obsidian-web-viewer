@@ -130,6 +130,11 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (requestPath === "/api/search") {
+    searchVaultContent(url.searchParams.get("q") || "", url.searchParams.get("limit"), res);
+    return;
+  }
+
   const filePath = path.normalize(path.join(root, requestPath === "/" ? "index.html" : requestPath));
 
   if (!filePath.startsWith(root)) {
@@ -321,6 +326,45 @@ function sendCalendarCache(key, res) {
       sendJson(res, 500, { error: "Calendar cache is corrupted" });
     }
   });
+}
+
+function searchVaultContent(query, limitStr, res) {
+  if (!vaultRoot || !query || query.length < 2) {
+    sendJson(res, 200, []);
+    return;
+  }
+
+  const limit = Math.min(parseInt(limitStr, 10) || 30, 100);
+  const lowerQuery = query.toLowerCase();
+  const results = [];
+
+  function walkDir(dir) {
+    if (results.length >= limit) return;
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const entry of entries) {
+      if (results.length >= limit) break;
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (!entry.name.startsWith(".")) walkDir(fullPath);
+        continue;
+      }
+      if (!/\.md$/i.test(entry.name)) continue;
+      let content;
+      try { content = fs.readFileSync(fullPath, "utf8"); } catch { continue; }
+      const lower = content.toLowerCase();
+      const idx = lower.indexOf(lowerQuery);
+      if (idx === -1) continue;
+      const start = Math.max(0, idx - 40);
+      const end = Math.min(content.length, idx + query.length + 80);
+      const snippet = (start > 0 ? "…" : "") + content.slice(start, end).replace(/\n/g, " ").trim() + (end < content.length ? "…" : "");
+      const relativePath = path.relative(vaultRoot, fullPath).replace(/\\/g, "/");
+      results.push({ path: relativePath, snippet });
+    }
+  }
+
+  walkDir(vaultRoot);
+  sendJson(res, 200, results);
 }
 
 function writeBinaryVaultFile(requestedPath, body, res) {

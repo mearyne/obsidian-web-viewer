@@ -47,6 +47,10 @@ const state = {
   newNotePath: "",
   imageSavePath: "",
   searchExcludePaths: [],
+  contentSearchTimer: null,
+  contentSearchQuery: "",
+  taskDialogActiveField: null,
+  taskDialogPickerMonth: null,
   connectionLost: false,
   connectionRetryTimer: null,
   sidebarResize: null,
@@ -105,6 +109,14 @@ const els = {
   imagePathInput: document.querySelector("#imagePathInput"),
   searchExcludeInput: document.querySelector("#searchExcludeInput"),
   searchStatus: document.querySelector("#searchStatus"),
+  contentSearchResults: document.querySelector("#contentSearchResults"),
+  taskCreateDialog: document.querySelector("#taskCreateDialog"),
+  taskTitleInput: document.querySelector("#taskTitleInput"),
+  taskStartDateBtn: document.querySelector("#taskStartDateBtn"),
+  taskDueDateBtn: document.querySelector("#taskDueDateBtn"),
+  taskDatePickerCal: document.querySelector("#taskDatePickerCal"),
+  taskCreateCancelBtn: document.querySelector("#taskCreateCancelBtn"),
+  taskCreateConfirmBtn: document.querySelector("#taskCreateConfirmBtn"),
   newNoteButton: document.querySelector("#newNoteButton"),
   newNoteDialog: document.querySelector("#newNoteDialog"),
   newNoteTitleInput: document.querySelector("#newNoteTitleInput"),
@@ -428,6 +440,7 @@ function isTypingTarget(target) {
 initTheme();
 initOptions();
 loadServerSettings();
+bindTaskCreateDialog();
 updateMarkdownToggleButton();
 updateTreeSortDirectionButton();
 initSidebarWidth();
@@ -947,16 +960,74 @@ function updateSearchStatus(query, matchCount) {
   if (!els.searchStatus) return;
   if (!query) {
     els.searchStatus.hidden = true;
+    if (els.contentSearchResults) els.contentSearchResults.hidden = true;
     return;
   }
   els.searchStatus.hidden = false;
   if (matchCount === 0) {
-    els.searchStatus.textContent = "검색 결과 없음";
+    els.searchStatus.textContent = "파일명 결과 없음";
     els.searchStatus.dataset.state = "empty";
   } else {
-    els.searchStatus.textContent = `파일 ${matchCount}개`;
+    els.searchStatus.textContent = `파일명 ${matchCount}개`;
     els.searchStatus.dataset.state = "found";
   }
+  scheduleContentSearch(query);
+}
+
+function scheduleContentSearch(query) {
+  if (!state.serverVaultWritable) return;
+  window.clearTimeout(state.contentSearchTimer);
+  if (query.length < 2) {
+    if (els.contentSearchResults) els.contentSearchResults.hidden = true;
+    return;
+  }
+  state.contentSearchQuery = query;
+  showContentSearchLoading();
+  state.contentSearchTimer = window.setTimeout(() => runContentSearch(query), 300);
+}
+
+function showContentSearchLoading() {
+  if (!els.contentSearchResults) return;
+  els.contentSearchResults.hidden = false;
+  els.contentSearchResults.innerHTML = `<div class="csr-header">내용 검색 중…</div>`;
+}
+
+async function runContentSearch(query) {
+  if (query !== state.contentSearchQuery) return;
+  try {
+    const res = await fetch(`/api/search?q=${encodeURIComponent(query)}&limit=30`, { cache: "no-store", signal: AbortSignal.timeout(8000) });
+    if (!res.ok) throw new Error();
+    const results = await res.json();
+    if (query !== state.contentSearchQuery) return;
+    renderContentSearchResults(query, results);
+  } catch {
+    if (query !== state.contentSearchQuery) return;
+    if (els.contentSearchResults) els.contentSearchResults.hidden = true;
+  }
+}
+
+function renderContentSearchResults(query, results) {
+  if (!els.contentSearchResults) return;
+  if (!results.length) {
+    els.contentSearchResults.innerHTML = `<div class="csr-header">내용 결과 없음</div>`;
+    return;
+  }
+  const highlight = (text) => {
+    const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return escapeHtml(text).replace(new RegExp(`(${escaped})`, "gi"), `<mark>$1</mark>`);
+  };
+  const items = results.map((r) => {
+    const name = r.path.split("/").pop() || r.path;
+    return `<button class="csr-item" type="button" data-path="${escapeAttribute(r.path)}">
+      <span class="csr-name">${highlight(name)}</span>
+      <span class="csr-snippet">${highlight(r.snippet)}</span>
+    </button>`;
+  }).join("");
+  els.contentSearchResults.innerHTML = `<div class="csr-header">내용 ${results.length}개</div>${items}`;
+  els.contentSearchResults.hidden = false;
+  els.contentSearchResults.querySelectorAll(".csr-item").forEach((btn) => {
+    btn.addEventListener("click", () => openFile(btn.dataset.path));
+  });
 }
 
 function updateTreeSortMode() {
@@ -2028,7 +2099,12 @@ async function handleEditorPaste(event) {
 
   try {
     const arrayBuffer = await blob.arrayBuffer();
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+    const bytes = new Uint8Array(arrayBuffer);
+    let binary = "";
+    for (let k = 0; k < bytes.length; k += 8192) {
+      binary += String.fromCharCode(...bytes.subarray(k, k + 8192));
+    }
+    const base64 = btoa(binary);
     const res = await fetch(`/api/vault-binary-file?path=${encodeURIComponent(filePath)}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -4121,9 +4197,166 @@ async function openDateEditor(date, startDate = "") {
     }
   }
 
-  const node = await getOrCreateDailyNote(date);
-  await openFile(node.path);
-  if (await enterEditMode()) appendTaskTemplate(taskDueDate, taskStartDate);
+  await showTaskCreateDialog(taskDueDate, taskStartDate);
+}
+
+async function showTaskCreateDialog(dueDate, startDate = "") {
+  if (!els.taskCreateDialog) return;
+
+  // reset state
+  state.taskDialogActiveField = null;
+  if (els.taskTitleInput) els.taskTitleInput.value = "";
+  setTaskDialogDate("due", dueDate);
+  setTaskDialogDate("start", startDate);
+  renderTaskDatePicker(null);
+
+  els.taskCreateDialog.showModal();
+
+  await new Promise((resolve) => {
+    const onClose = () => {
+      els.taskCreateDialog.removeEventListener("close", onClose);
+      resolve();
+    };
+    els.taskCreateDialog.addEventListener("close", onClose);
+  });
+}
+
+function setTaskDialogDate(field, value) {
+  const btn = field === "start" ? els.taskStartDateBtn : els.taskDueDateBtn;
+  if (!btn) return;
+  btn.dataset.date = value || "";
+  btn.textContent = value ? formatDateKorean(value) : (field === "start" ? "날짜 없음" : "날짜 선택");
+  btn.classList.toggle("has-date", Boolean(value));
+}
+
+function formatDateKorean(dateKey) {
+  const d = parseDateKey(dateKey);
+  if (!d) return dateKey;
+  const days = ["일", "월", "화", "수", "목", "금", "토"];
+  return `${d.getMonth() + 1}월 ${d.getDate()}일 (${days[d.getDay()]})`;
+}
+
+function renderTaskDatePicker(field) {
+  if (!els.taskDatePickerCal) return;
+  if (!field) {
+    els.taskDatePickerCal.hidden = true;
+    els.taskDatePickerCal.innerHTML = "";
+    state.taskDialogPickerMonth = null;
+    return;
+  }
+
+  const activeDate = field === "start" ? els.taskStartDateBtn?.dataset.date : els.taskDueDateBtn?.dataset.date;
+  const base = parseDateKey(activeDate) || new Date();
+  if (!state.taskDialogPickerMonth || field !== state.taskDialogActiveField) {
+    state.taskDialogPickerMonth = new Date(base.getFullYear(), base.getMonth(), 1);
+  }
+
+  state.taskDialogActiveField = field;
+  const month = state.taskDialogPickerMonth;
+  const year = month.getFullYear();
+  const mon = month.getMonth();
+  const todayKey = formatDate(new Date());
+  const selectedKey = activeDate || "";
+
+  const firstDay = new Date(year, mon, 1).getDay();
+  const daysInMonth = new Date(year, mon + 1, 0).getDate();
+
+  const prevBtn = `<button type="button" class="tpicker-nav" data-tpicker-nav="-1">‹</button>`;
+  const nextBtn = `<button type="button" class="tpicker-nav" data-tpicker-nav="1">›</button>`;
+  const header = `<div class="tpicker-header">${prevBtn}<span>${year}년 ${mon + 1}월</span>${nextBtn}</div>`;
+
+  const dayNames = ["일", "월", "화", "수", "목", "금", "토"].map((d) => `<span class="tpicker-dow">${d}</span>`).join("");
+  let cells = `<span></span>`.repeat(firstDay);
+  for (let d = 1; d <= daysInMonth; d++) {
+    const key = `${year}-${String(mon + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    const cls = ["tpicker-day", key === todayKey ? "today" : "", key === selectedKey ? "selected" : ""].filter(Boolean).join(" ");
+    cells += `<button type="button" class="${cls}" data-tpicker-date="${key}">${d}</button>`;
+  }
+
+  els.taskDatePickerCal.innerHTML = `${header}<div class="tpicker-days">${dayNames}${cells}</div>`;
+  els.taskDatePickerCal.hidden = false;
+
+  els.taskDatePickerCal.querySelectorAll("[data-tpicker-nav]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const dir = Number(btn.dataset.tpickerNav);
+      state.taskDialogPickerMonth = new Date(year, mon + dir, 1);
+      renderTaskDatePicker(state.taskDialogActiveField);
+    });
+  });
+
+  els.taskDatePickerCal.querySelectorAll("[data-tpicker-date]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const picked = btn.dataset.tpickerDate;
+      setTaskDialogDate(state.taskDialogActiveField, picked);
+      renderTaskDatePicker(null);
+      state.taskDialogActiveField = null;
+    });
+  });
+}
+
+function bindTaskCreateDialog() {
+  if (!els.taskCreateDialog) return;
+
+  els.taskStartDateBtn?.addEventListener("click", () => {
+    const field = "start";
+    if (state.taskDialogActiveField === field) {
+      renderTaskDatePicker(null);
+      state.taskDialogActiveField = null;
+    } else {
+      renderTaskDatePicker(field);
+    }
+  });
+
+  els.taskDueDateBtn?.addEventListener("click", () => {
+    const field = "due";
+    if (state.taskDialogActiveField === field) {
+      renderTaskDatePicker(null);
+      state.taskDialogActiveField = null;
+    } else {
+      renderTaskDatePicker(field);
+    }
+  });
+
+  els.taskCreateCancelBtn?.addEventListener("click", () => {
+    els.taskCreateDialog.close("cancel");
+  });
+
+  els.taskCreateConfirmBtn?.addEventListener("click", async () => {
+    const title = els.taskTitleInput?.value.trim() || "";
+    const dueDate = els.taskDueDateBtn?.dataset.date || "";
+    const startDate = els.taskStartDateBtn?.dataset.date || "";
+
+    if (!dueDate) {
+      els.taskDueDateBtn?.focus();
+      return;
+    }
+
+    els.taskCreateDialog.close("confirm");
+
+    const node = await getOrCreateDailyNote(dueDate);
+    const content = await readFileNode(node);
+    const prefix = content.endsWith("\n") ? "" : "\n";
+    const taskLine = startDate
+      ? `${prefix}- [ ] ${title} 🛫 ${startDate} 📅 ${dueDate}`
+      : `${prefix}- [ ] ${title} 📅 ${dueDate}`;
+    const nextContent = content + taskLine + "\n";
+    await writeNodeContent(node, nextContent, { backup: false, previousContent: content });
+    if (typeof node.content === "string") node.content = nextContent;
+    if (state.currentPath === node.path) {
+      state.currentContent = nextContent;
+      if (!state.editMode) renderCurrentDocument();
+    }
+    updateTasksForFile(node.path, nextContent);
+    refreshRecentFilesCache();
+    if (state.activeView === "calendar" && state.calendarKind === "tasks") renderCalendar();
+  });
+
+  els.taskCreateDialog.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { e.preventDefault(); els.taskCreateDialog.close("cancel"); }
+    if (e.key === "Enter" && e.target === els.taskTitleInput) { e.preventDefault(); els.taskCreateConfirmBtn?.click(); }
+  });
 }
 
 async function getOrCreateDailyNote(date) {
@@ -4413,23 +4646,13 @@ function renderMarkdown(source, context = {}) {
       continue;
     }
 
-    if (/^\s*[-*+]\s+/.test(line)) {
-      const items = [];
-      while (i < lines.length && /^\s*[-*+]\s+/.test(lines[i])) {
-        items.push({ text: lines[i].replace(/^\s*[-*+]\s+/, ""), line: i + 1 });
+    if (/^\s*[-*+]\s+/.test(line) || /^\s*\d+\.\s+/.test(line)) {
+      const listLines = [];
+      while (i < lines.length && (/^\s*[-*+]\s+/.test(lines[i]) || /^\s*\d+\.\s+/.test(lines[i]))) {
+        listLines.push({ line: lines[i], lineNum: i + 1 });
         i += 1;
       }
-      html.push(`<ul${depthAttribute(currentDepth)}>${items.map((item) => renderListItem(item, documentPath)).join("")}</ul>`);
-      continue;
-    }
-
-    if (/^\s*\d+\.\s+/.test(line)) {
-      const items = [];
-      while (i < lines.length && /^\s*\d+\.\s+/.test(lines[i])) {
-        items.push(lines[i].replace(/^\s*\d+\.\s+/, ""));
-        i += 1;
-      }
-      html.push(`<ol${depthAttribute(currentDepth)}>${items.map((item) => `<li>${renderInline(item)}</li>`).join("")}</ol>`);
+      html.push(renderNestedListFromLines(listLines, currentDepth, documentPath));
       continue;
     }
 
@@ -4475,9 +4698,9 @@ function renderMarkdown(source, context = {}) {
   return html.join("\n");
 }
 
-function renderListItem(item, path) {
+function renderListItem(item, path, children = "") {
   const task = item.text.match(/^\[([ xX-])\]\s*(.*)$/);
-  if (!task) return `<li>${renderInline(item.text)}</li>`;
+  if (!task) return `<li>${renderInline(item.text)}${children}</li>`;
 
   const checked = task[1].toLowerCase() === "x" || task[1] === "-";
   const disabled = path ? "" : " disabled";
@@ -4487,9 +4710,48 @@ function renderListItem(item, path) {
       <label class="task-list-label">
         <input class="task-list-checkbox" type="checkbox"${checked ? " checked" : ""}${disabled}${data}>
         <span>${renderInline(task[2])}</span>
-      </label>
+      </label>${children}
     </li>
   `;
+}
+
+function getLineIndent(line) {
+  const match = line.match(/^(\s*)/);
+  return match ? match[1].replace(/\t/g, "  ").length : 0;
+}
+
+function renderNestedListFromLines(listLines, docDepth, path) {
+  const items = listLines.map(({ line, lineNum }) => {
+    const indent = getLineIndent(line);
+    const isOrdered = /^\s*\d+\.\s+/.test(line);
+    const text = isOrdered ? line.replace(/^\s*\d+\.\s+/, "") : line.replace(/^\s*[-*+]\s+/, "");
+    return { indent, text, isOrdered, lineNum };
+  });
+  return buildListHtml(items, 0, items.length, path, docDepth, true);
+}
+
+function buildListHtml(items, start, end, path, docDepth, isTop) {
+  if (start >= end) return "";
+  const baseIndent = items[start].indent;
+  const tag = items[start].isOrdered ? "ol" : "ul";
+  const depthAttr = isTop ? depthAttribute(docDepth) : "";
+  let html = `<${tag}${depthAttr}>`;
+  let i = start;
+  while (i < end) {
+    const item = items[i];
+    if (item.indent < baseIndent) { i += 1; continue; }
+    if (item.indent === baseIndent) {
+      let childEnd = i + 1;
+      while (childEnd < end && items[childEnd].indent > baseIndent) childEnd += 1;
+      const children = childEnd > i + 1 ? buildListHtml(items, i + 1, childEnd, path, docDepth, false) : "";
+      html += renderListItem({ text: item.text, line: item.lineNum }, path, children);
+      i = childEnd;
+    } else {
+      i += 1;
+    }
+  }
+  html += `</${tag}>`;
+  return html;
 }
 
 function bindRenderedTaskCheckboxes(root) {
