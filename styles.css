@@ -689,6 +689,21 @@ button:disabled {
   gap: 8px;
 }
 
+.bottom-save-status {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.bottom-save-status[data-state="dirty"] {
+  color: var(--accent-strong);
+}
+
+.bottom-save-status[data-state="saving"] {
+  color: var(--muted);
+  opacity: 0.7;
+}
+
 @keyframes sync-spin {
   to {
     transform: rotate(360deg);

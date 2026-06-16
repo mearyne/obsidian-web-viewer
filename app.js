@@ -380,6 +380,20 @@ function handleGlobalKeydown(event) {
       setCalendarMode("day");
       return;
     }
+    if (state.activeView === "calendar" && event.key === "ArrowLeft") {
+      event.preventDefault();
+      event.stopPropagation();
+      state.calendarDate = shiftCalendarDate(-1);
+      renderCalendar();
+      return;
+    }
+    if (state.activeView === "calendar" && event.key === "ArrowRight") {
+      event.preventDefault();
+      event.stopPropagation();
+      state.calendarDate = shiftCalendarDate(1);
+      renderCalendar();
+      return;
+    }
     if (event.key.toLowerCase() === "e") {
       event.preventDefault();
       event.stopPropagation();
@@ -2062,6 +2076,7 @@ async function persistCurrentEdit({ closeEditor }) {
     renderTree();
     if (closeEditor) {
       state.editMode = false;
+      updateEditorStatus();
       stopAutoSave();
       holdViewerHeightDuringTransition();
       renderCurrentDocument();
@@ -2369,9 +2384,18 @@ function markEditorDirty() {
 }
 
 function updateEditorStatus(prefix = "") {
-  if (!state.editMode) return;
+  const bottomSaveStatus = document.getElementById("bottomSaveStatus");
+  if (!state.editMode) {
+    if (bottomSaveStatus) bottomSaveStatus.hidden = true;
+    return;
+  }
   const dirty = state.editorDirty ? "수정됨" : "저장됨";
   els.editorStatus.textContent = `${prefix ? `${prefix} · ` : ""}${state.currentPath} · ${dirty}`;
+  if (bottomSaveStatus) {
+    bottomSaveStatus.textContent = prefix || dirty;
+    bottomSaveStatus.hidden = false;
+    bottomSaveStatus.dataset.state = prefix ? "saving" : (state.editorDirty ? "dirty" : "saved");
+  }
 }
 
 function startAutoSave() {
@@ -2479,7 +2503,11 @@ function arrangeChromeControls() {
     const historyWrap = document.createElement("div");
     historyWrap.className = "status-history";
     historyWrap.append(els.historyBackButton, els.historyForwardButton);
-    statusBar.append(historyWrap, els.notePath, els.syncStatus);
+    const saveStatusEl = document.createElement("span");
+    saveStatusEl.id = "bottomSaveStatus";
+    saveStatusEl.className = "bottom-save-status";
+    saveStatusEl.hidden = true;
+    statusBar.append(historyWrap, els.notePath, saveStatusEl, els.syncStatus);
     document.body.append(statusBar);
     return;
   }
@@ -2489,6 +2517,13 @@ function arrangeChromeControls() {
   if (els.historyForwardButton && els.historyForwardButton.parentElement !== historyWrap) historyWrap.append(els.historyForwardButton);
   if (!historyWrap.parentElement) statusBar.append(historyWrap);
   if (els.notePath && els.notePath.parentElement !== statusBar) statusBar.insertBefore(els.notePath, els.syncStatus);
+  if (!document.getElementById("bottomSaveStatus")) {
+    const el = document.createElement("span");
+    el.id = "bottomSaveStatus";
+    el.className = "bottom-save-status";
+    el.hidden = true;
+    statusBar.insertBefore(el, els.syncStatus);
+  }
   if (els.syncStatus && els.syncStatus.parentElement !== statusBar) statusBar.append(els.syncStatus);
 }
 
@@ -3428,14 +3463,14 @@ function renderCalendarTask(task, dateKey = task.date, showDelete = false) {
     ? `<button class="agenda-delete-btn" type="button" data-agenda-delete data-path="${escapeAttribute(task.path)}" data-line="${task.line}" aria-label="삭제" title="삭제">🗑️</button>`
     : "";
   const indentPx = (task.indent || 0) * 12;
-  const indentStyle = indentPx > 0 ? ` style="padding-left: calc(1px + ${indentPx}px)"` : "";
+  const wrapIndentStyle = indentPx > 0 ? ` style="padding-left: ${indentPx}px"` : "";
   const hasSubItems = task.subItems && task.subItems.length > 0;
   const inlineSubItems = hasSubItems && showDelete
     ? `<div class="task-sub-items-inline">${renderSubItemsHtml(task.subItems)}</div>`
     : "";
   return `
-    <div class="calendar-task-wrap${showDelete ? " has-delete" : ""}${hasSubItems ? " has-sub" : ""}">
-      <button class="calendar-task ${task.checked ? "done" : ""} ${task.type} ${range ? `range-task ${colorClass}` : ""} ${task.draggingPreview ? "drag-preview" : ""}" type="button" data-path="${escapeAttribute(task.path)}" data-line="${task.line}" data-date="${escapeAttribute(dateKey)}" title="${escapeAttribute(title)}"${indentStyle}>
+    <div class="calendar-task-wrap${showDelete ? " has-delete" : ""}${hasSubItems ? " has-sub" : ""}"${wrapIndentStyle}>
+      <button class="calendar-task ${task.checked ? "done" : ""} ${task.type} ${range ? `range-task ${colorClass}` : ""} ${task.draggingPreview ? "drag-preview" : ""}" type="button" data-path="${escapeAttribute(task.path)}" data-line="${task.line}" data-date="${escapeAttribute(dateKey)}" title="${escapeAttribute(title)}">
         <span>${icon}</span>
         <span>${escapeHtml(task.text)}</span>
       </button>
