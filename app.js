@@ -3562,6 +3562,11 @@ function bindTaskSubItemsTooltip() {
     tooltip.className = "cal-sub-tooltip";
     tooltip.hidden = true;
     document.body.append(tooltip);
+    document.addEventListener("pointermove", (e) => {
+      if (!tooltip.hidden && !e.target?.closest?.(".calendar-task[data-sub]")) {
+        tooltip.hidden = true;
+      }
+    });
   }
 
   els.calendarView.querySelectorAll(".calendar-task[data-sub]").forEach((btn) => {
@@ -3579,7 +3584,6 @@ function bindTaskSubItemsTooltip() {
         tooltip.hidden = false;
       } catch { /* ignore parse errors */ }
     });
-    btn.addEventListener("mouseleave", () => { tooltip.hidden = true; });
   });
 }
 

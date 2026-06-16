@@ -1834,6 +1834,11 @@ button:disabled {
   margin-left: -1.1em;
 }
 
+.markdown-body .task-list-item > ul,
+.markdown-body .task-list-item > ol {
+  margin-left: 1.1em;
+}
+
 .markdown-body .task-list-label {
   align-items: flex-start;
   display: inline-flex;
@@ -2545,6 +2550,7 @@ button.calendar-more {
   gap: 4px;
   max-width: 220px;
   padding: 8px 10px;
+  pointer-events: none;
   position: fixed;
   z-index: 500;
 }
