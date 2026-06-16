@@ -2459,6 +2459,16 @@ button.calendar-more {
   min-width: 0;
 }
 
+.calendar-agenda .calendar-task {
+  font-size: 13px;
+  gap: 6px;
+  grid-template-columns: auto minmax(0, 1fr);
+  height: auto;
+  max-height: none;
+  min-height: 30px;
+  padding: 5px 8px;
+}
+
 .calendar-task-wrap {
   display: flex;
   flex-direction: column;
@@ -2471,9 +2481,9 @@ button.calendar-more {
 }
 
 .calendar-task-wrap.has-delete {
+  align-items: stretch;
   flex-direction: row;
   flex-wrap: wrap;
-  align-items: stretch;
 }
 
 .calendar-task-wrap.has-delete > .calendar-task {

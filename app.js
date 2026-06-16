@@ -2094,17 +2094,10 @@ async function handleEditorPaste(event) {
   const filePath = dir ? `${dir}/${filename}` : filename;
 
   try {
-    const arrayBuffer = await blob.arrayBuffer();
-    const bytes = new Uint8Array(arrayBuffer);
-    let binary = "";
-    for (let k = 0; k < bytes.length; k += 8192) {
-      binary += String.fromCharCode(...bytes.subarray(k, k + 8192));
-    }
-    const base64 = btoa(binary);
     const res = await fetch(`/api/vault-binary-file?path=${encodeURIComponent(filePath)}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ base64, mimeType: imageItem.type }),
+      headers: { "Content-Type": imageItem.type },
+      body: blob,
     });
     if (!res.ok) throw new Error("upload failed");
     const wikiLink = `![[${filePath}]]`;
@@ -3373,28 +3366,37 @@ function scheduleHolidayRender() {
   }, 50);
 }
 
+function renderSubItemContent(content) {
+  const wikiEmbed = content.match(/^!\[\[([^\]]+)\]\]$/);
+  if (wikiEmbed) {
+    const target = wikiEmbed[1].split("|")[0].trim();
+    const filePath = resolveVaultPath(target);
+    if (filePath && isImageDocument(filePath)) {
+      const src = `/api/vault-image-thumb?path=${encodeURIComponent(filePath)}&width=240`;
+      return `<img class="task-sub-img" src="${escapeAttribute(src)}" alt="${escapeAttribute(target)}" loading="lazy">`;
+    }
+    return `<span>${escapeHtml(content)}</span>`;
+  }
+  const mdImg = content.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
+  if (mdImg) {
+    return `<img class="task-sub-img" src="${escapeAttribute(mdImg[2])}" alt="${escapeAttribute(mdImg[1])}" loading="lazy">`;
+  }
+  return `<span>${escapeHtml(content)}</span>`;
+}
+
 function renderSubItemsHtml(subItems) {
   if (!subItems || !subItems.length) return "";
   return subItems.map((item) => {
-    const wikiEmbed = item.match(/^!\[\[([^\]]+)\]\]$/);
-    if (wikiEmbed) {
-      const target = wikiEmbed[1].split("|")[0].trim();
-      const path = resolveVaultPath(target);
-      if (path && isImageDocument(path)) {
-        const src = `/api/vault-image-thumb?path=${encodeURIComponent(path)}&width=240`;
-        return `<img class="task-sub-img" src="${escapeAttribute(src)}" alt="${escapeAttribute(target)}" loading="lazy">`;
-      }
-      return `<div class="task-sub-bullet"><span>•</span><span>${escapeHtml(target)}</span></div>`;
-    }
-    const mdImg = item.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
-    if (mdImg) {
-      return `<img class="task-sub-img" src="${escapeAttribute(mdImg[2])}" alt="${escapeAttribute(mdImg[1])}" loading="lazy">`;
-    }
     const listItem = item.match(/^[-*+]\s+(.*)$/);
     if (listItem) {
-      return `<div class="task-sub-bullet"><span>•</span><span>${escapeHtml(listItem[1])}</span></div>`;
+      const content = listItem[1].trim();
+      const rendered = renderSubItemContent(content);
+      if (rendered.startsWith("<img")) return rendered;
+      return `<div class="task-sub-bullet"><span>•</span>${rendered}</div>`;
     }
-    return `<div class="task-sub-text">${escapeHtml(item)}</div>`;
+    const rendered = renderSubItemContent(item);
+    if (rendered.startsWith("<img")) return rendered;
+    return `<div class="task-sub-text">${rendered}</div>`;
   }).join("");
 }
 
@@ -3561,8 +3563,6 @@ function bindTaskSubItemsTooltip() {
     tooltip.hidden = true;
     document.body.append(tooltip);
   }
-  const hide = () => { tooltip.hidden = true; };
-  tooltip.addEventListener("mouseleave", hide);
 
   els.calendarView.querySelectorAll(".calendar-task[data-sub]").forEach((btn) => {
     btn.addEventListener("mouseenter", () => {
@@ -3573,17 +3573,13 @@ function bindTaskSubItemsTooltip() {
         const subItems = JSON.parse(raw);
         tooltip.innerHTML = renderSubItemsHtml(subItems);
         const rect = btn.getBoundingClientRect();
-        const left = Math.min(rect.left, window.innerWidth - 220);
-        const top = rect.bottom + 4;
-        tooltip.style.top = `${top}px`;
-        tooltip.style.left = `${left}px`;
+        const left = Math.min(rect.left, window.innerWidth - 240);
+        tooltip.style.top = `${rect.bottom + 4}px`;
+        tooltip.style.left = `${Math.max(4, left)}px`;
         tooltip.hidden = false;
       } catch { /* ignore parse errors */ }
     });
-    btn.addEventListener("mouseleave", (e) => {
-      if (e.relatedTarget === tooltip || tooltip.contains(e.relatedTarget)) return;
-      hide();
-    });
+    btn.addEventListener("mouseleave", () => { tooltip.hidden = true; });
   });
 }
 

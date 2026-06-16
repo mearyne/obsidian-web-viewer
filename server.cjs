@@ -75,13 +75,18 @@ const server = http.createServer((req, res) => {
 
   if (requestPath === "/api/vault-binary-file") {
     if (req.method === "PUT") {
-      receiveBody(req, (error, body) => {
-        if (error) {
-          sendJson(res, 400, { error: "Invalid request body" });
-          return;
-        }
-        writeBinaryVaultFile(url.searchParams.get("path"), body, res);
-      });
+      const contentType = req.headers["content-type"] || "";
+      if (contentType.startsWith("application/json")) {
+        receiveBody(req, (error, body) => {
+          if (error) { sendJson(res, 400, { error: "Invalid request body" }); return; }
+          writeBinaryVaultFile(url.searchParams.get("path"), body, res);
+        });
+      } else {
+        receiveBinaryBody(req, (error, buffer) => {
+          if (error) { sendJson(res, 400, { error: "Invalid request body" }); return; }
+          writeBinaryVaultFileDirect(url.searchParams.get("path"), buffer, res);
+        });
+      }
       return;
     }
     sendJson(res, 405, { error: "Method not allowed" });
@@ -699,6 +704,36 @@ function receiveBody(req, callback) {
   });
   req.on("end", () => callback(null, body));
   req.on("error", callback);
+}
+
+function receiveBinaryBody(req, callback) {
+  const chunks = [];
+  let total = 0;
+  req.on("data", (chunk) => {
+    total += chunk.length;
+    if (total > 25 * 1024 * 1024) { req.destroy(); callback(new Error("Body too large")); return; }
+    chunks.push(chunk);
+  });
+  req.on("end", () => callback(null, Buffer.concat(chunks)));
+  req.on("error", callback);
+}
+
+function writeBinaryVaultFileDirect(requestedPath, buffer, res) {
+  if (readOnly) { sendJson(res, 403, { error: "Vault is read-only" }); return; }
+  const safePath = normalizeVaultPath(requestedPath || "");
+  if (!safePath || !/\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(safePath)) {
+    sendJson(res, 403, { error: "Invalid image file path" }); return;
+  }
+  const filePath = resolveVaultFilePath(safePath);
+  if (!filePath) { sendJson(res, 403, { error: "Forbidden path" }); return; }
+  try {
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, buffer);
+    const stat = fs.statSync(filePath);
+    sendJson(res, 200, { path: safePath, size: stat.size });
+  } catch (error) {
+    sendJson(res, 500, { error: error.message || "Write failed" });
+  }
 }
 
 function resolveVaultFilePath(requestedPath) {
