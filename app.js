@@ -235,8 +235,16 @@ els.dailyNotePathInput?.addEventListener("input", updateDailyNotePath);
 els.newNotePathInput?.addEventListener("input", handleNewNotePathInput);
 els.fontSelect?.addEventListener("change", updateAppFont);
 els.fontResetButton?.addEventListener("click", resetFontOptions);
-els.contentFontSizeInput?.addEventListener("input", updateContentFontSize);
-els.calendarRowFontSizeInput?.addEventListener("input", updateCalendarRowFontSize);
+els.contentFontSizeInput?.addEventListener("input", () => {
+  const v = Number(els.contentFontSizeInput.value);
+  if (Number.isFinite(v) && v >= 1) document.documentElement.style.setProperty("--content-font-size", `${Math.max(10, Math.min(28, v))}px`);
+});
+els.contentFontSizeInput?.addEventListener("change", updateContentFontSize);
+els.calendarRowFontSizeInput?.addEventListener("input", () => {
+  const v = Number(els.calendarRowFontSizeInput.value);
+  if (Number.isFinite(v) && v >= 1) document.documentElement.style.setProperty("--calendar-row-font-size", `${Math.max(6, Math.min(22, v))}px`);
+});
+els.calendarRowFontSizeInput?.addEventListener("change", updateCalendarRowFontSize);
 els.contentAlignSelect?.addEventListener("change", updateContentAlign);
 els.viewerWrap.addEventListener("click", closeSidebarFromMain);
 els.calendarView.addEventListener("wheel", handleCalendarWheel, { passive: false });
