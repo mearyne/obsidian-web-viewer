@@ -104,6 +104,7 @@ const els = {
   newNotePathInput: document.querySelector("#newNotePathInput"),
   imagePathInput: document.querySelector("#imagePathInput"),
   searchExcludeInput: document.querySelector("#searchExcludeInput"),
+  searchStatus: document.querySelector("#searchStatus"),
   newNoteButton: document.querySelector("#newNoteButton"),
   newNoteDialog: document.querySelector("#newNoteDialog"),
   newNoteTitleInput: document.querySelector("#newNoteTitleInput"),
@@ -928,16 +929,34 @@ function getDirNode(path) {
 function renderTree() {
   const previousScrollTop = els.fileTree.scrollTop;
   els.fileTree.replaceChildren();
-  const matcher = createSearchMatcher(els.searchInput.value, {
+  const query = els.searchInput.value;
+  const matcher = createSearchMatcher(query, {
     regexMode: els.regexSearchToggle.checked,
     caseSensitive: els.caseSearchToggle.checked,
   });
   const folderPaths = parsePathList(els.folderPathInput?.value || "");
   const excludePaths = matcher ? state.searchExcludePaths : [];
   const rootFragment = document.createDocumentFragment();
-  renderDirChildren(state.root, rootFragment, matcher, folderPaths, excludePaths);
+  const matchCount = renderDirChildren(state.root, rootFragment, matcher, folderPaths, excludePaths);
   els.fileTree.append(rootFragment);
   els.fileTree.scrollTop = Math.min(previousScrollTop, els.fileTree.scrollHeight);
+  updateSearchStatus(query, matchCount);
+}
+
+function updateSearchStatus(query, matchCount) {
+  if (!els.searchStatus) return;
+  if (!query) {
+    els.searchStatus.hidden = true;
+    return;
+  }
+  els.searchStatus.hidden = false;
+  if (matchCount === 0) {
+    els.searchStatus.textContent = "검색 결과 없음";
+    els.searchStatus.dataset.state = "empty";
+  } else {
+    els.searchStatus.textContent = `파일 ${matchCount}개`;
+    els.searchStatus.dataset.state = "found";
+  }
 }
 
 function updateTreeSortMode() {
@@ -1013,6 +1032,8 @@ function renderDirChildren(dir, parent, matcher, folderPaths, excludePaths = [])
   const entries = [...dir.children.values()]
     .sort(compareTreeNodes);
 
+  let fileCount = 0;
+
   entries.forEach((node) => {
     if (folderPaths.length && !nodeInAnyPath(node, folderPaths)) return;
     if (matcher && excludePaths.length && nodeIsExcluded(node, excludePaths)) return;
@@ -1029,6 +1050,7 @@ function renderDirChildren(dir, parent, matcher, folderPaths, excludePaths = [])
     if (node.kind === "file") {
       row.classList.add(`file-ext-${extensionOf(node.name) || "file"}`);
       if (!isOpenableDocument(node.name)) row.classList.add("not-openable");
+      fileCount += 1;
     } else {
       row.classList.add("directory");
     }
@@ -1063,12 +1085,14 @@ function renderDirChildren(dir, parent, matcher, folderPaths, excludePaths = [])
     if (node.kind === "directory") {
       const children = document.createElement("div");
       children.className = "tree-children";
-      renderDirChildren(node, children, matcher, folderPaths, excludePaths);
+      fileCount += renderDirChildren(node, children, matcher, folderPaths, excludePaths);
       group.append(children);
     }
 
     parent.append(group);
   });
+
+  return fileCount;
 }
 
 function dirHasMatch(dir, matcher, folderPaths, excludePaths = []) {

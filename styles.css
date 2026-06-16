@@ -218,7 +218,17 @@ button:disabled {
   display: grid;
   gap: 6px;
   grid-template-columns: minmax(0, 1fr) auto;
-  padding: 0 10px 10px;
+  padding: 0 10px 6px;
+}
+
+.search-status {
+  color: var(--muted);
+  font-size: 11px;
+  padding: 0 12px 8px;
+}
+
+.search-status[data-state="empty"] {
+  color: var(--danger);
 }
 
 .search-box {
