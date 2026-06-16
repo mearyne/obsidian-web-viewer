@@ -46,6 +46,7 @@ const state = {
   dailyNotePath: "1. Daily",
   newNotePath: "",
   imageSavePath: "",
+  searchExcludePaths: [],
   connectionLost: false,
   connectionRetryTimer: null,
   sidebarResize: null,
@@ -102,6 +103,7 @@ const els = {
   dailyNotePathInput: document.querySelector("#dailyNotePathInput"),
   newNotePathInput: document.querySelector("#newNotePathInput"),
   imagePathInput: document.querySelector("#imagePathInput"),
+  searchExcludeInput: document.querySelector("#searchExcludeInput"),
   newNoteButton: document.querySelector("#newNoteButton"),
   newNoteDialog: document.querySelector("#newNoteDialog"),
   newNoteTitleInput: document.querySelector("#newNoteTitleInput"),
@@ -240,6 +242,7 @@ els.markdownEditor.addEventListener("keydown", handleEditorKeydown);
 els.markdownEditor.addEventListener("input", handleEditorInput);
 els.markdownEditor.addEventListener("paste", handleEditorPaste);
 els.imagePathInput?.addEventListener("input", handleImagePathInput);
+els.searchExcludeInput?.addEventListener("input", handleSearchExcludeInput);
 els.newNoteButton?.addEventListener("click", openNewNote);
 els.randomFileButton.addEventListener("click", openRandomMarkdown);
 els.calendarButton.addEventListener("click", openNextCalendarKind);
@@ -930,8 +933,9 @@ function renderTree() {
     caseSensitive: els.caseSearchToggle.checked,
   });
   const folderPaths = parsePathList(els.folderPathInput?.value || "");
+  const excludePaths = matcher ? state.searchExcludePaths : [];
   const rootFragment = document.createDocumentFragment();
-  renderDirChildren(state.root, rootFragment, matcher, folderPaths);
+  renderDirChildren(state.root, rootFragment, matcher, folderPaths, excludePaths);
   els.fileTree.append(rootFragment);
   els.fileTree.scrollTop = Math.min(previousScrollTop, els.fileTree.scrollHeight);
 }
@@ -1005,14 +1009,15 @@ function expandPathToFile(path) {
   });
 }
 
-function renderDirChildren(dir, parent, matcher, folderPaths) {
+function renderDirChildren(dir, parent, matcher, folderPaths, excludePaths = []) {
   const entries = [...dir.children.values()]
     .sort(compareTreeNodes);
 
   entries.forEach((node) => {
     if (folderPaths.length && !nodeInAnyPath(node, folderPaths)) return;
+    if (matcher && excludePaths.length && nodeIsExcluded(node, excludePaths)) return;
     if (matcher && node.kind === "file" && !matcher(node.path)) return;
-    if (matcher && node.kind === "directory" && !dirHasMatch(node, matcher, folderPaths)) return;
+    if (matcher && node.kind === "directory" && !dirHasMatch(node, matcher, folderPaths, excludePaths)) return;
 
     const group = document.createElement("div");
     group.className = "tree-group";
@@ -1058,7 +1063,7 @@ function renderDirChildren(dir, parent, matcher, folderPaths) {
     if (node.kind === "directory") {
       const children = document.createElement("div");
       children.className = "tree-children";
-      renderDirChildren(node, children, matcher, folderPaths);
+      renderDirChildren(node, children, matcher, folderPaths, excludePaths);
       group.append(children);
     }
 
@@ -1066,12 +1071,18 @@ function renderDirChildren(dir, parent, matcher, folderPaths) {
   });
 }
 
-function dirHasMatch(dir, matcher, folderPaths) {
+function dirHasMatch(dir, matcher, folderPaths, excludePaths = []) {
   return [...dir.children.values()].some((node) => {
     if (folderPaths.length && !nodeInAnyPath(node, folderPaths)) return false;
+    if (excludePaths.length && nodeIsExcluded(node, excludePaths)) return false;
     if (node.kind === "file") return matcher(node.path);
-    return dirHasMatch(node, matcher, folderPaths);
+    return dirHasMatch(node, matcher, folderPaths, excludePaths);
   });
+}
+
+function nodeIsExcluded(node, excludePaths) {
+  const path = node.path || "";
+  return excludePaths.some((ex) => path === ex || path.startsWith(`${ex}/`));
 }
 
 function compareTreeNodes(a, b) {
@@ -1394,6 +1405,9 @@ function initOptions() {
   const savedImagePath = localStorage.getItem("obsidian-web-viewer-image-path") || "";
   state.imageSavePath = savedImagePath;
   if (els.imagePathInput) els.imagePathInput.value = savedImagePath;
+  const savedSearchExclude = localStorage.getItem("obsidian-web-viewer-search-exclude") || "";
+  state.searchExcludePaths = parsePathList(savedSearchExclude);
+  if (els.searchExcludeInput) els.searchExcludeInput.value = savedSearchExclude;
   const savedFont = localStorage.getItem("obsidian-web-viewer-font") || "default";
   const appliedFont = setAppFont(savedFont);
   if (els.fontSelect) els.fontSelect.value = appliedFont;
@@ -1452,6 +1466,12 @@ function handleImagePathInput() {
   const value = normalizeVaultPath(els.imagePathInput?.value || "");
   state.imageSavePath = value;
   localStorage.setItem("obsidian-web-viewer-image-path", value);
+}
+
+function handleSearchExcludeInput() {
+  state.searchExcludePaths = parsePathList(els.searchExcludeInput?.value || "");
+  localStorage.setItem("obsidian-web-viewer-search-exclude", els.searchExcludeInput?.value || "");
+  renderTree();
 }
 
 async function openNewNote() {
@@ -2893,15 +2913,22 @@ function cleanTaskText(text) {
 }
 
 function extractTaskDates(text) {
-  const due = findTaskDateByMarkers(text, ["\u{1F4C5}", "due", "end"]) || findBareTaskDate(text);
+  const done = findTaskDateByMarkers(text, ["\u{2705}", "done"]);
+  const cancelled = findTaskDateByMarkers(text, ["\u{274C}", "cancelled", "canceled"]);
+  // Strip completion/cancellation dates before bare-date search to prevent them from
+  // being picked up as due dates (e.g., ✅ 2026-06-10 should not become the due date).
+  const textForBareDate = text
+    .replace(/(?:\u{2705}|done)\s*\d{4}-\d{2}-\d{2}/giu, "")
+    .replace(/(?:\u{274C}|cancelled|canceled)\s*\d{4}-\d{2}-\d{2}/giu, "");
+  const due = findTaskDateByMarkers(text, ["\u{1F4C5}", "due", "end"]) || findBareTaskDate(textForBareDate);
   const start = findTaskDateByMarkers(text, ["\u{1F6EB}", "start"]);
   return {
     due,
     end: due,
     scheduled: findTaskDateByMarkers(text, ["\u{23F3}", "scheduled"]),
     start,
-    done: findTaskDateByMarkers(text, ["\u{2705}", "done"]),
-    cancelled: findTaskDateByMarkers(text, ["\u{274C}", "cancelled", "canceled"]),
+    done,
+    cancelled,
   };
 }
 
@@ -4203,10 +4230,13 @@ function calendarPreviewTasks() {
 function taskCalendarDates(task) {
   const start = parseDateKey(task.dates?.start);
   const end = parseDateKey(task.dates?.end || task.dates?.due);
-  if (!start || !end) return [task.date].filter(Boolean);
+  // For done tasks with a start but no explicit end/due, use the done date as the range end.
+  const doneEnd = !end && task.checked ? parseDateKey(task.dates?.done) : null;
+  const rangeEnd = end || doneEnd;
+  if (!start || !rangeEnd) return [task.date].filter(Boolean);
 
-  const from = start <= end ? start : end;
-  const to = start <= end ? end : start;
+  const from = start <= rangeEnd ? start : rangeEnd;
+  const to = start <= rangeEnd ? rangeEnd : start;
   const dates = [];
   for (let current = new Date(from); current <= to; current = addDays(current, 1)) {
     dates.push(formatDate(current));
