@@ -3430,14 +3430,12 @@ function renderCalendarTask(task, dateKey = task.date, showDelete = false) {
   const indentPx = (task.indent || 0) * 12;
   const indentStyle = indentPx > 0 ? ` style="padding-left: calc(1px + ${indentPx}px)"` : "";
   const hasSubItems = task.subItems && task.subItems.length > 0;
-  const subItemsEncoded = hasSubItems ? escapeAttribute(JSON.stringify(task.subItems)) : "";
-  const subAttr = hasSubItems && !showDelete ? ` data-sub="${subItemsEncoded}"` : "";
   const inlineSubItems = hasSubItems && showDelete
     ? `<div class="task-sub-items-inline">${renderSubItemsHtml(task.subItems)}</div>`
     : "";
   return `
     <div class="calendar-task-wrap${showDelete ? " has-delete" : ""}${hasSubItems ? " has-sub" : ""}">
-      <button class="calendar-task ${task.checked ? "done" : ""} ${task.type} ${range ? `range-task ${colorClass}` : ""} ${task.draggingPreview ? "drag-preview" : ""}" type="button" data-path="${escapeAttribute(task.path)}" data-line="${task.line}" data-date="${escapeAttribute(dateKey)}" title="${escapeAttribute(title)}"${subAttr}${indentStyle}>
+      <button class="calendar-task ${task.checked ? "done" : ""} ${task.type} ${range ? `range-task ${colorClass}` : ""} ${task.draggingPreview ? "drag-preview" : ""}" type="button" data-path="${escapeAttribute(task.path)}" data-line="${task.line}" data-date="${escapeAttribute(dateKey)}" title="${escapeAttribute(title)}"${indentStyle}>
         <span>${icon}</span>
         <span>${escapeHtml(task.text)}</span>
       </button>
@@ -3566,43 +3564,11 @@ function bindCalendarEvents() {
     });
   });
 
-  bindTaskSubItemsTooltip();
-
   els.calendarView.querySelectorAll("[data-calendar-date]").forEach((target) => {
     bindDateClick(target);
   });
 }
 
-function bindTaskSubItemsTooltip() {
-  let tooltip = document.getElementById("calTaskSubTooltip");
-  if (!tooltip) {
-    tooltip = document.createElement("div");
-    tooltip.id = "calTaskSubTooltip";
-    tooltip.className = "cal-sub-tooltip";
-    tooltip.hidden = true;
-    document.body.append(tooltip);
-  }
-
-  els.calendarView.querySelectorAll(".calendar-task[data-sub]").forEach((btn) => {
-    btn.addEventListener("mouseenter", () => {
-      if (state.calendarTaskDrag?.active) return;
-      const raw = btn.getAttribute("data-sub");
-      if (!raw) return;
-      try {
-        const subItems = JSON.parse(raw);
-        tooltip.innerHTML = renderSubItemsHtml(subItems);
-        const rect = btn.getBoundingClientRect();
-        const left = Math.min(rect.left, window.innerWidth - 240);
-        tooltip.style.top = `${rect.bottom + 4}px`;
-        tooltip.style.left = `${Math.max(4, left)}px`;
-        tooltip.hidden = false;
-      } catch { /* ignore parse errors */ }
-    });
-    btn.addEventListener("mouseleave", () => {
-      tooltip.hidden = true;
-    });
-  });
-}
 
 async function deleteCalendarTaskLine(filePath, lineNumber) {
   try {
