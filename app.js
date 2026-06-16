@@ -3483,7 +3483,7 @@ function renderCalendarTask(task, dateKey = task.date, showDelete = false) {
   const deleteBtn = showDelete
     ? `<button class="agenda-delete-btn" type="button" data-agenda-delete data-path="${escapeAttribute(task.path)}" data-line="${task.line}" aria-label="삭제" title="삭제">🗑️</button>`
     : "";
-  const indentPx = (task.indent || 0) * 12;
+  const indentPx = (task.indent || 0) * 24;
   const wrapIndentStyle = indentPx > 0 ? ` style="padding-left: ${indentPx}px"` : "";
   const hasSubItems = task.subItems && task.subItems.length > 0;
   const inlineSubItems = hasSubItems && showDelete
