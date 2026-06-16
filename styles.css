@@ -1700,6 +1700,13 @@ button:disabled {
   width: min(360px, calc(100vw - 32px));
 }
 
+@media (max-width: 768px) {
+  .new-note-dialog {
+    max-height: calc(100dvh - 20px);
+    overflow-y: auto;
+  }
+}
+
 .new-note-dialog::backdrop {
   background: rgba(0, 0, 0, 0.4);
 }
@@ -2081,6 +2088,7 @@ button:disabled {
 
 .calendar-today-button {
   flex: 0 0 56px;
+  margin-left: auto;
 }
 
 .calendar-toolbar span {

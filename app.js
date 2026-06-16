@@ -1612,6 +1612,21 @@ async function openNewNote() {
   await createAndOpenNote(title.trim() || defaultTitle);
 }
 
+function positionNewNoteDialog() {
+  const dialog = els.newNoteDialog;
+  if (!dialog || !isTouchPrimaryDevice()) return;
+  const vv = window.visualViewport;
+  if (!vv) return;
+  const keyboardHeight = window.innerHeight - vv.height - vv.offsetTop;
+  if (keyboardHeight > 80) {
+    dialog.style.marginTop = `${Math.max(8, vv.offsetTop + 8)}px`;
+    dialog.style.marginBottom = "auto";
+  } else {
+    dialog.style.marginTop = "";
+    dialog.style.marginBottom = "";
+  }
+}
+
 function showNewNoteDialog(defaultTitle) {
   return new Promise((resolve) => {
     if (!els.newNoteDialog) {
@@ -1620,6 +1635,9 @@ function showNewNoteDialog(defaultTitle) {
     }
     els.newNoteTitleInput.value = defaultTitle;
     els.newNoteDialog.showModal();
+    positionNewNoteDialog();
+    const vv = window.visualViewport;
+    if (vv) vv.addEventListener("resize", positionNewNoteDialog);
     requestAnimationFrame(() => {
       els.newNoteTitleInput.select();
     });
@@ -1627,6 +1645,9 @@ function showNewNoteDialog(defaultTitle) {
       els.newNoteDialog.close();
       els.newNoteDialog.removeEventListener("close", onClose);
       els.newNoteCancelButton.removeEventListener("click", onCancel);
+      if (vv) vv.removeEventListener("resize", positionNewNoteDialog);
+      els.newNoteDialog.style.marginTop = "";
+      els.newNoteDialog.style.marginBottom = "";
       resolve(result);
     };
     const onClose = () => finish(els.newNoteDialog.returnValue === "cancel" ? null : els.newNoteTitleInput.value);
