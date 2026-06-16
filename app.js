@@ -100,6 +100,10 @@ const els = {
   dailyNotePathInput: document.querySelector("#dailyNotePathInput"),
   newNotePathInput: document.querySelector("#newNotePathInput"),
   newNoteButton: document.querySelector("#newNoteButton"),
+  newNoteDialog: document.querySelector("#newNoteDialog"),
+  newNoteTitleInput: document.querySelector("#newNoteTitleInput"),
+  newNoteCancelButton: document.querySelector("#newNoteCancelButton"),
+  newNoteConfirmButton: document.querySelector("#newNoteConfirmButton"),
   connectionBanner: document.querySelector("#connectionBanner"),
   fontSelect: document.querySelector("#fontSelect"),
   fontResetButton: document.querySelector("#fontResetButton"),
@@ -1409,18 +1413,57 @@ async function openNewNote() {
     alert("vault를 먼저 열어야 새 노트를 만들 수 있습니다.");
     return;
   }
-  const dirPath = normalizeVaultPath(state.newNotePath || els.newNotePathInput?.value || "");
   const now = new Date();
   const date = formatDate(now);
   const time = now.toTimeString().slice(0, 5).replace(":", "");
-  const fileName = `${date} ${time}.md`;
+  const defaultTitle = `${date} ${time}`;
+
+  const title = await showNewNoteDialog(defaultTitle);
+  if (title === null) return;
+
+  await createAndOpenNote(title.trim() || defaultTitle);
+}
+
+function showNewNoteDialog(defaultTitle) {
+  return new Promise((resolve) => {
+    if (!els.newNoteDialog) {
+      resolve(prompt("새 노트 제목:", defaultTitle));
+      return;
+    }
+    els.newNoteTitleInput.value = defaultTitle;
+    els.newNoteDialog.showModal();
+    requestAnimationFrame(() => {
+      els.newNoteTitleInput.select();
+    });
+    const finish = (result) => {
+      els.newNoteDialog.close();
+      els.newNoteDialog.removeEventListener("close", onClose);
+      els.newNoteCancelButton.removeEventListener("click", onCancel);
+      resolve(result);
+    };
+    const onClose = () => finish(els.newNoteDialog.returnValue === "cancel" ? null : els.newNoteTitleInput.value);
+    const onCancel = () => {
+      els.newNoteDialog.returnValue = "cancel";
+      els.newNoteDialog.close();
+    };
+    els.newNoteDialog.returnValue = "";
+    els.newNoteDialog.addEventListener("close", onClose, { once: true });
+    els.newNoteCancelButton.addEventListener("click", onCancel, { once: true });
+  });
+}
+
+async function createAndOpenNote(title, dirPathOverride) {
+  const dirPath = dirPathOverride !== undefined
+    ? dirPathOverride
+    : normalizeVaultPath(state.newNotePath || els.newNotePathInput?.value || "");
+  const fileName = title.endsWith(".md") ? title : `${title}.md`;
   const path = dirPath ? `${dirPath}/${fileName}` : fileName;
 
   if (state.files.has(path)) {
     await openFile(path);
     return;
   }
-  const initialContent = `# ${date}\n\n`;
+  const initialContent = `# ${title.replace(/\.md$/i, "")}\n\n`;
 
   if (!state.rootHandle && state.serverVaultWritable) {
     const metadata = await writeServerFile(path, initialContent, { backup: false });
@@ -4427,7 +4470,7 @@ function renderWikiLink(rawTarget) {
   const [target, alias] = rawTarget.split("|").map((value) => value.trim());
   const path = resolveVaultPath(target);
   const label = alias || target;
-  if (!path) return `<span class="wiki-link missing">${escapeHtml(label)}</span>`;
+  if (!path) return `<a class="wiki-link missing" href="#" data-wiki-create="${escapeAttribute(target)}">${escapeHtml(label)}</a>`;
   return `<a class="wiki-link" href="#" data-wiki="${escapeAttribute(path)}">${escapeHtml(label)}</a>`;
 }
 
@@ -4702,6 +4745,42 @@ function bindWikiLinks(root) {
       if (path && isOpenableDocument(path)) await openFile(path);
     });
   });
+
+  root.querySelectorAll("[data-wiki-create]").forEach((link) => {
+    link.addEventListener("click", async (event) => {
+      event.preventDefault();
+      const target = link.getAttribute("data-wiki-create");
+      if (!target) return;
+      await createAndOpenWikiFile(target);
+    });
+  });
+}
+
+async function createAndOpenWikiFile(target) {
+  if (!state.rootHandle && !state.serverVaultWritable) {
+    alert("vault를 먼저 열어야 파일을 만들 수 있습니다.");
+    return;
+  }
+  const cleanTarget = target.split("#")[0].trim();
+  const hasExtension = /\.[a-z]+$/i.test(cleanTarget);
+  const title = hasExtension ? cleanTarget.replace(/\.md$/i, "") : cleanTarget;
+  const fileName = hasExtension ? cleanTarget : `${cleanTarget}.md`;
+
+  const currentDir = state.currentPath?.includes("/")
+    ? state.currentPath.split("/").slice(0, -1).join("/")
+    : "";
+  const hasSlash = cleanTarget.includes("/");
+  const dirPath = hasSlash
+    ? normalizeVaultPath(fileName.split("/").slice(0, -1).join("/"))
+    : currentDir;
+  const baseName = hasSlash ? fileName.split("/").pop() : fileName;
+  const path = dirPath ? `${dirPath}/${baseName}` : baseName;
+
+  if (state.files.has(path)) {
+    await openFile(path);
+    return;
+  }
+  await createAndOpenNote(title, dirPath);
 }
 
 function arrangeImageGroups(root) {

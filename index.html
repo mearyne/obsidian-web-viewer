@@ -226,6 +226,17 @@
       </details>
     </section>
 
+    <dialog id="newNoteDialog" class="new-note-dialog">
+      <form method="dialog" class="new-note-form">
+        <h3>새 노트</h3>
+        <input id="newNoteTitleInput" type="text" placeholder="제목" autocomplete="off" />
+        <div class="dialog-buttons">
+          <button type="button" id="newNoteCancelButton">취소</button>
+          <button type="submit" id="newNoteConfirmButton">만들기</button>
+        </div>
+      </form>
+    </dialog>
+
     <div id="imageLightbox" class="image-lightbox" hidden>
       <button id="imageLightboxClose" class="image-lightbox-close" type="button" aria-label="이미지 닫기">×</button>
       <img id="imageLightboxImg" alt="" />

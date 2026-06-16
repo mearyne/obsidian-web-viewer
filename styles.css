@@ -1345,6 +1345,10 @@ button:disabled {
 
 .wiki-link.missing {
   color: var(--danger);
+  cursor: pointer;
+  text-decoration: underline dashed;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
 }
 
 .markdown-body img {
@@ -1384,6 +1388,69 @@ button:disabled {
   max-width: min(400px, 100%);
   object-fit: contain;
   width: 100%;
+}
+
+.new-note-dialog {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+  padding: 0;
+  width: min(360px, calc(100vw - 32px));
+}
+
+.new-note-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.new-note-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+}
+
+.new-note-form h3 {
+  font-size: 16px;
+  font-weight: 650;
+  margin: 0;
+}
+
+.new-note-form input {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  font-size: 15px;
+  padding: 9px 12px;
+  width: 100%;
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.new-note-form input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.dialog-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.dialog-buttons button {
+  min-height: 36px;
+  padding: 0 16px;
+}
+
+#newNoteConfirmButton {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+#newNoteConfirmButton:hover:not(:disabled) {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
 }
 
 .image-lightbox {
