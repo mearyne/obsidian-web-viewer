@@ -53,6 +53,9 @@ const state = {
   vaultLoaded: false,
   taskDialogActiveField: null,
   taskDialogPickerMonth: null,
+  taskDialogMeta: { kind: null, category: null, priority: null, tags: [] },
+  calendarTaskFilters: { types: [], categories: [], tags: [], priorities: [] },
+  calendarTaskTags: ["게임", "가족", "공부"],
   connectionLost: false,
   connectionRetryTimer: null,
   sidebarResize: null,
@@ -118,6 +121,11 @@ const els = {
   taskDatePickerCal: document.querySelector("#taskDatePickerCal"),
   taskCreateCancelBtn: document.querySelector("#taskCreateCancelBtn"),
   taskCreateConfirmBtn: document.querySelector("#taskCreateConfirmBtn"),
+  taskKindChips: document.querySelector("#taskKindChips"),
+  taskCategoryChips: document.querySelector("#taskCategoryChips"),
+  taskPriorityChips: document.querySelector("#taskPriorityChips"),
+  taskTagChips: document.querySelector("#taskTagChips"),
+  taskTagsInput: document.querySelector("#taskTagsInput"),
   newNoteButton: document.querySelector("#newNoteButton"),
   newNoteDialog: document.querySelector("#newNoteDialog"),
   newNoteTitleInput: document.querySelector("#newNoteTitleInput"),
@@ -232,6 +240,12 @@ els.folderPathInput?.addEventListener("input", renderTree);
 els.calendarPathInput?.addEventListener("input", handleCalendarFilterInput);
 els.randomPathInput?.addEventListener("input", handleRandomPathInput);
 els.dailyNotePathInput?.addEventListener("input", updateDailyNotePath);
+els.taskTagsInput?.addEventListener("change", () => {
+  const tags = (els.taskTagsInput.value || "").split(",").map((t) => t.trim()).filter(Boolean);
+  state.calendarTaskTags = tags.length ? tags : ["게임", "가족", "공부"];
+  saveCalendarTaskTags();
+  if (els.taskTagsInput) els.taskTagsInput.value = state.calendarTaskTags.join(", ");
+});
 els.newNotePathInput?.addEventListener("input", handleNewNotePathInput);
 els.fontSelect?.addEventListener("change", updateAppFont);
 els.fontResetButton?.addEventListener("click", resetFontOptions);
@@ -1525,6 +1539,16 @@ function initOptions() {
   const appliedFont = setAppFont(savedFont);
   if (els.fontSelect) els.fontSelect.value = appliedFont;
   applyDeviceDisplayOptions();
+  try {
+    const sf = localStorage.getItem("obsidian-web-viewer-task-filters");
+    if (sf) Object.assign(state.calendarTaskFilters, JSON.parse(sf));
+  } catch {}
+  const savedTagsStr = localStorage.getItem("obsidian-web-viewer-task-tags");
+  if (savedTagsStr) {
+    const parsed = savedTagsStr.split(",").map((t) => t.trim()).filter(Boolean);
+    if (parsed.length) state.calendarTaskTags = parsed;
+  }
+  if (els.taskTagsInput) els.taskTagsInput.value = state.calendarTaskTags.join(", ");
 }
 
 async function loadServerSettings() {
@@ -3050,6 +3074,7 @@ function parseTasks(content, path) {
         subItems.push(subLine.trim());
       }
 
+      const meta = extractTaskMeta(rawText);
       return [
         {
           path,
@@ -3062,6 +3087,10 @@ function parseTasks(content, path) {
           dates,
           indent: Math.floor(taskIndentLen / 2),
           subItems,
+          kind: meta.kind,
+          category: meta.category,
+          priority: meta.priority,
+          tags: meta.tags,
         },
       ];
     });
@@ -3158,6 +3187,85 @@ function cleanTaskText(text) {
     .trim();
 }
 
+function extractTaskMeta(text) {
+  const KIND_SET = new Set(["일정", "할일"]);
+  const CAT_SET = new Set(["회사", "개인", "기타"]);
+  const PRI_SET = new Set(["상", "중", "하"]);
+  let kind = null, category = null, priority = null;
+  const tags = [];
+  for (const m of text.matchAll(/#([\p{L}\p{N}_]+)/gu)) {
+    const v = m[1];
+    if (!kind && KIND_SET.has(v)) { kind = v; continue; }
+    if (!category && CAT_SET.has(v)) { category = v; continue; }
+    if (!priority && PRI_SET.has(v)) { priority = v; continue; }
+    tags.push(v);
+  }
+  return { kind, category, priority, tags };
+}
+
+function saveCalendarTaskFilters() {
+  localStorage.setItem("obsidian-web-viewer-task-filters", JSON.stringify(state.calendarTaskFilters));
+}
+
+function saveCalendarTaskTags() {
+  localStorage.setItem("obsidian-web-viewer-task-tags", state.calendarTaskTags.join(","));
+  if (els.taskTagsInput) els.taskTagsInput.value = state.calendarTaskTags.join(", ");
+}
+
+function applyCalendarTaskFilters(tasks) {
+  const { types, categories, tags, priorities } = state.calendarTaskFilters;
+  if (!types.length && !categories.length && !tags.length && !priorities.length) return tasks;
+  return tasks.filter((task) => {
+    if (types.length && !types.includes(task.kind)) return false;
+    if (categories.length && !categories.includes(task.category)) return false;
+    if (priorities.length && !priorities.includes(task.priority)) return false;
+    if (tags.length && !tags.some((t) => (task.tags || []).includes(t))) return false;
+    return true;
+  });
+}
+
+function renderCalendarFilterBar() {
+  const { types, categories, tags, priorities } = state.calendarTaskFilters;
+  const allTags = state.calendarTaskTags || [];
+  const chip = (val, arr, filterType, label) =>
+    `<button class="filter-chip${arr.includes(val) ? " active" : ""}" type="button" data-filter-type="${filterType}" data-filter-val="${escapeAttribute(val)}">${label}</button>`;
+  const rows = [
+    ["종류", [["일정", "🗓 일정"], ["할일", "✓ 할일"]].map(([v, l]) => chip(v, types, "types", l)).join("")],
+    ["분류", ["회사", "개인", "기타"].map((v) => chip(v, categories, "categories", v)).join("")],
+    ["중요도", [["상", "🔴 상"], ["중", "🟡 중"], ["하", "🔵 하"]].map(([v, l]) => chip(v, priorities, "priorities", l)).join("")],
+    ...(allTags.length ? [["태그", allTags.map((v) => chip(v, tags, "tags", `#${v}`)).join("")]] : []),
+  ];
+  const hasActive = types.length || categories.length || tags.length || priorities.length;
+  return `<div class="calendar-filter-bar">
+    ${rows.map(([label, chips]) => `<div class="filter-row"><span class="filter-label">${label}</span><div class="filter-chips">${chips}</div></div>`).join("")}
+    ${hasActive ? '<button class="filter-reset-btn" type="button" data-filter-reset>필터 초기화</button>' : ""}
+  </div>`;
+}
+
+function updateTaskDialogMetaUI() {
+  const { kind, category, priority, tags } = state.taskDialogMeta;
+  els.taskKindChips?.querySelectorAll("[data-meta='kind']").forEach((b) => b.classList.toggle("active", b.dataset.val === kind));
+  els.taskCategoryChips?.querySelectorAll("[data-meta='category']").forEach((b) => b.classList.toggle("active", b.dataset.val === category));
+  els.taskPriorityChips?.querySelectorAll("[data-meta='priority']").forEach((b) => b.classList.toggle("active", b.dataset.val === priority));
+  els.taskTagChips?.querySelectorAll("[data-meta='tags']").forEach((b) => b.classList.toggle("active", tags.includes(b.dataset.val)));
+}
+
+function renderDialogTagChips() {
+  if (!els.taskTagChips) return;
+  els.taskTagChips.innerHTML = (state.calendarTaskTags || [])
+    .map((tag) => `<button type="button" class="task-meta-chip" data-meta="tags" data-val="${escapeAttribute(tag)}">#${escapeHtml(tag)}</button>`)
+    .join("");
+  els.taskTagChips.querySelectorAll("[data-meta='tags']").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const val = btn.dataset.val;
+      const idx = state.taskDialogMeta.tags.indexOf(val);
+      if (idx >= 0) state.taskDialogMeta.tags.splice(idx, 1);
+      else state.taskDialogMeta.tags.push(val);
+      updateTaskDialogMetaUI();
+    });
+  });
+}
+
 function renderCalendar() {
   if (state.activeView === "calendar") updateCalendarTitle();
   const showingTasks = state.calendarKind === "tasks";
@@ -3222,6 +3330,7 @@ function renderCalendar() {
           <button type="button" data-calendar-mode="day" class="${state.calendarMode === "day" ? "active" : ""}">1d</button>
         </div>
       </div>
+      ${showingTasks ? renderCalendarFilterBar() : ""}
       <div class="calendar-weekdays">
         ${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => `<div>${day}</div>`).join("")}
       </div>
@@ -3507,11 +3616,18 @@ function renderCalendarTask(task, dateKey = task.date, showDelete = false) {
   const inlineSubItems = hasSubItems && showDelete
     ? `<div class="task-sub-items-inline">${renderSubItemsHtml(task.subItems)}</div>`
     : "";
+  const metaClasses = [
+    task.category ? `cat-${task.category}` : "",
+    task.priority ? `pri-${task.priority}` : "",
+  ].filter(Boolean).join(" ");
+  const priDot = task.priority
+    ? `<span class="task-pri-dot pri-dot-${task.priority}" aria-hidden="true"></span>`
+    : "";
   return `
     <div class="calendar-task-wrap${showDelete ? " has-delete" : ""}${hasSubItems ? " has-sub" : ""}"${wrapIndentStyle}>
-      <button class="calendar-task ${task.checked ? "done" : ""} ${task.type} ${range ? `range-task ${colorClass}` : ""} ${task.draggingPreview ? "drag-preview" : ""}" type="button" data-path="${escapeAttribute(task.path)}" data-line="${task.line}" data-date="${escapeAttribute(dateKey)}" title="${escapeAttribute(title)}">
+      <button class="calendar-task ${task.checked ? "done" : ""} ${task.type} ${range ? `range-task ${colorClass}` : ""} ${task.draggingPreview ? "drag-preview" : ""} ${metaClasses}" type="button" data-path="${escapeAttribute(task.path)}" data-line="${task.line}" data-date="${escapeAttribute(dateKey)}" title="${escapeAttribute(title)}">
         <span>${icon}</span>
-        <span>${escapeHtml(task.text)}</span>
+        <span>${priDot}${escapeHtml(task.text)}</span>
       </button>
       ${deleteBtn}
       ${inlineSubItems}
@@ -3577,6 +3693,26 @@ function bindCalendarEvents() {
       state.calendarMode = button.getAttribute("data-calendar-mode") || "month";
       renderCalendar();
     });
+  });
+
+  els.calendarView.querySelectorAll("[data-filter-type]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const type = btn.dataset.filterType;
+      const val = btn.dataset.filterVal;
+      const arr = state.calendarTaskFilters[type];
+      if (!arr) return;
+      const idx = arr.indexOf(val);
+      if (idx >= 0) arr.splice(idx, 1);
+      else arr.push(val);
+      saveCalendarTaskFilters();
+      renderCalendar();
+    });
+  });
+
+  els.calendarView.querySelector("[data-filter-reset]")?.addEventListener("click", () => {
+    state.calendarTaskFilters = { types: [], categories: [], tags: [], priorities: [] };
+    saveCalendarTaskFilters();
+    renderCalendar();
   });
 
   els.calendarView.querySelectorAll("[data-calendar-more]").forEach((button) => {
@@ -4368,10 +4504,13 @@ async function showTaskCreateDialog(dueDate, startDate = "") {
 
   // reset state
   state.taskDialogActiveField = null;
+  state.taskDialogMeta = { kind: null, category: null, priority: null, tags: [] };
   if (els.taskTitleInput) els.taskTitleInput.value = "";
   setTaskDialogDate("due", dueDate);
   setTaskDialogDate("start", startDate);
   renderTaskDatePicker(null);
+  renderDialogTagChips();
+  updateTaskDialogMetaUI();
 
   els.taskCreateDialog.showModal();
   positionTaskCreateDialog();
@@ -4484,6 +4623,18 @@ function renderTaskDatePicker(field) {
 function bindTaskCreateDialog() {
   if (!els.taskCreateDialog) return;
 
+  // Meta chip bindings (kind, category, priority - single select/toggle)
+  [els.taskKindChips, els.taskCategoryChips, els.taskPriorityChips].forEach((container) => {
+    container?.querySelectorAll("[data-meta]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const key = btn.dataset.meta;
+        const val = btn.dataset.val;
+        state.taskDialogMeta[key] = state.taskDialogMeta[key] === val ? null : val;
+        updateTaskDialogMetaUI();
+      });
+    });
+  });
+
   els.taskStartDateBtn?.addEventListener("click", () => {
     const field = "start";
     if (state.taskDialogActiveField === field) {
@@ -4523,9 +4674,12 @@ function bindTaskCreateDialog() {
     const node = await getOrCreateDailyNote(dueDate);
     const content = await readFileNode(node);
     const prefix = content.endsWith("\n") ? "" : "\n";
+    const { kind, category, priority, tags } = state.taskDialogMeta;
+    const hashParts = [kind, category, priority, ...tags].filter(Boolean).map((v) => `#${v}`);
+    const metaStr = hashParts.length ? ` ${hashParts.join(" ")}` : "";
     const taskLine = startDate
-      ? `${prefix}- [ ] ${title} 🛫 ${startDate} 📅 ${dueDate}`
-      : `${prefix}- [ ] ${title} 📅 ${dueDate}`;
+      ? `${prefix}- [ ] ${title}${metaStr} 🛫 ${startDate} 📅 ${dueDate}`
+      : `${prefix}- [ ] ${title}${metaStr} 📅 ${dueDate}`;
     const nextContent = content + taskLine + "\n";
     await writeNodeContent(node, nextContent, { backup: false, previousContent: content });
     if (typeof node.content === "string") node.content = nextContent;
@@ -4631,8 +4785,7 @@ function groupTasksByDate(tasks) {
 
 function calendarPreviewTasks() {
   const drag = state.calendarTaskDrag;
-  if (!drag?.active || !drag.previewDate) return state.tasks;
-  return state.tasks.map((task) => {
+  const base = (!drag?.active || !drag.previewDate) ? state.tasks : state.tasks.map((task) => {
     if (task.path !== drag.path || task.line !== drag.line) return task;
     const dates = { ...(task.dates || {}) };
     const moveMode = calendarTaskMoveMode(task, drag.sourceDate);
@@ -4667,6 +4820,7 @@ function calendarPreviewTasks() {
       type: dates.due || dates.end ? "due" : dates.scheduled ? "scheduled" : "start",
     };
   });
+  return applyCalendarTaskFilters(base);
 }
 
 function taskCalendarDates(task) {

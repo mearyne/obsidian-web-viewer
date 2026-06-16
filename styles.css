@@ -1691,6 +1691,64 @@ button:disabled {
   background: var(--accent-strong, var(--accent));
 }
 
+.task-create-meta {
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding-top: 12px;
+}
+
+.task-meta-row {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 42px 1fr;
+}
+
+.task-meta-label {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.task-meta-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.task-meta-chip {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 3px 10px;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+}
+
+.task-meta-chip:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.task-meta-chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.task-pri-chip-high { border-color: rgba(231, 76, 60, 0.4); color: #e74c3c; }
+.task-pri-chip-high.active { background: #e74c3c; border-color: #e74c3c; color: #fff; }
+.task-pri-chip-mid { border-color: rgba(230, 162, 15, 0.4); color: #c98c0a; }
+.task-pri-chip-mid.active { background: #e6a20f; border-color: #e6a20f; color: #fff; }
+.task-pri-chip-low { border-color: rgba(52, 152, 219, 0.4); color: #3498db; }
+.task-pri-chip-low.active { background: #3498db; border-color: #3498db; color: #fff; }
+
 .new-note-dialog {
   background: var(--surface);
   border: 1px solid var(--line);
@@ -2125,6 +2183,77 @@ button:disabled {
   color: white;
 }
 
+.calendar-filter-bar {
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 0 8px;
+}
+
+.filter-row {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+  min-height: 26px;
+}
+
+.filter-label {
+  color: var(--muted);
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  width: 38px;
+}
+
+.filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.filter-chip {
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  padding: 3px 9px;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+}
+
+.filter-chip:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.filter-chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.filter-reset-btn {
+  align-self: flex-start;
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 11px;
+  margin-top: 2px;
+  padding: 3px 10px;
+}
+
+.filter-reset-btn:hover {
+  border-color: #e74c3c;
+  color: #e74c3c;
+}
+
 .calendar-mobile-mode {
   display: none;
 }
@@ -2366,6 +2495,24 @@ button:disabled {
   outline: 2px solid var(--accent-strong);
   outline-offset: -2px;
 }
+
+.calendar-task.cat-회사 { background: color-mix(in srgb, #4a9eff 7%, var(--surface-2)); }
+.calendar-task.cat-개인 { background: color-mix(in srgb, #4ac97e 7%, var(--surface-2)); }
+.calendar-task.cat-기타 { background: color-mix(in srgb, #aaa 5%, var(--surface-2)); }
+
+.task-pri-dot {
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+  height: 6px;
+  margin-right: 3px;
+  vertical-align: middle;
+  width: 6px;
+}
+
+.task-pri-dot.pri-dot-상 { background: #e74c3c; }
+.task-pri-dot.pri-dot-중 { background: #e6a20f; }
+.task-pri-dot.pri-dot-하 { background: #3498db; }
 
 .calendar-cell.task-drop-target,
 .calendar-agenda-day.task-drop-target {

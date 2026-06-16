@@ -212,6 +212,10 @@
             <span>Daily 노트 위치</span>
             <input id="dailyNotePathInput" type="text" placeholder="1. Daily" />
           </label>
+          <label class="option-field">
+            <span>Task 태그 목록</span>
+            <input id="taskTagsInput" type="text" placeholder="게임, 가족, 공부" />
+          </label>
           <p class="option-help">Task 캘린더에 포함할 Markdown 폴더 경로를 줄바꿈 또는 쉼표로 지정합니다. 비워두면 전체 vault의 task를 표시합니다.</p>
         </div>
       </details>
@@ -250,6 +254,35 @@
         <div class="task-create-field">
           <label>제목</label>
           <input id="taskTitleInput" type="text" placeholder="할 일을 입력하세요" autocomplete="off" />
+        </div>
+        <div class="task-create-meta">
+          <div class="task-meta-row">
+            <span class="task-meta-label">종류</span>
+            <div class="task-meta-chips" id="taskKindChips">
+              <button type="button" class="task-meta-chip" data-meta="kind" data-val="일정">🗓 일정</button>
+              <button type="button" class="task-meta-chip" data-meta="kind" data-val="할일">✓ 할일</button>
+            </div>
+          </div>
+          <div class="task-meta-row">
+            <span class="task-meta-label">분류</span>
+            <div class="task-meta-chips" id="taskCategoryChips">
+              <button type="button" class="task-meta-chip" data-meta="category" data-val="회사">회사</button>
+              <button type="button" class="task-meta-chip" data-meta="category" data-val="개인">개인</button>
+              <button type="button" class="task-meta-chip" data-meta="category" data-val="기타">기타</button>
+            </div>
+          </div>
+          <div class="task-meta-row">
+            <span class="task-meta-label">중요도</span>
+            <div class="task-meta-chips" id="taskPriorityChips">
+              <button type="button" class="task-meta-chip task-pri-chip-high" data-meta="priority" data-val="상">상</button>
+              <button type="button" class="task-meta-chip task-pri-chip-mid" data-meta="priority" data-val="중">중</button>
+              <button type="button" class="task-meta-chip task-pri-chip-low" data-meta="priority" data-val="하">하</button>
+            </div>
+          </div>
+          <div class="task-meta-row">
+            <span class="task-meta-label">태그</span>
+            <div class="task-meta-chips" id="taskTagChips"></div>
+          </div>
         </div>
         <div class="task-create-dates">
           <div class="task-create-field">
