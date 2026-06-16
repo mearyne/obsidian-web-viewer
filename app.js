@@ -56,6 +56,7 @@ const state = {
   taskDialogMeta: { kind: null, category: null, priority: null, tags: [] },
   calendarTaskFilters: { types: [], categories: [], tags: [], priorities: [] },
   calendarTaskTags: ["게임", "가족", "공부"],
+  calendarFilterOpen: false,
   connectionLost: false,
   connectionRetryTimer: null,
   sidebarResize: null,
@@ -3229,16 +3230,26 @@ function renderCalendarFilterBar() {
   const allTags = state.calendarTaskTags || [];
   const chip = (val, arr, filterType, label) =>
     `<button class="filter-chip${arr.includes(val) ? " active" : ""}" type="button" data-filter-type="${filterType}" data-filter-val="${escapeAttribute(val)}">${label}</button>`;
-  const rows = [
-    ["종류", [["일정", "🗓 일정"], ["할일", "✓ 할일"]].map(([v, l]) => chip(v, types, "types", l)).join("")],
-    ["분류", ["회사", "개인", "기타"].map((v) => chip(v, categories, "categories", v)).join("")],
-    ["중요도", [["상", "🔴 상"], ["중", "🟡 중"], ["하", "🔵 하"]].map(([v, l]) => chip(v, priorities, "priorities", l)).join("")],
-    ...(allTags.length ? [["태그", allTags.map((v) => chip(v, tags, "tags", `#${v}`)).join("")]] : []),
+  const groups = [
+    { label: "종류", chips: [["일정", "🗓 일정"], ["할일", "✓ 할일"]].map(([v, l]) => chip(v, types, "types", l)).join("") },
+    { label: "분류", chips: ["회사", "개인", "기타"].map((v) => chip(v, categories, "categories", v)).join("") },
+    { label: "중요도", chips: [["상", "🔴 상"], ["중", "🟡 중"], ["하", "🔵 하"]].map(([v, l]) => chip(v, priorities, "priorities", l)).join("") },
+    ...(allTags.length ? [{ label: "태그", chips: allTags.map((v) => chip(v, tags, "tags", `#${v}`)).join("") }] : []),
   ];
-  const hasActive = types.length || categories.length || tags.length || priorities.length;
-  return `<div class="calendar-filter-bar">
-    ${rows.map(([label, chips]) => `<div class="filter-row"><span class="filter-label">${label}</span><div class="filter-chips">${chips}</div></div>`).join("")}
-    ${hasActive ? '<button class="filter-reset-btn" type="button" data-filter-reset>필터 초기화</button>' : ""}
+  const activeCount = types.length + categories.length + tags.length + priorities.length;
+  const hasActive = activeCount > 0;
+  const isOpen = state.calendarFilterOpen;
+  const groupsHtml = groups.map((g, i) =>
+    `${i > 0 ? '<span class="filter-group-sep" aria-hidden="true"></span>' : ""}<div class="filter-group"><span class="filter-label">${g.label}</span><div class="filter-chips">${g.chips}</div></div>`
+  ).join("");
+  return `<div class="calendar-filter-bar${isOpen ? " open" : ""}">
+    <button class="filter-bar-toggle" type="button" data-filter-toggle>
+      <span>필터</span>${hasActive ? `<span class="filter-active-badge">${activeCount}</span>` : ""}<span class="filter-toggle-arrow">${isOpen ? "▲" : "▼"}</span>
+    </button>
+    <div class="filter-bar-body">
+      ${groupsHtml}
+      ${hasActive ? '<button class="filter-reset-btn" type="button" data-filter-reset>초기화</button>' : ""}
+    </div>
   </div>`;
 }
 
@@ -3713,6 +3724,14 @@ function bindCalendarEvents() {
     state.calendarTaskFilters = { types: [], categories: [], tags: [], priorities: [] };
     saveCalendarTaskFilters();
     renderCalendar();
+  });
+
+  els.calendarView.querySelector("[data-filter-toggle]")?.addEventListener("click", () => {
+    state.calendarFilterOpen = !state.calendarFilterOpen;
+    const bar = els.calendarView.querySelector(".calendar-filter-bar");
+    const arrow = els.calendarView.querySelector(".filter-toggle-arrow");
+    if (bar) bar.classList.toggle("open", state.calendarFilterOpen);
+    if (arrow) arrow.textContent = state.calendarFilterOpen ? "▲" : "▼";
   });
 
   els.calendarView.querySelectorAll("[data-calendar-more]").forEach((button) => {

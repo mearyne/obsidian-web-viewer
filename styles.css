@@ -2183,19 +2183,34 @@ button:disabled {
   color: white;
 }
 
+/* ── Filter bar (PC: single horizontal row) ── */
 .calendar-filter-bar {
   border-bottom: 1px solid var(--line);
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 6px 0 8px;
+  padding: 5px 0 7px;
 }
 
-.filter-row {
+.filter-bar-toggle {
+  display: none;
+}
+
+.filter-bar-body {
   align-items: center;
   display: flex;
-  gap: 6px;
-  min-height: 26px;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+
+.filter-group {
+  align-items: center;
+  display: flex;
+  gap: 5px;
+}
+
+.filter-group-sep {
+  background: var(--line);
+  flex-shrink: 0;
+  height: 14px;
+  width: 1px;
 }
 
 .filter-label {
@@ -2205,7 +2220,6 @@ button:disabled {
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  width: 38px;
 }
 
 .filter-chips {
@@ -2238,20 +2252,85 @@ button:disabled {
 }
 
 .filter-reset-btn {
-  align-self: flex-start;
   background: none;
   border: 1px solid var(--line);
   border-radius: 6px;
   color: var(--muted);
   cursor: pointer;
   font-size: 11px;
-  margin-top: 2px;
   padding: 3px 10px;
 }
 
 .filter-reset-btn:hover {
   border-color: #e74c3c;
   color: #e74c3c;
+}
+
+/* ── Mobile filter bar ── */
+@media (max-width: 768px) {
+  .calendar-filter-bar {
+    padding: 0;
+  }
+
+  .filter-bar-toggle {
+    align-items: center;
+    background: none;
+    border: none;
+    border-bottom: 1px solid var(--line);
+    color: var(--text);
+    cursor: pointer;
+    display: flex;
+    font-size: 13px;
+    gap: 6px;
+    padding: 7px 2px;
+    width: 100%;
+  }
+
+  .filter-active-badge {
+    background: var(--accent);
+    border-radius: 999px;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+    padding: 2px 6px;
+  }
+
+  .filter-toggle-arrow {
+    color: var(--muted);
+    font-size: 10px;
+    margin-left: auto;
+  }
+
+  .filter-bar-body {
+    display: none;
+    flex-direction: column;
+    gap: 0;
+    padding: 4px 0 8px;
+  }
+
+  .calendar-filter-bar.open .filter-bar-body {
+    display: flex;
+  }
+
+  .filter-group {
+    align-items: center;
+    gap: 6px;
+    padding: 5px 0;
+  }
+
+  .filter-group-sep {
+    display: none;
+  }
+
+  .filter-label {
+    width: 40px;
+  }
+
+  .filter-reset-btn {
+    align-self: flex-start;
+    margin-top: 6px;
+  }
 }
 
 .calendar-mobile-mode {
