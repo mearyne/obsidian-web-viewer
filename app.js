@@ -3237,6 +3237,14 @@ function renderCalendar() {
   updateSyncStatus();
   ensureVisibleHolidays();
   requestAnimationFrame(syncCalendarRowLimit);
+  if (state.calendarMode === "week" || state.calendarMode === "day") {
+    requestAnimationFrame(scrollAgendaToToday);
+  }
+}
+
+function scrollAgendaToToday() {
+  const todayEl = els.calendarView.querySelector(".calendar-agenda-day.today");
+  if (todayEl) todayEl.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function renderCalendarRows(items, context, rowLimit, renderer) {
@@ -3560,6 +3568,7 @@ function bindCalendarEvents() {
       if (action === "next") state.calendarDate = shiftCalendarDate(1);
       if (action === "today") state.calendarDate = new Date();
       renderCalendar();
+      if (action === "today") requestAnimationFrame(scrollAgendaToToday);
     });
   });
 
