@@ -2677,6 +2677,7 @@ async function writeServerFile(path, content, { backup = true } = {}) {
 
 function updateEditButtons() {
   const canEdit = canEditNode(state.currentNode) && state.activeView === "note";
+  document.documentElement.classList.toggle("editing-mode", state.editMode);
   els.editButton.disabled = state.activeView !== "note" || !state.vaultName || !state.currentPath;
   els.webEditButton.disabled = !canEdit || state.autoSaveInFlight;
   els.webEditButton.hidden = state.activeView !== "note";
@@ -2685,6 +2686,7 @@ function updateEditButtons() {
   if (els.randomFileButton) els.randomFileButton.hidden = state.editMode;
   if (els.calendarButton) els.calendarButton.hidden = state.editMode;
   els.markdownToggleButton.disabled = state.editMode;
+  els.markdownToggleButton.hidden = state.activeView !== "note";
   if (els.saveEditButton) els.saveEditButton.hidden = true;
   if (els.editorImageButton) els.editorImageButton.hidden = !(state.editMode && state.serverVaultWritable);
 }

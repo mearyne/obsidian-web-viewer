@@ -739,6 +739,12 @@ button:disabled {
   width: auto;
 }
 
+.editing-mode #newNoteButton,
+.editing-mode #randomFileButton,
+.editing-mode #calendarButton {
+  display: none !important;
+}
+
 #collapseHeadingsButton,
 #collapseHeadingLevelButton,
 #expandHeadingLevelButton {
