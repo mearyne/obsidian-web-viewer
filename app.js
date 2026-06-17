@@ -1,4 +1,3 @@
-const CALENDAR_REFRESH_INTERVAL = 10 * 1000;
 const TASKS_DIRTY_KEY = "obsidian-web-viewer-tasks-dirty";
 function setTasksDirty() { try { localStorage.setItem(TASKS_DIRTY_KEY, "1"); } catch {} }
 function clearTasksDirty() { try { localStorage.removeItem(TASKS_DIRTY_KEY); } catch {} }
@@ -68,7 +67,6 @@ const state = {
   calendarFilterOpen: false,
   connectionLost: false,
   connectionRetryTimer: null,
-  calendarPollTimer: null,
   sidebarResize: null,
   sidebarPinned: false,
   activeTabId: "main",
@@ -937,7 +935,6 @@ function hydrateServerVault(vaultName, files, writable = false) {
   if (firstLoad) {
     state.calendarDate = new Date();
     showInitialCalendarView();
-    startCalendarPoll();
     connectSSE();
   }
   loadCalendarCache().finally(scheduleCalendarRefresh);
@@ -973,7 +970,6 @@ function resetVault() {
     window.clearTimeout(state.calendarRefreshTimer);
     state.calendarRefreshTimer = null;
   }
-  stopCalendarPoll();
   disconnectSSE();
   state.activeView = "note";
   clearObjectUrls();
@@ -1816,21 +1812,6 @@ async function checkServerConnection() {
   }
 }
 
-function startCalendarPoll() {
-  stopCalendarPoll();
-  state.calendarPollTimer = window.setInterval(() => {
-    if (!state.vaultLoaded) return;
-    loadCalendarCache().finally(scheduleCalendarRefresh);
-  }, CALENDAR_REFRESH_INTERVAL);
-}
-
-function stopCalendarPoll() {
-  if (state.calendarPollTimer) {
-    window.clearInterval(state.calendarPollTimer);
-    state.calendarPollTimer = null;
-  }
-}
-
 let _sseBuildId = null;
 
 function connectSSE() {
@@ -1853,13 +1834,18 @@ function connectSSE() {
     }
     if (state.currentPath === path && !state.editMode) {
       const freshNode = state.files.get(path) || state.currentNode;
-      if (!freshNode) return;
-      try {
-        const content = await readFileNodeUncached(freshNode);
-        if (content === state.currentContent) return;
-        state.currentContent = content;
-        renderCurrentDocument();
-      } catch {}
+      if (freshNode) {
+        try {
+          const content = await readFileNodeUncached(freshNode);
+          if (content !== state.currentContent) {
+            state.currentContent = content;
+            renderCurrentDocument();
+          }
+        } catch {}
+      }
+    }
+    if (path.toLowerCase().endsWith(".md")) {
+      scheduleCalendarRefresh();
     }
   });
 
@@ -2836,12 +2822,6 @@ async function openNextCalendarKind() {
   }
 }
 
-async function refreshCalendarIfVisible() {
-  if (state.activeView !== "calendar") return;
-  if (state.calendarRefreshing) return;
-  scheduleCalendarRefresh();
-}
-
 function showInitialCalendarView() {
   state.calendarMode = "month";
   state.calendarDate = new Date();
@@ -2855,17 +2835,6 @@ function scheduleCalendarRefresh(delay = 0) {
     state.calendarRefreshTimer = null;
     refreshCalendarTasks({ showLoading: false });
   }, delay);
-}
-
-function scheduleCalendarRefreshIfStale(delay = 0) {
-  if (state.activeView !== "calendar" || state.calendarKind !== "tasks") return;
-  if (isTasksDirty()) {
-    clearTasksDirty();
-    scheduleCalendarRefresh(delay);
-    return;
-  }
-  state.calendarCacheState = "fresh";
-  renderCalendar();
 }
 
 async function refreshCalendarTasks({ showLoading }) {
