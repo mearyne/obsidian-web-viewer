@@ -160,6 +160,7 @@ const els = {
   taskEditPriorityChips: document.querySelector("#taskEditPriorityChips"),
   taskEditTagChips: document.querySelector("#taskEditTagChips"),
   taskEditSubItems: document.querySelector("#taskEditSubItems"),
+  taskEditSubItemsInput: document.querySelector("#taskEditSubItemsInput"),
   newNoteButton: document.querySelector("#newNoteButton"),
   newNoteDialog: document.querySelector("#newNoteDialog"),
   newNoteTitleInput: document.querySelector("#newNoteTitleInput"),
@@ -5572,6 +5573,8 @@ function bindTaskEditDialog() {
     handleTaskTitleEnter(e, els.taskEditConfirmBtn);
   });
 
+  els.taskEditSubItemsInput?.addEventListener("keydown", handleTaskSubItemsEnter);
+
   els.taskEditConfirmBtn?.addEventListener("click", async () => {
     const title = els.taskEditTitleInput?.value.trim() || "";
     const dueDate = els.taskEditDueDateBtn?.dataset.date || "";
@@ -5582,8 +5585,9 @@ function bindTaskEditDialog() {
     if (!dueDate) { els.taskEditDueDateBtn?.focus(); return; }
     const task = state.taskEditTask;
     if (!task) return;
+    const subItemsText = els.taskEditSubItemsInput?.value || "";
     els.taskEditDialog.close("confirm");
-    await saveTaskEdit(task, title, state.taskEditMeta, dueDate, startDate, checked, dueTime, startTime);
+    await saveTaskEdit(task, title, state.taskEditMeta, dueDate, startDate, checked, dueTime, startTime, subItemsText);
   });
 
   els.taskEditDialog.addEventListener("keydown", (e) => {
@@ -5598,6 +5602,17 @@ function handleTaskTitleEnter(event, confirmButton) {
   event.preventDefault();
   event.stopPropagation();
   confirmButton?.click();
+}
+
+function handleTaskSubItemsEnter(event) {
+  if (event.key !== "Enter" && event.key !== "NumpadEnter") return;
+  if (event.isComposing || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return;
+  event.preventDefault();
+  const textarea = event.currentTarget;
+  const { selectionStart, selectionEnd, value } = textarea;
+  textarea.value = `${value.slice(0, selectionStart)}\n- ${value.slice(selectionEnd)}`;
+  const next = selectionStart + 3;
+  textarea.setSelectionRange(next, next);
 }
 
 function updateTaskEditMetaUI() {
@@ -5720,34 +5735,49 @@ async function showTaskEditDialog(task) {
 }
 
 function renderTaskEditSubItems(subItems) {
-  if (!els.taskEditSubItems) return;
-  if (!subItems || !subItems.length) {
-    els.taskEditSubItems.hidden = true;
-    els.taskEditSubItems.innerHTML = "";
-    return;
-  }
-  els.taskEditSubItems.hidden = false;
-  els.taskEditSubItems.innerHTML = `
-    <div class="task-edit-sub-label">하위 불릿</div>
-    <div class="task-sub-items-inline">${renderSubItemsHtml(subItems)}</div>
-  `;
+  if (!els.taskEditSubItemsInput) return;
+  els.taskEditSubItemsInput.value = taskSubItemsToEditableText(subItems);
 }
 
-async function saveTaskEdit(task, title, meta, dueDate, startDate, checked, dueTime = "", startTime = "") {
+function taskSubItemsToEditableText(subItems) {
+  if (!subItems || !subItems.length) return "";
+  return subItems.map((item) => (/^[-*+]\s+/.test(item) ? item : `- ${item}`)).join("\n");
+}
+
+function normalizeTaskSubItemsInput(value) {
+  return (value || "")
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => (/^[-*+]\s+/.test(line) ? line : `- ${line.replace(/^[-*+]\s*/, "")}`));
+}
+
+async function saveTaskEdit(task, title, meta, dueDate, startDate, checked, dueTime = "", startTime = "", subItemsText = "") {
   try {
     const node = state.files.get(task.path);
     if (!node) { alert("파일을 찾을 수 없습니다."); return; }
     const content = await readFileNode(node);
-    const lines = content.split("\n");
+    const lines = content.replace(/\r\n/g, "\n").split("\n");
     const idx = task.line - 1;
     if (idx < 0 || idx >= lines.length) { alert("태스크 줄을 찾을 수 없습니다."); return; }
     const indentStr = (lines[idx].match(/^(\s*)/)?.[1]) || "";
+    const taskIndentLen = normalizeLineIndent(lines[idx]).length;
     const { kind, category, priority, tags } = meta;
     const hashParts = [kind, category, priority, ...tags].filter(Boolean).map((v) => `#${v}`);
     const metaStr = hashParts.length ? ` ${hashParts.join(" ")}` : "";
     const startPart = startDate ? ` 🛫 ${startDate}${startTime ? " " + startTime : ""}` : "";
     const duePart = ` 📅 ${dueDate}${dueTime ? " " + dueTime : ""}`;
     lines[idx] = `${indentStr}- [${checked ? "x" : " "}] ${title}${metaStr}${startPart}${duePart}`;
+    let childEnd = idx + 1;
+    while (childEnd < lines.length) {
+      if (lines[childEnd].trim() === "") break;
+      if (normalizeLineIndent(lines[childEnd]).length <= taskIndentLen) break;
+      childEnd += 1;
+    }
+    const childIndent = `${indentStr}  `;
+    const subItemLines = normalizeTaskSubItemsInput(subItemsText).map((line) => `${childIndent}${line}`);
+    lines.splice(idx + 1, childEnd - idx - 1, ...subItemLines);
     const newContent = lines.join("\n");
     await writeNodeContent(node, newContent, { backup: false, previousContent: content });
     if (typeof node.content === "string") node.content = newContent;

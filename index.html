@@ -320,62 +320,69 @@
     </dialog>
 
     <dialog id="taskEditDialog" class="task-create-dialog">
-      <div class="task-create-form">
+      <div class="task-create-form task-edit-form">
         <div class="task-edit-header">
           <h3>태스크 수정</h3>
           <label class="task-edit-done-label"><input type="checkbox" id="taskEditChecked" /> 완료</label>
         </div>
-        <div class="task-create-field">
-          <label>제목</label>
-          <input id="taskEditTitleInput" type="text" placeholder="할 일을 입력하세요" autocomplete="off" />
+        <div class="task-edit-body">
+          <div class="task-edit-main">
+            <div class="task-create-field">
+              <label>제목</label>
+              <input id="taskEditTitleInput" type="text" placeholder="할 일을 입력하세요" autocomplete="off" />
+            </div>
+            <div class="task-create-meta">
+              <div class="task-meta-row">
+                <span class="task-meta-label">종류</span>
+                <div class="task-meta-chips" id="taskEditKindChips">
+                  <button type="button" class="task-meta-chip" data-meta="kind" data-val="일정">🗓 일정</button>
+                  <button type="button" class="task-meta-chip" data-meta="kind" data-val="할일">✓ 할일</button>
+                </div>
+              </div>
+              <div class="task-meta-row">
+                <span class="task-meta-label">분류</span>
+                <div class="task-meta-chips" id="taskEditCategoryChips">
+                  <button type="button" class="task-meta-chip" data-meta="category" data-val="회사">회사</button>
+                  <button type="button" class="task-meta-chip" data-meta="category" data-val="개인">개인</button>
+                  <button type="button" class="task-meta-chip" data-meta="category" data-val="기타">기타</button>
+                </div>
+              </div>
+              <div class="task-meta-row">
+                <span class="task-meta-label">중요도</span>
+                <div class="task-meta-chips" id="taskEditPriorityChips">
+                  <button type="button" class="task-meta-chip task-pri-chip-high" data-meta="priority" data-val="상">상</button>
+                  <button type="button" class="task-meta-chip task-pri-chip-mid" data-meta="priority" data-val="중">중</button>
+                  <button type="button" class="task-meta-chip task-pri-chip-low" data-meta="priority" data-val="하">하</button>
+                </div>
+              </div>
+              <div class="task-meta-row">
+                <span class="task-meta-label">태그</span>
+                <div class="task-meta-chips" id="taskEditTagChips"></div>
+              </div>
+            </div>
+            <div class="task-create-dates">
+              <div class="task-create-field">
+                <label>시작일 <span class="task-date-optional">(선택)</span></label>
+                <div class="date-time-row">
+                  <button type="button" id="taskEditStartDateBtn" class="date-picker-btn" data-date="">날짜 없음</button>
+                  <input type="time" id="taskEditStartTimeInput" class="time-input" value="" step="300">
+                </div>
+              </div>
+              <div class="task-create-field">
+                <label>종료일</label>
+                <div class="date-time-row">
+                  <button type="button" id="taskEditDueDateBtn" class="date-picker-btn" data-date="">날짜 선택</button>
+                  <input type="time" id="taskEditDueTimeInput" class="time-input" value="" step="300">
+                </div>
+              </div>
+            </div>
+            <div id="taskEditDatePickerCal" class="task-date-picker-cal" hidden></div>
+          </div>
+          <div id="taskEditSubItems" class="task-edit-sub-items">
+            <label for="taskEditSubItemsInput">하위 불릿</label>
+            <textarea id="taskEditSubItemsInput" rows="10" spellcheck="false" placeholder="- 세부 내용"></textarea>
+          </div>
         </div>
-        <div id="taskEditSubItems" class="task-edit-sub-items" hidden></div>
-        <div class="task-create-meta">
-          <div class="task-meta-row">
-            <span class="task-meta-label">종류</span>
-            <div class="task-meta-chips" id="taskEditKindChips">
-              <button type="button" class="task-meta-chip" data-meta="kind" data-val="일정">🗓 일정</button>
-              <button type="button" class="task-meta-chip" data-meta="kind" data-val="할일">✓ 할일</button>
-            </div>
-          </div>
-          <div class="task-meta-row">
-            <span class="task-meta-label">분류</span>
-            <div class="task-meta-chips" id="taskEditCategoryChips">
-              <button type="button" class="task-meta-chip" data-meta="category" data-val="회사">회사</button>
-              <button type="button" class="task-meta-chip" data-meta="category" data-val="개인">개인</button>
-              <button type="button" class="task-meta-chip" data-meta="category" data-val="기타">기타</button>
-            </div>
-          </div>
-          <div class="task-meta-row">
-            <span class="task-meta-label">중요도</span>
-            <div class="task-meta-chips" id="taskEditPriorityChips">
-              <button type="button" class="task-meta-chip task-pri-chip-high" data-meta="priority" data-val="상">상</button>
-              <button type="button" class="task-meta-chip task-pri-chip-mid" data-meta="priority" data-val="중">중</button>
-              <button type="button" class="task-meta-chip task-pri-chip-low" data-meta="priority" data-val="하">하</button>
-            </div>
-          </div>
-          <div class="task-meta-row">
-            <span class="task-meta-label">태그</span>
-            <div class="task-meta-chips" id="taskEditTagChips"></div>
-          </div>
-        </div>
-        <div class="task-create-dates">
-          <div class="task-create-field">
-            <label>시작일 <span class="task-date-optional">(선택)</span></label>
-            <div class="date-time-row">
-              <button type="button" id="taskEditStartDateBtn" class="date-picker-btn" data-date="">날짜 없음</button>
-              <input type="time" id="taskEditStartTimeInput" class="time-input" value="" step="300">
-            </div>
-          </div>
-          <div class="task-create-field">
-            <label>종료일</label>
-            <div class="date-time-row">
-              <button type="button" id="taskEditDueDateBtn" class="date-picker-btn" data-date="">날짜 선택</button>
-              <input type="time" id="taskEditDueTimeInput" class="time-input" value="" step="300">
-            </div>
-          </div>
-        </div>
-        <div id="taskEditDatePickerCal" class="task-date-picker-cal" hidden></div>
         <div class="dialog-buttons">
           <button type="button" id="taskEditOpenFileBtn" class="task-edit-open-btn">📄 파일 열기</button>
           <button type="button" id="taskEditDeleteBtn" class="task-edit-delete-btn">🗑 삭제</button>
