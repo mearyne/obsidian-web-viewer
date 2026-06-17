@@ -777,7 +777,7 @@ async function loadVaultFromHandle(handle) {
     renderTree();
     state.calendarDate = new Date();
     showInitialCalendarView();
-    loadCalendarCache().finally(scheduleCalendarRefreshIfStale);
+    loadCalendarCache().finally(scheduleCalendarRefresh);
     loadRecentFilesCache().finally(refreshRecentFilesCache);
   } finally {
     hideLoading();
@@ -936,7 +936,7 @@ function hydrateServerVault(vaultName, files, writable = false) {
     state.calendarDate = new Date();
     showInitialCalendarView();
   }
-  loadCalendarCache().finally(scheduleCalendarRefreshIfStale);
+  loadCalendarCache().finally(scheduleCalendarRefresh);
   loadRecentFilesCache().finally(refreshRecentFilesCache);
   window.dispatchEvent(new CustomEvent("vaultReady"));
 }
@@ -1782,9 +1782,7 @@ async function handleVisibilityChange() {
   if (document.visibilityState !== "visible") return;
   if (state.vaultLoaded) {
     await loadCalendarCache();
-    if (state.activeView === "calendar" && state.calendarKind === "tasks") {
-      scheduleCalendarRefreshIfStale();
-    }
+    scheduleCalendarRefresh();
   }
   if (!state.serverVaultWritable) return;
   await checkServerConnection();
@@ -1799,7 +1797,7 @@ async function checkServerConnection() {
       stopConnectionRetry();
       showConnectionBanner("서버에 재연결됐습니다.", "reconnected");
       if (state.vaultLoaded) {
-        loadCalendarCache().finally(scheduleCalendarRefreshIfStale);
+        loadCalendarCache().finally(scheduleCalendarRefresh);
       }
     }
   } catch {
@@ -1958,7 +1956,7 @@ function refreshCalendarForFilterChange() {
   state.calendarRefreshTimer = null;
   state.calendarSyncedAt = 0;
   state.calendarCacheState = "refreshing";
-  loadCalendarCache().finally(() => scheduleCalendarRefreshIfStale(250));
+  loadCalendarCache().finally(() => scheduleCalendarRefresh(250));
 }
 
 function scheduleSettingsSave() {
@@ -2730,7 +2728,7 @@ async function buildCalendarView() {
   state.calendarMode = "month";
   showCalendarView();
   renderCalendar();
-  scheduleCalendarRefreshIfStale();
+  scheduleCalendarRefresh();
 }
 
 async function buildRecentCalendarView(type) {
@@ -2759,7 +2757,7 @@ async function openNextCalendarKind() {
 async function refreshCalendarIfVisible() {
   if (state.activeView !== "calendar") return;
   if (state.calendarRefreshing) return;
-  scheduleCalendarRefreshIfStale();
+  scheduleCalendarRefresh();
 }
 
 function showInitialCalendarView() {
