@@ -59,6 +59,10 @@ const state = {
   taskDialogActiveField: null,
   taskDialogPickerMonth: null,
   taskDialogMeta: { kind: null, category: null, priority: null, tags: [] },
+  taskEditActiveField: null,
+  taskEditPickerMonth: null,
+  taskEditMeta: { kind: null, category: null, priority: null, tags: [] },
+  taskEditTask: null,
   calendarTaskFilters: { types: [], categories: [], tags: [], priorities: [] },
   calendarTaskTags: ["게임", "가족", "공부"],
   calendarFilterOpen: false,
@@ -132,6 +136,19 @@ const els = {
   taskPriorityChips: document.querySelector("#taskPriorityChips"),
   taskTagChips: document.querySelector("#taskTagChips"),
   taskTagsInput: document.querySelector("#taskTagsInput"),
+  taskEditDialog: document.querySelector("#taskEditDialog"),
+  taskEditTitleInput: document.querySelector("#taskEditTitleInput"),
+  taskEditChecked: document.querySelector("#taskEditChecked"),
+  taskEditStartDateBtn: document.querySelector("#taskEditStartDateBtn"),
+  taskEditDueDateBtn: document.querySelector("#taskEditDueDateBtn"),
+  taskEditDatePickerCal: document.querySelector("#taskEditDatePickerCal"),
+  taskEditCancelBtn: document.querySelector("#taskEditCancelBtn"),
+  taskEditConfirmBtn: document.querySelector("#taskEditConfirmBtn"),
+  taskEditOpenFileBtn: document.querySelector("#taskEditOpenFileBtn"),
+  taskEditKindChips: document.querySelector("#taskEditKindChips"),
+  taskEditCategoryChips: document.querySelector("#taskEditCategoryChips"),
+  taskEditPriorityChips: document.querySelector("#taskEditPriorityChips"),
+  taskEditTagChips: document.querySelector("#taskEditTagChips"),
   newNoteButton: document.querySelector("#newNoteButton"),
   newNoteDialog: document.querySelector("#newNoteDialog"),
   newNoteTitleInput: document.querySelector("#newNoteTitleInput"),
@@ -484,6 +501,7 @@ initTheme();
 initOptions();
 loadServerSettings();
 bindTaskCreateDialog();
+bindTaskEditDialog();
 updateMarkdownToggleButton();
 updateTreeSortDirectionButton();
 initSidebarWidth();
@@ -3779,7 +3797,9 @@ function bindCalendarEvents() {
       if (path && Number.isInteger(line)) {
         event.preventDefault();
         event.stopPropagation();
-        await openFile(path);
+        const task = state.tasks.find((t) => t.path === path && t.line === line);
+        if (task) await showTaskEditDialog(task);
+        else await openFile(path);
       } else if (path) {
         await openFile(path);
       }
@@ -4729,6 +4749,194 @@ function bindTaskCreateDialog() {
     if (e.key === "Escape") { e.preventDefault(); els.taskCreateDialog.close("cancel"); }
     if (e.key === "Enter" && e.target === els.taskTitleInput) { e.preventDefault(); els.taskCreateConfirmBtn?.click(); }
   });
+}
+
+function bindTaskEditDialog() {
+  if (!els.taskEditDialog) return;
+
+  [els.taskEditKindChips, els.taskEditCategoryChips, els.taskEditPriorityChips].forEach((container) => {
+    container?.querySelectorAll("[data-meta]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const key = btn.dataset.meta;
+        const val = btn.dataset.val;
+        state.taskEditMeta[key] = state.taskEditMeta[key] === val ? null : val;
+        updateTaskEditMetaUI();
+      });
+    });
+  });
+
+  els.taskEditStartDateBtn?.addEventListener("click", () => {
+    const field = "start";
+    state.taskEditActiveField = state.taskEditActiveField === field ? null : field;
+    renderTaskEditDatePicker(state.taskEditActiveField);
+  });
+
+  els.taskEditDueDateBtn?.addEventListener("click", () => {
+    const field = "due";
+    state.taskEditActiveField = state.taskEditActiveField === field ? null : field;
+    renderTaskEditDatePicker(state.taskEditActiveField);
+  });
+
+  els.taskEditCancelBtn?.addEventListener("click", () => {
+    els.taskEditDialog.close("cancel");
+  });
+
+  els.taskEditOpenFileBtn?.addEventListener("click", async () => {
+    const task = state.taskEditTask;
+    els.taskEditDialog.close("open");
+    if (task?.path) await openFile(task.path);
+  });
+
+  els.taskEditConfirmBtn?.addEventListener("click", async () => {
+    const title = els.taskEditTitleInput?.value.trim() || "";
+    const dueDate = els.taskEditDueDateBtn?.dataset.date || "";
+    const startDate = els.taskEditStartDateBtn?.dataset.date || "";
+    const checked = els.taskEditChecked?.checked || false;
+    if (!dueDate) { els.taskEditDueDateBtn?.focus(); return; }
+    const task = state.taskEditTask;
+    if (!task) return;
+    els.taskEditDialog.close("confirm");
+    await saveTaskEdit(task, title, state.taskEditMeta, dueDate, startDate, checked);
+  });
+
+  els.taskEditDialog.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { e.preventDefault(); els.taskEditDialog.close("cancel"); }
+    if (e.key === "Enter" && e.target === els.taskEditTitleInput) { e.preventDefault(); els.taskEditConfirmBtn?.click(); }
+  });
+}
+
+function updateTaskEditMetaUI() {
+  const { kind, category, priority, tags } = state.taskEditMeta;
+  els.taskEditKindChips?.querySelectorAll("[data-meta='kind']").forEach((b) => b.classList.toggle("active", b.dataset.val === kind));
+  els.taskEditCategoryChips?.querySelectorAll("[data-meta='category']").forEach((b) => b.classList.toggle("active", b.dataset.val === category));
+  els.taskEditPriorityChips?.querySelectorAll("[data-meta='priority']").forEach((b) => b.classList.toggle("active", b.dataset.val === priority));
+  els.taskEditTagChips?.querySelectorAll("[data-meta='tags']").forEach((b) => b.classList.toggle("active", tags.includes(b.dataset.val)));
+}
+
+function renderEditTagChips() {
+  if (!els.taskEditTagChips) return;
+  els.taskEditTagChips.innerHTML = (state.calendarTaskTags || [])
+    .map((tag) => `<button type="button" class="task-meta-chip" data-meta="tags" data-val="${escapeAttribute(tag)}">#${escapeHtml(tag)}</button>`)
+    .join("");
+  els.taskEditTagChips.querySelectorAll("[data-meta='tags']").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const val = btn.dataset.val;
+      const idx = state.taskEditMeta.tags.indexOf(val);
+      if (idx >= 0) state.taskEditMeta.tags.splice(idx, 1);
+      else state.taskEditMeta.tags.push(val);
+      updateTaskEditMetaUI();
+    });
+  });
+}
+
+function setTaskEditDate(field, value) {
+  const btn = field === "start" ? els.taskEditStartDateBtn : els.taskEditDueDateBtn;
+  if (!btn) return;
+  btn.dataset.date = value || "";
+  btn.textContent = value ? formatDateKorean(value) : (field === "start" ? "날짜 없음" : "날짜 선택");
+  btn.classList.toggle("has-date", Boolean(value));
+}
+
+function renderTaskEditDatePicker(field) {
+  if (!els.taskEditDatePickerCal) return;
+  if (!field) {
+    els.taskEditDatePickerCal.hidden = true;
+    els.taskEditDatePickerCal.innerHTML = "";
+    return;
+  }
+  const activeDate = field === "start" ? els.taskEditStartDateBtn?.dataset.date : els.taskEditDueDateBtn?.dataset.date;
+  const base = parseDateKey(activeDate) || new Date();
+  if (!state.taskEditPickerMonth || field !== state.taskEditActiveField) {
+    state.taskEditPickerMonth = new Date(base.getFullYear(), base.getMonth(), 1);
+  }
+  const month = state.taskEditPickerMonth;
+  const year = month.getFullYear();
+  const mon = month.getMonth();
+  const todayKey = formatDate(new Date());
+  const selectedKey = activeDate || "";
+  const firstDay = new Date(year, mon, 1).getDay();
+  const daysInMonth = new Date(year, mon + 1, 0).getDate();
+  const prevBtn = `<button type="button" class="tpicker-nav" data-tpicker-nav="-1">‹</button>`;
+  const nextBtn = `<button type="button" class="tpicker-nav" data-tpicker-nav="1">›</button>`;
+  const header = `<div class="tpicker-header">${prevBtn}<span>${year}년 ${mon + 1}월</span>${nextBtn}</div>`;
+  const dayNames = ["일", "월", "화", "수", "목", "금", "토"].map((d) => `<span class="tpicker-dow">${d}</span>`).join("");
+  let cells = `<span></span>`.repeat(firstDay);
+  for (let d = 1; d <= daysInMonth; d++) {
+    const key = `${year}-${String(mon + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    const cls = ["tpicker-day", key === todayKey ? "today" : "", key === selectedKey ? "selected" : ""].filter(Boolean).join(" ");
+    cells += `<button type="button" class="${cls}" data-tpicker-date="${key}">${d}</button>`;
+  }
+  els.taskEditDatePickerCal.innerHTML = `${header}<div class="tpicker-days">${dayNames}${cells}</div>`;
+  els.taskEditDatePickerCal.hidden = false;
+  els.taskEditDatePickerCal.querySelectorAll("[data-tpicker-nav]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      state.taskEditPickerMonth = new Date(year, mon + Number(btn.dataset.tpickerNav), 1);
+      renderTaskEditDatePicker(state.taskEditActiveField);
+    });
+  });
+  els.taskEditDatePickerCal.querySelectorAll("[data-tpicker-date]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      setTaskEditDate(state.taskEditActiveField, btn.dataset.tpickerDate);
+      state.taskEditActiveField = null;
+      renderTaskEditDatePicker(null);
+    });
+  });
+}
+
+async function showTaskEditDialog(task) {
+  if (!els.taskEditDialog) return;
+  state.taskEditTask = task;
+  state.taskEditMeta = {
+    kind: task.kind || null,
+    category: task.category || null,
+    priority: task.priority || null,
+    tags: [...(task.tags || [])],
+  };
+  state.taskEditActiveField = null;
+  state.taskEditPickerMonth = null;
+  if (els.taskEditTitleInput) els.taskEditTitleInput.value = task.text || "";
+  if (els.taskEditChecked) els.taskEditChecked.checked = task.checked || false;
+  setTaskEditDate("start", task.dates?.start || "");
+  setTaskEditDate("due", task.dates?.due || task.dates?.end || task.date || "");
+  renderEditTagChips();
+  updateTaskEditMetaUI();
+  renderTaskEditDatePicker(null);
+  els.taskEditDialog.showModal();
+  els.taskEditTitleInput?.focus();
+  els.taskEditTitleInput?.select();
+  await new Promise((resolve) => {
+    const onClose = () => { els.taskEditDialog.removeEventListener("close", onClose); resolve(); };
+    els.taskEditDialog.addEventListener("close", onClose);
+  });
+}
+
+async function saveTaskEdit(task, title, meta, dueDate, startDate, checked) {
+  try {
+    const node = state.files.get(task.path);
+    if (!node) { alert("파일을 찾을 수 없습니다."); return; }
+    const content = await readFileNode(node);
+    const lines = content.split("\n");
+    const idx = task.line - 1;
+    if (idx < 0 || idx >= lines.length) { alert("태스크 줄을 찾을 수 없습니다."); return; }
+    const indentStr = (lines[idx].match(/^(\s*)/)?.[1]) || "";
+    const { kind, category, priority, tags } = meta;
+    const hashParts = [kind, category, priority, ...tags].filter(Boolean).map((v) => `#${v}`);
+    const metaStr = hashParts.length ? ` ${hashParts.join(" ")}` : "";
+    const dateStr = startDate ? ` 🛫 ${startDate} 📅 ${dueDate}` : ` 📅 ${dueDate}`;
+    lines[idx] = `${indentStr}- [${checked ? "x" : " "}] ${title}${metaStr}${dateStr}`;
+    const newContent = lines.join("\n");
+    await writeNodeContent(node, newContent, { backup: false, previousContent: content });
+    if (typeof node.content === "string") node.content = newContent;
+    if (state.currentPath === node.path) {
+      state.currentContent = newContent;
+      if (!state.editMode) renderCurrentDocument();
+    }
+    updateTasksForFile(task.path, newContent);
+  } catch {
+    alert("저장에 실패했습니다.");
+  }
 }
 
 async function getOrCreateDailyNote(date) {

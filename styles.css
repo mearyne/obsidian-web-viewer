@@ -1802,6 +1802,26 @@ button:disabled {
   outline: none;
 }
 
+.task-edit-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.task-edit-header h3 { margin: 0; }
+
+.task-edit-done-label {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  font-size: 13px;
+  gap: 5px;
+}
+
+.task-edit-open-btn {
+  margin-right: auto;
+}
+
 .dialog-buttons {
   display: flex;
   gap: 8px;
