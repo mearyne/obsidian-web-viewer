@@ -1721,6 +1721,26 @@ button:disabled {
   outline: none;
 }
 
+.task-edit-sub-items {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.task-edit-sub-label {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+}
+
+.task-edit-sub-items .task-sub-items-inline {
+  padding: 0;
+}
+
 .task-create-dates {
   display: grid;
   gap: 10px;

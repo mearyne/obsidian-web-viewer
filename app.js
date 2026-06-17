@@ -159,6 +159,7 @@ const els = {
   taskEditCategoryChips: document.querySelector("#taskEditCategoryChips"),
   taskEditPriorityChips: document.querySelector("#taskEditPriorityChips"),
   taskEditTagChips: document.querySelector("#taskEditTagChips"),
+  taskEditSubItems: document.querySelector("#taskEditSubItems"),
   newNoteButton: document.querySelector("#newNoteButton"),
   newNoteDialog: document.querySelector("#newNoteDialog"),
   newNoteTitleInput: document.querySelector("#newNoteTitleInput"),
@@ -5694,6 +5695,7 @@ async function showTaskEditDialog(task) {
   if (els.taskEditChecked) els.taskEditChecked.checked = task.checked || false;
   if (els.taskEditStartTimeInput) els.taskEditStartTimeInput.value = task.startTime || "";
   if (els.taskEditDueTimeInput) els.taskEditDueTimeInput.value = task.dueTime || "";
+  renderTaskEditSubItems(task.subItems);
   setTaskEditDate("start", task.dates?.start || "");
   setTaskEditDate("due", task.dates?.due || task.dates?.end || task.date || "");
   renderEditTagChips();
@@ -5715,6 +5717,20 @@ async function showTaskEditDialog(task) {
     };
     els.taskEditDialog.addEventListener("close", onClose);
   });
+}
+
+function renderTaskEditSubItems(subItems) {
+  if (!els.taskEditSubItems) return;
+  if (!subItems || !subItems.length) {
+    els.taskEditSubItems.hidden = true;
+    els.taskEditSubItems.innerHTML = "";
+    return;
+  }
+  els.taskEditSubItems.hidden = false;
+  els.taskEditSubItems.innerHTML = `
+    <div class="task-edit-sub-label">하위 불릿</div>
+    <div class="task-sub-items-inline">${renderSubItemsHtml(subItems)}</div>
+  `;
 }
 
 async function saveTaskEdit(task, title, meta, dueDate, startDate, checked, dueTime = "", startTime = "") {
