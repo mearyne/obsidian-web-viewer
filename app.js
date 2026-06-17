@@ -175,6 +175,8 @@ const els = {
   markdownEditor: document.querySelector("#markdownEditor"),
   editorPreview: document.querySelector("#editorPreview"),
   editorStatus: document.querySelector("#editorStatus"),
+  editorImageButton: document.querySelector("#editorImageButton"),
+  editorImageInput: document.querySelector("#editorImageInput"),
   calendarView: document.querySelector("#calendarView"),
   loadingOverlay: document.querySelector("#loadingOverlay"),
   loadingText: document.querySelector("#loadingText"),
@@ -305,6 +307,13 @@ els.saveEditButton.addEventListener("click", saveCurrentEdit);
 els.markdownEditor.addEventListener("keydown", handleEditorKeydown);
 els.markdownEditor.addEventListener("input", handleEditorInput);
 els.markdownEditor.addEventListener("paste", handleEditorPaste);
+els.editorImageButton?.addEventListener("click", () => els.editorImageInput?.click());
+els.editorImageInput?.addEventListener("change", async (e) => {
+  const file = e.target.files?.[0];
+  if (!file || !file.type.startsWith("image/")) return;
+  e.target.value = "";
+  await uploadImageToEditor(file, file.type);
+});
 els.imagePathInput?.addEventListener("input", handleImagePathInput);
 els.searchExcludeInput?.addEventListener("input", handleSearchExcludeInput);
 els.newNoteButton?.addEventListener("click", openNewNote);
@@ -2278,31 +2287,26 @@ function handleEditorInput() {
   markEditorDirty();
 }
 
-async function handleEditorPaste(event) {
-  if (!state.serverVaultWritable) return;
-  const items = event.clipboardData?.items;
-  if (!items) return;
-  const imageItem = Array.from(items).find((item) => item.type.startsWith("image/"));
-  if (!imageItem) return;
-  event.preventDefault();
-
-  const blob = imageItem.getAsFile();
-  if (!blob) return;
-
+async function uploadImageToEditor(blob, mimeType) {
   const now = new Date();
   const pad = (n) => String(n).padStart(2, "0");
   const dateStr = formatDate(now);
   const timeStr = `${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
   const rand = Math.random().toString(36).slice(2, 7);
-  const ext = imageItem.type === "image/png" ? "png" : "jpg";
+  const ext = mimeType === "image/png" ? "png" : mimeType === "image/gif" ? "gif" : mimeType === "image/webp" ? "webp" : "jpg";
   const filename = `${dateStr} ${timeStr} ${rand}.${ext}`;
   const dir = normalizeVaultPath(state.imageSavePath || els.imagePathInput?.value || "");
   const filePath = dir ? `${dir}/${filename}` : filename;
 
+  const btn = els.editorImageButton;
+  if (btn) btn.classList.add("uploading");
+  const prevStatus = els.editorStatus?.textContent || "";
+  updateEditorStatus("이미지 업로드 중…");
+
   try {
     const res = await fetch(`/api/vault-binary-file?path=${encodeURIComponent(filePath)}`, {
       method: "PUT",
-      headers: { "Content-Type": imageItem.type },
+      headers: { "Content-Type": mimeType },
       body: blob,
     });
     if (!res.ok) throw new Error("upload failed");
@@ -2317,7 +2321,22 @@ async function handleEditorPaste(event) {
     registerUploadedFileInVault(filePath, blob.size);
   } catch {
     alert("이미지 업로드에 실패했습니다.");
+  } finally {
+    if (btn) btn.classList.remove("uploading");
+    updateEditorStatus(prevStatus);
   }
+}
+
+async function handleEditorPaste(event) {
+  if (!state.serverVaultWritable) return;
+  const items = event.clipboardData?.items;
+  if (!items) return;
+  const imageItem = Array.from(items).find((item) => item.type.startsWith("image/"));
+  if (!imageItem) return;
+  event.preventDefault();
+  const blob = imageItem.getAsFile();
+  if (!blob) return;
+  await uploadImageToEditor(blob, imageItem.type);
 }
 
 function registerUploadedFileInVault(filePath, size = 0) {
@@ -2652,6 +2671,7 @@ function updateEditButtons() {
   els.webEditButton.hidden = state.activeView !== "note";
   els.markdownToggleButton.disabled = state.editMode;
   if (els.saveEditButton) els.saveEditButton.hidden = !(state.activeView === "note" && state.editMode);
+  if (els.editorImageButton) els.editorImageButton.hidden = !(state.editMode && state.serverVaultWritable);
 }
 
 function arrangeChromeControls() {
