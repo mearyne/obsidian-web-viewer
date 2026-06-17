@@ -4841,6 +4841,10 @@ function bindTaskCreateDialog() {
     els.taskCreateDialog.close("cancel");
   });
 
+  els.taskTitleInput?.addEventListener("keydown", (e) => {
+    handleTaskTitleEnter(e, els.taskCreateConfirmBtn);
+  });
+
   els.taskCreateConfirmBtn?.addEventListener("click", async () => {
     const title = els.taskTitleInput?.value.trim() || "";
     const dueDate = els.taskDueDateBtn?.dataset.date || "";
@@ -4927,6 +4931,10 @@ function bindTaskEditDialog() {
     if (task?.path) await openFile(task.path);
   });
 
+  els.taskEditTitleInput?.addEventListener("keydown", (e) => {
+    handleTaskTitleEnter(e, els.taskEditConfirmBtn);
+  });
+
   els.taskEditConfirmBtn?.addEventListener("click", async () => {
     const title = els.taskEditTitleInput?.value.trim() || "";
     const dueDate = els.taskEditDueDateBtn?.dataset.date || "";
@@ -4945,6 +4953,14 @@ function bindTaskEditDialog() {
     if (e.key === "Escape") { e.preventDefault(); els.taskEditDialog.close("cancel"); }
     if (e.key === "Enter" && e.target === els.taskEditTitleInput) { e.preventDefault(); els.taskEditConfirmBtn?.click(); }
   });
+}
+
+function handleTaskTitleEnter(event, confirmButton) {
+  if (event.key !== "Enter" && event.key !== "NumpadEnter") return;
+  if (event.isComposing || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return;
+  event.preventDefault();
+  event.stopPropagation();
+  confirmButton?.click();
 }
 
 function updateTaskEditMetaUI() {
