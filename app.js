@@ -98,6 +98,7 @@ const state = {
   fullscreenAttempted: false,
   fullscreenFallback: false,
   fontDeviceKey: "",
+  sseSource: null,
 };
 
 const EXCALIDRAW_PREVIEW_ENABLED = false;
@@ -937,6 +938,7 @@ function hydrateServerVault(vaultName, files, writable = false) {
     state.calendarDate = new Date();
     showInitialCalendarView();
     startCalendarPoll();
+    connectSSE();
   }
   loadCalendarCache().finally(scheduleCalendarRefresh);
   loadRecentFilesCache().finally(refreshRecentFilesCache);
@@ -972,6 +974,7 @@ function resetVault() {
     state.calendarRefreshTimer = null;
   }
   stopCalendarPoll();
+  disconnectSSE();
   state.activeView = "note";
   clearObjectUrls();
 }
@@ -1826,6 +1829,49 @@ function stopCalendarPoll() {
     window.clearInterval(state.calendarPollTimer);
     state.calendarPollTimer = null;
   }
+}
+
+function connectSSE() {
+  if (state.sseSource) { state.sseSource.close(); state.sseSource = null; }
+  const es = new EventSource("/api/events");
+  state.sseSource = es;
+
+  es.addEventListener("file-changed", async (e) => {
+    const { path, updatedAt } = JSON.parse(e.data);
+    const node = state.files.get(path);
+    if (node) {
+      node.content = undefined;
+      node.updatedAt = updatedAt;
+    }
+    if (state.currentPath === path && !state.editMode) {
+      const freshNode = state.files.get(path) || state.currentNode;
+      if (!freshNode) return;
+      try {
+        const content = await readFileNodeUncached(freshNode);
+        if (content === state.currentContent) return;
+        state.currentContent = content;
+        renderCurrentDocument();
+      } catch {}
+    }
+  });
+
+  es.addEventListener("file-deleted", (e) => {
+    const { path } = JSON.parse(e.data);
+    if (state.currentPath === path) {
+      state.currentContent = "(파일이 삭제되었습니다)";
+      renderCurrentDocument();
+    }
+  });
+
+  es.onerror = () => {
+    es.close();
+    state.sseSource = null;
+    if (state.vaultLoaded) window.setTimeout(connectSSE, 5000);
+  };
+}
+
+function disconnectSSE() {
+  if (state.sseSource) { state.sseSource.close(); state.sseSource = null; }
 }
 
 function startConnectionRetry() {

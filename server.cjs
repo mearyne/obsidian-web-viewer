@@ -32,9 +32,32 @@ const types = {
   ".woff2": "font/woff2",
 };
 
+const sseClients = new Set();
+
+function broadcastVaultEvent(event, data) {
+  const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+  for (const res of sseClients) {
+    try { res.write(payload); } catch {}
+  }
+}
+
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://localhost:${port}`);
   const requestPath = decodeURIComponent(url.pathname);
+
+  if (requestPath === "/api/events") {
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+      "Access-Control-Allow-Origin": "*",
+    });
+    res.write(":\n\n");
+    sseClients.add(res);
+    const keepAlive = setInterval(() => { try { res.write(":\n\n"); } catch {} }, 25000);
+    req.on("close", () => { sseClients.delete(res); clearInterval(keepAlive); });
+    return;
+  }
 
   if (requestPath === "/api/health") {
     res.writeHead(200, { "Content-Type": "application/json" });
@@ -300,12 +323,14 @@ function writeVaultFile(requestedPath, body, res) {
     const stat = fs.statSync(filePath);
     createdTimes[safePath] = previousCreatedAt || createdAtFromStat(stat);
     writeCreatedTimes(createdTimes);
-    sendJson(res, 200, {
+    const result = {
       path: safePath,
       size: stat.size,
       updatedAt: stat.mtimeMs,
       createdAt: previousCreatedAt || createdAtFromStat(stat),
-    });
+    };
+    sendJson(res, 200, result);
+    broadcastVaultEvent("file-changed", { path: safePath, updatedAt: stat.mtimeMs });
   } catch (error) {
     sendJson(res, 500, { error: error.message || "Write failed" });
   }
@@ -472,6 +497,7 @@ function deleteVaultFile(requestedPath, res) {
     delete createdTimes[safePath];
     writeCreatedTimes(createdTimes);
     sendJson(res, 200, { ok: true, path: safePath });
+    broadcastVaultEvent("file-deleted", { path: safePath });
   } catch (error) {
     sendJson(res, 500, { error: error.message || "Delete failed" });
   }
