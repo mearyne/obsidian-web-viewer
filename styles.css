@@ -1612,13 +1612,12 @@ button:disabled {
 
 .date-time-row {
   display: flex;
+  flex-direction: column;
   gap: 6px;
-  align-items: center;
 }
 
 .date-time-row .date-picker-btn {
-  flex: 1;
-  min-width: 0;
+  width: 100%;
 }
 
 .time-input {
@@ -1628,8 +1627,8 @@ button:disabled {
   color: var(--text);
   font-size: 13px;
   padding: 6px 8px;
-  width: 108px;
-  flex-shrink: 0;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .time-input:focus {
