@@ -679,6 +679,94 @@ button:disabled {
   cursor: default;
 }
 
+.app-toast-host {
+  bottom: 54px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  left: 50%;
+  max-width: min(520px, calc(100vw - 24px));
+  pointer-events: none;
+  position: fixed;
+  transform: translateX(-50%);
+  width: max-content;
+  z-index: 70;
+}
+
+.app-toast {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.45;
+  max-width: min(520px, calc(100vw - 24px));
+  opacity: 0;
+  padding: 10px 12px;
+  transform: translateY(8px);
+  transition: opacity 160ms ease, transform 160ms ease;
+  white-space: pre-wrap;
+}
+
+.app-toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.app-confirm-backdrop {
+  align-items: center;
+  background: rgba(20, 24, 28, 0.42);
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  left: 0;
+  padding: 18px;
+  position: fixed;
+  right: 0;
+  top: 0;
+  z-index: 75;
+}
+
+.app-confirm-backdrop[hidden] {
+  display: none;
+}
+
+.app-confirm-dialog {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.28);
+  color: var(--text);
+  max-width: 420px;
+  padding: 18px;
+  width: min(420px, 100%);
+}
+
+.app-confirm-dialog h2 {
+  font-size: 16px;
+  margin: 0 0 10px;
+}
+
+.app-confirm-message {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.app-confirm-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 18px;
+}
+
+.app-confirm-actions button {
+  min-width: 72px;
+}
+
 .status-history {
   display: flex;
   gap: 8px;
@@ -2652,6 +2740,121 @@ button:disabled {
   z-index: 1;
 }
 
+.matrix-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100%;
+  min-height: 0;
+}
+
+.matrix-toolbar {
+  flex: 0 0 auto;
+}
+
+.matrix-grid {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(160px, 1fr));
+  min-height: 0;
+}
+
+.matrix-quadrant {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.matrix-quadrant.do {
+  border-left: 4px solid #d94848;
+}
+
+.matrix-quadrant.plan {
+  border-left: 4px solid #2f80ed;
+}
+
+.matrix-quadrant.delegate {
+  border-left: 4px solid #d6a11d;
+}
+
+.matrix-quadrant.drop {
+  border-left: 4px solid #7a8794;
+}
+
+.matrix-quadrant.drag-over {
+  box-shadow: inset 0 0 0 2px var(--accent-strong);
+}
+
+.matrix-quadrant header {
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  font-size: 13px;
+  justify-content: space-between;
+  padding: 8px 10px;
+}
+
+.matrix-quadrant header span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.matrix-task-list {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px;
+}
+
+.matrix-task {
+  align-items: flex-start;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--text);
+  cursor: grab;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-height: 42px;
+  padding: 7px 8px;
+  text-align: left;
+  width: 100%;
+}
+
+.matrix-task:active {
+  cursor: grabbing;
+}
+
+.matrix-task.dragging {
+  opacity: 0.55;
+}
+
+.matrix-task-title {
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.matrix-task-meta {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.matrix-empty {
+  color: var(--muted);
+  font-size: 12px;
+  padding: 6px 2px;
+}
+
 .calendar-task {
   align-items: center;
   background: var(--surface-2);
@@ -3206,6 +3409,30 @@ button.calendar-more {
 }
 
 @media (max-width: 520px) {
+  .matrix-grid {
+    gap: 6px;
+    grid-template-rows: repeat(2, minmax(180px, 1fr));
+  }
+
+  .matrix-quadrant header {
+    font-size: 12px;
+    padding: 6px 7px;
+  }
+
+  .matrix-task-list {
+    gap: 5px;
+    padding: 6px;
+  }
+
+  .matrix-task {
+    min-height: 38px;
+    padding: 6px;
+  }
+
+  .matrix-task-title {
+    font-size: 12px;
+  }
+
   .markdown-body .heading-level {
     gap: 5px;
     grid-template-columns: 20px minmax(0, 1fr);
