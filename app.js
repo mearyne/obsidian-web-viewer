@@ -3829,8 +3829,7 @@ async function deleteCalendarTaskLine(filePath, lineNumber) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ content: updated }),
     });
-    await loadSampleVault();
-    renderCalendar();
+    updateTasksForFile(filePath, updated);
   } catch {
     alert("삭제에 실패했습니다.");
   }
