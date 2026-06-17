@@ -1831,10 +1831,18 @@ function stopCalendarPoll() {
   }
 }
 
+let _sseBuildId = null;
+
 function connectSSE() {
   if (state.sseSource) { state.sseSource.close(); state.sseSource = null; }
   const es = new EventSource("/api/events");
   state.sseSource = es;
+
+  es.addEventListener("build-id", (e) => {
+    const { id } = JSON.parse(e.data);
+    if (_sseBuildId === null) { _sseBuildId = id; return; }
+    if (_sseBuildId !== id) showUpdateBar();
+  });
 
   es.addEventListener("file-changed", async (e) => {
     const { path, updatedAt } = JSON.parse(e.data);
@@ -1872,6 +1880,15 @@ function connectSSE() {
 
 function disconnectSSE() {
   if (state.sseSource) { state.sseSource.close(); state.sseSource = null; }
+}
+
+function showUpdateBar() {
+  if (document.getElementById("update-bar")) return;
+  const bar = document.createElement("div");
+  bar.id = "update-bar";
+  bar.innerHTML = `<span>새 버전이 있습니다</span><button onclick="location.reload()">새로고침</button><button id="update-bar-close" aria-label="닫기">✕</button>`;
+  document.body.appendChild(bar);
+  document.getElementById("update-bar-close").addEventListener("click", () => bar.remove());
 }
 
 function startConnectionRetry() {

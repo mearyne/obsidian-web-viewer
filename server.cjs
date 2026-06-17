@@ -33,6 +33,7 @@ const types = {
 };
 
 const sseClients = new Set();
+const BUILD_ID = Date.now().toString(36);
 
 function broadcastVaultEvent(event, data) {
   const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
@@ -52,7 +53,7 @@ const server = http.createServer((req, res) => {
       "Connection": "keep-alive",
       "Access-Control-Allow-Origin": "*",
     });
-    res.write(":\n\n");
+    res.write(`event: build-id\ndata: ${JSON.stringify({ id: BUILD_ID })}\n\n`);
     sseClients.add(res);
     const keepAlive = setInterval(() => { try { res.write(":\n\n"); } catch {} }, 25000);
     req.on("close", () => { sseClients.delete(res); clearInterval(keepAlive); });

@@ -3170,3 +3170,53 @@ button.calendar-more {
     margin-left: 0;
   }
 }
+
+#update-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: var(--accent, #4a9eff);
+  color: #fff;
+  font-size: 14px;
+  animation: slideUpBar 0.25s ease;
+}
+
+@keyframes slideUpBar {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+#update-bar span {
+  flex: 1;
+}
+
+#update-bar button {
+  padding: 4px 12px;
+  border: 1.5px solid rgba(255,255,255,0.7);
+  border-radius: 6px;
+  background: transparent;
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+#update-bar button:hover {
+  background: rgba(255,255,255,0.2);
+}
+
+#update-bar-close {
+  padding: 4px 8px !important;
+  border: none !important;
+  opacity: 0.7;
+}
+
+#update-bar-close:hover {
+  opacity: 1;
+  background: transparent !important;
+}
