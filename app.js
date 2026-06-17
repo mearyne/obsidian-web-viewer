@@ -2856,7 +2856,7 @@ async function refreshCalendarTasks({ showLoading }) {
   const refreshKind = state.calendarKind;
   state.calendarRefreshing = true;
   state.calendarCacheState = state.tasks.length ? "stale" : "refreshing";
-  if (state.activeView === "calendar") renderCalendar();
+  updateSyncStatus();
 
   try {
     const pathPrefixes = parsePathList(els.calendarPathInput.value);
