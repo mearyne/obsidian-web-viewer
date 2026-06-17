@@ -1499,6 +1499,7 @@ async function deleteCurrentFileNode(node) {
     saveCalendarCache();
     refreshDirectoryMetadataFrom(path);
     renderTree();
+    refreshRecentFilesCache();
     els.notePath.textContent = "문서를 선택하세요";
     els.noteTitle.textContent = "Obsidian Markdown Viewer";
     els.markdownView.classList.add("empty-state");
@@ -1777,6 +1778,7 @@ async function createAndOpenNote(title, dirPathOverride) {
     if (dir) dir.children.set(node.name, node);
     refreshDirectoryMetadataFrom(path);
     renderTree();
+    refreshRecentFilesCache();
     await openFile(path);
     await enterEditMode();
     return;
@@ -1793,6 +1795,7 @@ async function createAndOpenNote(title, dirPathOverride) {
   if (dir) dir.children.set(node.name, node);
   refreshDirectoryMetadataFrom(path);
   renderTree();
+  refreshRecentFilesCache();
   await openFile(path);
   await enterEditMode();
 }
@@ -4031,6 +4034,7 @@ async function deleteVaultFileByPath(filePath) {
     state.calendarTaskFiles.delete(filePath);
     saveCalendarCache();
     refreshDirectoryMetadataFrom(filePath);
+    refreshRecentFilesCache();
     if (state.currentPath === filePath) {
       state.currentPath = "";
       state.currentContent = "";
