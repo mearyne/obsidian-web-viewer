@@ -34,6 +34,9 @@ const types = {
 
 const sseClients = new Set();
 const BUILD_ID = Date.now().toString(36);
+const TEXT_FILE_CACHE_LIMIT = 512;
+const TEXT_FILE_CACHE_MAX_BYTES = 1024 * 1024;
+const textFileCache = new Map();
 
 function broadcastVaultEvent(event, data) {
   const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
@@ -264,10 +267,35 @@ function createdAtFromStat(stat) {
 }
 
 function sendVaultFile(requestedPath, res) {
+  const safePath = normalizeVaultPath(requestedPath || "");
   const filePath = resolveVaultFilePath(requestedPath);
   if (!filePath) {
     res.writeHead(403);
     res.end("Forbidden");
+    return;
+  }
+
+  let stat;
+  try {
+    stat = fs.statSync(filePath);
+  } catch {
+    res.writeHead(404);
+    res.end("Not found");
+    return;
+  }
+
+  const cacheKey = `${safePath}:${stat.mtimeMs}:${stat.size}`;
+  const contentType = types[path.extname(filePath).toLowerCase()] || "application/octet-stream";
+  const cached = textFileCache.get(cacheKey);
+  if (cached) {
+    textFileCache.delete(cacheKey);
+    textFileCache.set(cacheKey, cached);
+    res.writeHead(200, {
+      "Content-Type": contentType,
+      "Cache-Control": "private, max-age=300",
+      "X-OWV-File-Cache": "hit",
+    });
+    res.end(cached);
     return;
   }
 
@@ -278,12 +306,33 @@ function sendVaultFile(requestedPath, res) {
       return;
     }
 
+    if (isTextVaultFile(safePath) && data.length <= TEXT_FILE_CACHE_MAX_BYTES) {
+      rememberTextFileCache(cacheKey, data);
+    }
+
     res.writeHead(200, {
-      "Content-Type": types[path.extname(filePath).toLowerCase()] || "application/octet-stream",
+      "Content-Type": contentType,
       "Cache-Control": "private, max-age=300",
+      "X-OWV-File-Cache": "miss",
     });
     res.end(data);
   });
+}
+
+function rememberTextFileCache(cacheKey, data) {
+  textFileCache.set(cacheKey, data);
+  while (textFileCache.size > TEXT_FILE_CACHE_LIMIT) {
+    const firstKey = textFileCache.keys().next().value;
+    if (!firstKey) break;
+    textFileCache.delete(firstKey);
+  }
+}
+
+function forgetTextFileCache(safePath) {
+  const prefix = `${safePath}:`;
+  for (const key of textFileCache.keys()) {
+    if (key.startsWith(prefix)) textFileCache.delete(key);
+  }
 }
 
 function writeVaultFile(requestedPath, body, res) {
@@ -321,6 +370,7 @@ function writeVaultFile(requestedPath, body, res) {
       fs.copyFileSync(filePath, `${filePath}.bak`);
     }
     fs.writeFileSync(filePath, payload.content, "utf8");
+    forgetTextFileCache(safePath);
     const stat = fs.statSync(filePath);
     createdTimes[safePath] = previousCreatedAt || createdAtFromStat(stat);
     writeCreatedTimes(createdTimes);
@@ -494,6 +544,7 @@ function deleteVaultFile(requestedPath, res) {
 
   try {
     fs.unlinkSync(filePath);
+    forgetTextFileCache(safePath);
     const createdTimes = readCreatedTimes();
     delete createdTimes[safePath];
     writeCreatedTimes(createdTimes);

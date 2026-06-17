@@ -1371,11 +1371,17 @@ async function openFile(path) {
   const node = state.files.get(path);
   if (!node || !isOpenableDocument(node.name)) return;
 
+  const startedAt = performance.now();
+  let readDoneAt = startedAt;
+  let renderDoneAt = startedAt;
+  let loadingShown = false;
   const loadingTimer = window.setTimeout(() => {
+    loadingShown = true;
     showLoading(`문서 여는 중: ${node.name}`);
   }, 450);
   try {
     const content = await readFileNode(node);
+    readDoneAt = performance.now();
     state.currentPath = path;
     state.currentContent = content;
     state.currentNode = node;
@@ -1385,12 +1391,33 @@ async function openFile(path) {
     els.noteTitle.textContent = displayDocumentTitle(node.name);
     updateEditButtons();
     renderCurrentDocument();
+    renderDoneAt = performance.now();
     showNoteView();
     scrollViewerTop();
   } finally {
     window.clearTimeout(loadingTimer);
     hideLoading();
+    logOpenFileTiming(node, {
+      loadingShown,
+      readMs: readDoneAt - startedAt,
+      renderMs: renderDoneAt - readDoneAt,
+      totalMs: performance.now() - startedAt,
+    });
   }
+}
+
+function logOpenFileTiming(node, timing) {
+  const totalMs = Math.round(timing.totalMs);
+  if (!timing.loadingShown && totalMs < 250) return;
+  console.info("[obsidian-web-viewer] openFile", {
+    path: node.path,
+    size: node.size || 0,
+    loadingShown: timing.loadingShown,
+    readMs: Math.round(timing.readMs),
+    renderMs: Math.round(timing.renderMs),
+    totalMs,
+    serverCache: node.lastServerCache || "",
+  });
 }
 
 function activeNavigationHistory() {
@@ -1569,14 +1596,20 @@ async function readFileNode(node) {
 
 async function readFileNodeUncached(node) {
   if (node.serverBacked) {
-    const response = await fetch(`/api/vault-file?path=${encodeURIComponent(node.path)}`, { cache: "no-store" });
+    const response = await fetch(vaultFileReadUrl(node));
     if (!response.ok) throw new Error("파일을 읽지 못했습니다.");
+    node.lastServerCache = response.headers.get("X-OWV-File-Cache") || "";
     const content = await response.text();
     if (isTextVaultFilePath(node.path)) node.content = content;
     return content;
   }
   const file = await node.handle.getFile();
   return file.text();
+}
+
+function vaultFileReadUrl(node) {
+  const version = [node.updatedAt || 0, node.size || 0].join(":");
+  return `/api/vault-file?path=${encodeURIComponent(node.path)}&v=${encodeURIComponent(version)}`;
 }
 
 function initTheme() {
