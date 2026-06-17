@@ -68,6 +68,7 @@ const state = {
   calendarFilterOpen: false,
   connectionLost: false,
   connectionRetryTimer: null,
+  calendarPollTimer: null,
   sidebarResize: null,
   sidebarPinned: false,
   activeTabId: "main",
@@ -935,6 +936,7 @@ function hydrateServerVault(vaultName, files, writable = false) {
   if (firstLoad) {
     state.calendarDate = new Date();
     showInitialCalendarView();
+    startCalendarPoll();
   }
   loadCalendarCache().finally(scheduleCalendarRefresh);
   loadRecentFilesCache().finally(refreshRecentFilesCache);
@@ -969,6 +971,7 @@ function resetVault() {
     window.clearTimeout(state.calendarRefreshTimer);
     state.calendarRefreshTimer = null;
   }
+  stopCalendarPoll();
   state.activeView = "note";
   clearObjectUrls();
 }
@@ -1806,6 +1809,21 @@ async function checkServerConnection() {
       showConnectionBanner("서버 연결이 끊겼습니다. 탭하면 새로고침합니다.");
       startConnectionRetry();
     }
+  }
+}
+
+function startCalendarPoll() {
+  stopCalendarPoll();
+  state.calendarPollTimer = window.setInterval(() => {
+    if (!state.vaultLoaded) return;
+    loadCalendarCache().finally(scheduleCalendarRefresh);
+  }, CALENDAR_REFRESH_INTERVAL);
+}
+
+function stopCalendarPoll() {
+  if (state.calendarPollTimer) {
+    window.clearInterval(state.calendarPollTimer);
+    state.calendarPollTimer = null;
   }
 }
 
