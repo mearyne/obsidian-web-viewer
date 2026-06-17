@@ -1,4 +1,5 @@
 const TASKS_DIRTY_KEY = "obsidian-web-viewer-tasks-dirty";
+const EDITOR_AUTO_SAVE_INTERVAL = 30 * 1000;
 function setTasksDirty() { try { localStorage.setItem(TASKS_DIRTY_KEY, "1"); } catch {} }
 function clearTasksDirty() { try { localStorage.removeItem(TASKS_DIRTY_KEY); } catch {} }
 function isTasksDirty() { try { return localStorage.getItem(TASKS_DIRTY_KEY) === "1"; } catch { return false; } }
@@ -2718,7 +2719,7 @@ function updateEditorStatus(prefix = "") {
 
 function startAutoSave() {
   stopAutoSave();
-  state.autoSaveTimer = window.setInterval(autoSaveCurrentEdit, 10000);
+  state.autoSaveTimer = window.setInterval(autoSaveCurrentEdit, EDITOR_AUTO_SAVE_INTERVAL);
 }
 
 function stopAutoSave() {
