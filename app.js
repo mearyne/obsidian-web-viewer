@@ -2688,7 +2688,9 @@ function arrangeChromeControls() {
   }
   if (viewControls && els.saveEditButton && els.saveEditButton.parentElement !== viewControls) {
     els.saveEditButton.classList.add("save-edit-button");
-    viewControls.insertBefore(els.saveEditButton, els.webEditButton?.nextSibling || viewControls.firstChild);
+    els.saveEditButton.setAttribute("aria-label", "저장");
+    els.saveEditButton.title = "저장";
+    viewControls.insertBefore(els.saveEditButton, els.webEditButton || viewControls.firstChild);
   }
   if (editorToolbar && els.editorStatus && els.editorStatus.parentElement !== editorToolbar) {
     editorToolbar.insertBefore(els.editorStatus, editorToolbar.firstChild);
