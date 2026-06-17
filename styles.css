@@ -2644,22 +2644,9 @@ button:disabled {
 .calendar-task-wrap.pri-하 .calendar-task { background: var(--surface-2); }
 
 /* Category — right-edge strip */
-.calendar-task-wrap.cat-회사::after,
-.calendar-task-wrap.cat-개인::after,
-.calendar-task-wrap.cat-기타::after {
-  border-radius: 0 4px 4px 0;
-  bottom: 0;
-  content: "";
-  pointer-events: none;
-  position: absolute;
-  right: 0;
-  top: 0;
-  width: 3px;
-}
-.calendar-task-wrap { position: relative; }
-.calendar-task-wrap.cat-회사::after { background: rgba(74, 158, 255, 0.55); }
-.calendar-task-wrap.cat-개인::after { background: rgba(74, 201, 126, 0.55); }
-.calendar-task-wrap.cat-기타::after { background: rgba(153, 153, 153, 0.4); }
+.calendar-task-wrap.cat-회사 > .calendar-task { border-right: 3px solid rgba(74, 158, 255, 0.75); }
+.calendar-task-wrap.cat-개인 > .calendar-task { border-right: 3px solid rgba(74, 201, 126, 0.75); }
+.calendar-task-wrap.cat-기타 > .calendar-task { border-right: 3px solid rgba(153, 153, 153, 0.6); }
 
 /* Kind icons — colored text characters for 일정/할일 */
 .kind-schedule { color: #7b68ee; }
