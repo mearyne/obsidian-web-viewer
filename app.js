@@ -1,4 +1,4 @@
-const CALENDAR_REFRESH_INTERVAL = 5 * 60 * 1000;
+const CALENDAR_REFRESH_INTERVAL = 10 * 1000;
 const TASKS_DIRTY_KEY = "obsidian-web-viewer-tasks-dirty";
 function setTasksDirty() { try { localStorage.setItem(TASKS_DIRTY_KEY, "1"); } catch {} }
 function clearTasksDirty() { try { localStorage.removeItem(TASKS_DIRTY_KEY); } catch {} }
