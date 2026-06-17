@@ -45,7 +45,7 @@ const state = {
   metadataSyncedAt: 0,
   recentFiles: { updated: [], created: [] },
   calendarKind: "tasks",
-  matrixPeriodDays: 30,
+  matrixPeriodDays: 1,
   mobileCalendarMode: "agenda",
   calendarRowLimit: 5,
   dailyNotePath: "1. Daily",
@@ -86,6 +86,7 @@ const state = {
   calendarDragHandled: false,
   calendarDragPointer: null,
   calendarTaskDrag: null,
+  matrixTaskDrag: null,
   calendarTaskPendingStates: new Map(),
   calendarTaskWriteQueues: new Map(),
   noteTitlePressTimer: null,
@@ -195,6 +196,7 @@ const els = {
   saveEditButton: document.querySelector("#saveEditButton"),
   randomFileButton: document.querySelector("#randomFileButton"),
   calendarButton: document.querySelector("#calendarButton"),
+  matrixButton: document.querySelector("#matrixButton"),
   optionsButton: document.querySelector("#optionsButton"),
   optionsMenu: document.querySelector("#optionsMenu"),
   optionsBackdrop: document.querySelector("#optionsBackdrop"),
@@ -323,6 +325,7 @@ els.searchExcludeInput?.addEventListener("input", handleSearchExcludeInput);
 els.newNoteButton?.addEventListener("click", openNewNote);
 els.randomFileButton.addEventListener("click", openRandomMarkdown);
 els.calendarButton.addEventListener("click", openNextCalendarKind);
+els.matrixButton?.addEventListener("click", buildMatrixView);
 els.syncStatus?.addEventListener("click", handleSyncStatusClick);
 document.addEventListener("visibilitychange", handleVisibilityChange);
 els.connectionBanner?.addEventListener("click", () => { if (state.connectionLost) window.location.reload(); });
@@ -996,6 +999,7 @@ function resetVault() {
   state.calendarKind = "tasks";
   state.calendarTaskOpenSuppressedUntil = 0;
   state.calendarDateOpenSuppressedUntil = 0;
+  state.matrixTaskDrag = null;
   state.vaultLoaded = false;
   state.contentSearchMatches = null;
   if (state.calendarRefreshTimer) {
@@ -2789,6 +2793,7 @@ function updateEditButtons() {
   if (els.newNoteButton) els.newNoteButton.hidden = state.editMode;
   if (els.randomFileButton) els.randomFileButton.hidden = state.editMode;
   if (els.calendarButton) els.calendarButton.hidden = false;
+  if (els.matrixButton) els.matrixButton.hidden = false;
   els.markdownToggleButton.disabled = state.editMode;
   els.markdownToggleButton.hidden = state.activeView !== "note";
   if (els.saveEditButton) els.saveEditButton.hidden = true;
@@ -3069,8 +3074,6 @@ async function openNextCalendarKind() {
   if (state.activeView !== "calendar") {
     await buildCalendarView();
   } else if (state.calendarKind === "tasks") {
-    await buildMatrixView();
-  } else if (state.calendarKind === "matrix") {
     await buildRecentCalendarView("created");
   } else if (state.calendarKind === "created") {
     await buildRecentCalendarView("updated");
@@ -3091,7 +3094,7 @@ async function buildMatrixView() {
   closeOptionsMenu();
   closeSidebar();
   state.calendarKind = "matrix";
-  state.calendarMode = "month";
+  state.matrixPeriodDays = state.matrixPeriodDays || 1;
   showCalendarView();
   renderCalendar();
   scheduleCalendarRefresh();
@@ -3353,6 +3356,7 @@ function waitForBrowser() {
 
 function showNoteView() {
   state.activeView = "note";
+  document.documentElement.classList.remove("matrix-mode");
   els.markdownView.hidden = false;
   els.editorShell.hidden = true;
   els.calendarView.hidden = true;
@@ -3364,11 +3368,13 @@ function showNoteView() {
 
 function showCalendarView() {
   state.activeView = "calendar";
+  document.documentElement.classList.toggle("matrix-mode", state.calendarKind === "matrix");
   updateCalendarTitle();
   els.markdownView.hidden = true;
   els.editorShell.hidden = true;
   els.calendarView.hidden = false;
   els.calendarButton.classList.add("active");
+  els.matrixButton?.classList.toggle("active", state.calendarKind === "matrix");
   updateCalendarKindButton();
   els.editButton.disabled = true;
   updateEditButtons();
@@ -3376,14 +3382,11 @@ function showCalendarView() {
 
 function updateCalendarKindButton() {
   if (!els.calendarButton) return;
-  if (state.activeView !== "calendar" || state.calendarKind === "tasks") {
+  els.matrixButton?.classList.toggle("active", state.activeView === "calendar" && state.calendarKind === "matrix");
+  if (state.activeView !== "calendar" || state.calendarKind === "tasks" || state.calendarKind === "matrix") {
     els.calendarButton.textContent = "📅";
     els.calendarButton.title = "Task 캘린더";
     els.calendarButton.setAttribute("aria-label", "Task 캘린더");
-  } else if (state.calendarKind === "matrix") {
-    els.calendarButton.textContent = "🧭";
-    els.calendarButton.title = "아이젠하워 매트릭스";
-    els.calendarButton.setAttribute("aria-label", "아이젠하워 매트릭스");
   } else if (state.calendarKind === "created") {
     els.calendarButton.textContent = "➕";
     els.calendarButton.title = "최근 생성 파일";
@@ -3397,6 +3400,7 @@ function updateCalendarKindButton() {
 
 function updateCalendarTitle() {
   const pathPrefixes = parsePathList(els.calendarPathInput.value);
+  document.documentElement.classList.toggle("matrix-mode", state.activeView === "calendar" && state.calendarKind === "matrix");
   if (state.calendarKind === "tasks") {
     els.notePath.textContent = pathPrefixes.length ? `calendar: ${pathPrefixes.join(", ")}` : "calendar: vault";
     els.noteTitle.textContent = "Tasks Calendar";
@@ -3749,11 +3753,12 @@ function renderCalendar() {
 function renderEisenhowerMatrix() {
   const range = matrixDateRange();
   const tasks = matrixVisibleTasks(range);
+  const unclassified = tasks.filter((task) => !task.priority);
   const quadrants = [
-    { key: "do", title: "긴급 · 중요", urgent: true, important: true },
-    { key: "plan", title: "덜 긴급 · 중요", urgent: false, important: true },
-    { key: "delegate", title: "긴급 · 덜 중요", urgent: true, important: false },
-    { key: "drop", title: "덜 긴급 · 덜 중요", urgent: false, important: false },
+    { key: "do", icon: "🔥", title: "긴급 · 중요", urgent: true, important: true },
+    { key: "plan", icon: "📌", title: "덜 긴급 · 중요", urgent: false, important: true },
+    { key: "delegate", icon: "⚡", title: "긴급 · 덜 중요", urgent: true, important: false },
+    { key: "drop", icon: "💤", title: "덜 긴급 · 덜 중요", urgent: false, important: false },
   ].map((quadrant) => ({
     ...quadrant,
     tasks: tasks.filter((task) => matrixTaskUrgent(task, range) === quadrant.urgent && matrixTaskImportant(task) === quadrant.important),
@@ -3764,7 +3769,7 @@ function renderEisenhowerMatrix() {
       <div class="calendar-toolbar matrix-toolbar">
         <div class="calendar-month-nav">
           <button type="button" data-matrix-action="prev">&lt;</button>
-          <strong>${escapeHtml(formatDate(range.start))} - ${escapeHtml(formatDate(addDays(range.end, -1)))}</strong>
+          <strong>${escapeHtml(matrixTitle())}</strong>
           <button type="button" data-matrix-action="next">&gt;</button>
         </div>
         <button class="calendar-today-button" type="button" data-matrix-action="today">Today</button>
@@ -3773,6 +3778,8 @@ function renderEisenhowerMatrix() {
         </div>
       </div>
       ${renderCalendarFilterBar()}
+      ${renderMatrixRules(range)}
+      ${renderMatrixUnclassified(unclassified)}
       <div class="matrix-grid">
         ${quadrants.map((quadrant) => renderMatrixQuadrant(quadrant)).join("")}
       </div>
@@ -3787,7 +3794,7 @@ function renderMatrixQuadrant(quadrant) {
   return `
     <section class="matrix-quadrant ${quadrant.key}" data-matrix-urgent="${quadrant.urgent}" data-matrix-important="${quadrant.important}">
       <header>
-        <strong>${escapeHtml(quadrant.title)}</strong>
+        <strong><span aria-hidden="true">${quadrant.icon}</span>${escapeHtml(quadrant.title)}</strong>
         <span>${quadrant.tasks.length}</span>
       </header>
       <div class="matrix-task-list">
@@ -3801,15 +3808,69 @@ function renderMatrixTask(task) {
   const due = task.dates?.due || task.dates?.end || task.dates?.scheduled || task.dates?.start || task.date || "";
   return `
     <button class="matrix-task ${task.checked ? "done" : ""}" type="button" draggable="true" data-path="${escapeAttribute(task.path)}" data-line="${task.line}" title="${escapeAttribute(`${task.path}: ${task.rawText || task.text}`)}">
-      <span class="matrix-task-title">${escapeHtml(task.text)}</span>
+      <span class="matrix-task-title"><span class="matrix-task-icon" aria-hidden="true">${taskDisplayIcon(task)}</span>${escapeHtml(task.text)}</span>
       <span class="matrix-task-meta">${escapeHtml(due)}${task.priority ? ` · ${escapeHtml(task.priority)}` : ""}</span>
     </button>
   `;
 }
 
+function renderMatrixRules(range) {
+  const cutoff = addDays(matrixUrgentCutoff(range), -1);
+  return `
+    <div class="matrix-rules">
+      <span>긴급: ${escapeHtml(formatDate(range.start))} - ${escapeHtml(formatDate(cutoff))}</span>
+      <span>중요: #상</span>
+      <span>덜 중요: #중/#하/미분류</span>
+    </div>
+  `;
+}
+
+function renderMatrixUnclassified(tasks) {
+  if (!tasks.length) return "";
+  return `
+    <section class="matrix-unclassified">
+      <header><strong>미분류 빠른 분류</strong><span>${tasks.length}</span></header>
+      <div class="matrix-unclassified-list">
+        ${tasks.slice(0, 8).map((task) => `
+          <div class="matrix-unclassified-row">
+            <span>${taskDisplayIcon(task)} ${escapeHtml(task.text)}</span>
+            <div>
+              <button type="button" data-matrix-quick="do" data-path="${escapeAttribute(task.path)}" data-line="${task.line}">🔥</button>
+              <button type="button" data-matrix-quick="plan" data-path="${escapeAttribute(task.path)}" data-line="${task.line}">📌</button>
+              <button type="button" data-matrix-quick="delegate" data-path="${escapeAttribute(task.path)}" data-line="${task.line}">⚡</button>
+              <button type="button" data-matrix-quick="drop" data-path="${escapeAttribute(task.path)}" data-line="${task.line}">💤</button>
+            </div>
+          </div>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
 function matrixDateRange() {
+  const days = state.matrixPeriodDays || 1;
+  if (days === 30) {
+    const start = startOfMonth(state.calendarDate);
+    return { start, end: new Date(start.getFullYear(), start.getMonth() + 1, 1) };
+  }
+  if (days === 7) {
+    const start = startOfWeek(state.calendarDate, 0);
+    return { start, end: addDays(start, 7) };
+  }
   const start = new Date(state.calendarDate.getFullYear(), state.calendarDate.getMonth(), state.calendarDate.getDate());
-  return { start, end: addDays(start, state.matrixPeriodDays || 30) };
+  return { start, end: addDays(start, 1) };
+}
+
+function matrixTitle() {
+  const days = state.matrixPeriodDays || 1;
+  if (days === 1) return formatDate(state.calendarDate);
+  if (days === 7) {
+    const start = new Date(state.calendarDate.getFullYear(), state.calendarDate.getMonth(), state.calendarDate.getDate());
+    const week = Math.ceil((start.getDate() + startOfMonth(start).getDay()) / 7);
+    return `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")} ${week}W`;
+  }
+  const month = startOfMonth(state.calendarDate);
+  return `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, "0")}`;
 }
 
 function matrixVisibleTasks(range = matrixDateRange()) {
@@ -3823,8 +3884,8 @@ function matrixVisibleTasks(range = matrixDateRange()) {
 }
 
 function matrixUrgentCutoff(range) {
-  const days = state.matrixPeriodDays || 30;
-  const urgentDays = days >= 30 ? 7 : days >= 7 ? 1 : 1;
+  const days = state.matrixPeriodDays || 1;
+  const urgentDays = days >= 30 ? 7 : days >= 7 ? 2 : 1;
   return addDays(range.start, urgentDays);
 }
 
@@ -3840,11 +3901,21 @@ function matrixTaskImportant(task) {
 function bindMatrixEvents() {
   bindCalendarFilterEvents();
 
+  els.calendarView.querySelectorAll("[data-matrix-quick]").forEach((button) => {
+    button.addEventListener("click", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const placement = matrixPlacementFromKey(button.getAttribute("data-matrix-quick"));
+      if (!placement) return;
+      await moveTaskToMatrixQuadrant(button.getAttribute("data-path"), Number(button.getAttribute("data-line")), placement);
+    });
+  });
+
   els.calendarView.querySelectorAll("[data-matrix-action]").forEach((button) => {
     button.addEventListener("click", () => {
       const action = button.getAttribute("data-matrix-action");
-      if (action === "prev") state.calendarDate = addDays(state.calendarDate, -(state.matrixPeriodDays || 30));
-      if (action === "next") state.calendarDate = addDays(state.calendarDate, state.matrixPeriodDays || 30);
+      if (action === "prev") state.calendarDate = shiftMatrixDate(-1);
+      if (action === "next") state.calendarDate = shiftMatrixDate(1);
       if (action === "today") state.calendarDate = new Date();
       renderCalendar();
     });
@@ -3852,12 +3923,13 @@ function bindMatrixEvents() {
 
   els.calendarView.querySelectorAll("[data-matrix-period]").forEach((button) => {
     button.addEventListener("click", () => {
-      state.matrixPeriodDays = Number(button.getAttribute("data-matrix-period")) || 30;
+      state.matrixPeriodDays = Number(button.getAttribute("data-matrix-period")) || 1;
       renderCalendar();
     });
   });
 
   els.calendarView.querySelectorAll(".matrix-task").forEach((button) => {
+    bindMatrixTaskPointerDrag(button);
     button.addEventListener("click", async (event) => {
       if (button.dataset.dragged === "true") {
         event.preventDefault();
@@ -3908,6 +3980,89 @@ function bindMatrixEvents() {
       await moveTaskToMatrixQuadrant(payload.path, payload.line, { urgent, important });
     });
   });
+}
+
+function shiftMatrixDate(direction) {
+  const days = state.matrixPeriodDays || 1;
+  if (days === 30) return addMonths(state.calendarDate, direction);
+  if (days === 7) return addDays(state.calendarDate, direction * 7);
+  return addDays(state.calendarDate, direction);
+}
+
+function matrixPlacementFromKey(key) {
+  return {
+    do: { urgent: true, important: true },
+    plan: { urgent: false, important: true },
+    delegate: { urgent: true, important: false },
+    drop: { urgent: false, important: false },
+  }[key] || null;
+}
+
+function bindMatrixTaskPointerDrag(button) {
+  button.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0 && event.pointerType === "mouse") return;
+    state.matrixTaskDrag = {
+      pointerId: event.pointerId,
+      path: button.getAttribute("data-path"),
+      line: Number(button.getAttribute("data-line")),
+      x: event.clientX,
+      y: event.clientY,
+      active: false,
+      button,
+      target: null,
+    };
+    button.setPointerCapture?.(event.pointerId);
+  });
+
+  button.addEventListener("pointermove", (event) => {
+    const drag = state.matrixTaskDrag;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const distance = Math.hypot(event.clientX - drag.x, event.clientY - drag.y);
+    if (!drag.active && distance < CALENDAR_DRAG_DISTANCE) return;
+    if (!drag.active) {
+      drag.active = true;
+      button.dataset.dragged = "true";
+      button.classList.add("dragging");
+    }
+    event.preventDefault();
+    updateMatrixDragTarget(event.clientX, event.clientY);
+  });
+
+  const finish = async (event) => {
+    const drag = state.matrixTaskDrag;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    state.matrixTaskDrag = null;
+    button.releasePointerCapture?.(event.pointerId);
+    button.classList.remove("dragging");
+    clearMatrixDragTarget();
+    if (drag.active && drag.target) {
+      event.preventDefault();
+      event.stopPropagation();
+      const urgent = drag.target.getAttribute("data-matrix-urgent") === "true";
+      const important = drag.target.getAttribute("data-matrix-important") === "true";
+      await moveTaskToMatrixQuadrant(drag.path, drag.line, { urgent, important });
+    }
+    window.setTimeout(() => {
+      button.dataset.dragged = "";
+    }, 250);
+  };
+
+  button.addEventListener("pointerup", finish);
+  button.addEventListener("pointercancel", finish);
+}
+
+function updateMatrixDragTarget(x, y) {
+  const drag = state.matrixTaskDrag;
+  if (!drag) return;
+  const target = document.elementFromPoint(x, y)?.closest?.(".matrix-quadrant") || null;
+  if (target === drag.target) return;
+  clearMatrixDragTarget();
+  drag.target = target;
+  target?.classList.add("drag-over");
+}
+
+function clearMatrixDragTarget() {
+  els.calendarView.querySelectorAll(".matrix-quadrant.drag-over").forEach((item) => item.classList.remove("drag-over"));
 }
 
 function bindCalendarFilterEvents() {

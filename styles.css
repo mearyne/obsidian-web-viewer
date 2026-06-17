@@ -842,6 +842,10 @@ button:disabled {
   display: none !important;
 }
 
+.matrix-mode .heading-controls {
+  display: none !important;
+}
+
 #collapseHeadingsButton,
 #collapseHeadingLevelButton,
 #expandHeadingLevelButton {
@@ -2752,6 +2756,74 @@ button:disabled {
   flex: 0 0 auto;
 }
 
+.matrix-rules {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  font-size: 12px;
+  gap: 6px;
+}
+
+.matrix-rules span {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 4px 7px;
+}
+
+.matrix-unclassified {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  flex: 0 0 auto;
+  overflow: hidden;
+}
+
+.matrix-unclassified header {
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  font-size: 12px;
+  justify-content: space-between;
+  padding: 6px 8px;
+}
+
+.matrix-unclassified-list {
+  display: grid;
+  gap: 5px;
+  max-height: 132px;
+  overflow: auto;
+  padding: 6px;
+}
+
+.matrix-unclassified-row {
+  align-items: center;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.matrix-unclassified-row > span {
+  font-size: 12px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.matrix-unclassified-row div {
+  display: flex;
+  gap: 4px;
+}
+
+.matrix-unclassified-row button {
+  height: 26px;
+  padding: 0;
+  width: 28px;
+}
+
 .matrix-grid {
   display: grid;
   flex: 1 1 auto;
@@ -2800,6 +2872,12 @@ button:disabled {
   padding: 8px 10px;
 }
 
+.matrix-quadrant header strong {
+  align-items: center;
+  display: inline-flex;
+  gap: 5px;
+}
+
 .matrix-quadrant header span {
   color: var(--muted);
   font-size: 12px;
@@ -2828,6 +2906,7 @@ button:disabled {
   min-height: 42px;
   padding: 7px 8px;
   text-align: left;
+  touch-action: none;
   width: 100%;
 }
 
@@ -2840,8 +2919,15 @@ button:disabled {
 }
 
 .matrix-task-title {
+  align-items: center;
+  display: inline-flex;
   font-size: 13px;
+  gap: 5px;
   line-height: 1.35;
+}
+
+.matrix-task-icon {
+  flex: 0 0 auto;
 }
 
 .matrix-task-meta {
