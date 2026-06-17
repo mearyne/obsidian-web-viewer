@@ -2453,6 +2453,22 @@ button:disabled {
   margin-left: auto;
 }
 
+.calendar-date-jump {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--text);
+  flex: 0 0 132px;
+  font-size: 12px;
+  height: 30px;
+  padding: 0 6px;
+}
+
+.calendar-date-jump:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
 .calendar-toolbar span {
   color: var(--muted);
   display: none;
@@ -3425,6 +3441,11 @@ button.calendar-more {
 
   .calendar-toolbar span {
     margin-left: 0;
+  }
+
+  .calendar-date-jump {
+    flex-basis: 118px;
+    font-size: 11px;
   }
 
   .calendar-mode-switch {

@@ -448,6 +448,12 @@ function handleGlobalKeydown(event) {
       setCalendarMode("day");
       return;
     }
+    if (state.activeView === "calendar" && event.key.toLowerCase() === "t") {
+      event.preventDefault();
+      event.stopPropagation();
+      goCalendarToday();
+      return;
+    }
     if (state.activeView === "calendar" && event.key === "ArrowLeft") {
       event.preventDefault();
       event.stopPropagation();
@@ -3725,6 +3731,7 @@ function renderCalendar() {
           <button type="button" data-calendar-action="next">&gt;</button>
         </div>
         <button class="calendar-today-button" type="button" data-calendar-action="today">Today</button>
+        <input class="calendar-date-jump" type="date" value="${formatDate(state.calendarDate)}" aria-label="날짜로 이동" title="날짜로 이동">
         <div class="calendar-mode-switch" aria-label="Calendar view">
           <button type="button" data-calendar-mode="month" class="${state.calendarMode === "month" ? "active" : ""}">30d</button>
           <button type="button" data-calendar-mode="week" class="${state.calendarMode === "week" ? "active" : ""}">7d</button>
@@ -4102,6 +4109,12 @@ function scrollAgendaToToday() {
   if (todayEl) todayEl.scrollIntoView({ behavior: "instant", block: "start" });
 }
 
+function goCalendarToday() {
+  state.calendarDate = new Date();
+  renderCalendar();
+  requestAnimationFrame(scrollAgendaToToday);
+}
+
 function renderCalendarRows(items, context, rowLimit, renderer) {
   const safeLimit = Math.max(1, Math.min(5, rowLimit));
   const visibleLimit = items.length > safeLimit ? Math.max(0, safeLimit - 1) : safeLimit;
@@ -4429,10 +4442,19 @@ function bindCalendarEvents() {
       const action = button.getAttribute("data-calendar-action");
       if (action === "prev") state.calendarDate = shiftCalendarDate(-1);
       if (action === "next") state.calendarDate = shiftCalendarDate(1);
-      if (action === "today") state.calendarDate = new Date();
+      if (action === "today") {
+        goCalendarToday();
+        return;
+      }
       renderCalendar();
-      if (action === "today") requestAnimationFrame(scrollAgendaToToday);
     });
+  });
+
+  els.calendarView.querySelector(".calendar-date-jump")?.addEventListener("change", (event) => {
+    const date = parseDateKey(event.currentTarget.value);
+    if (!date) return;
+    state.calendarDate = date;
+    renderCalendar();
   });
 
   els.calendarView.querySelectorAll("[data-calendar-mode]").forEach((button) => {
