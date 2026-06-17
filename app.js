@@ -1780,8 +1780,11 @@ function handleSyncStatusClick() {
 
 async function handleVisibilityChange() {
   if (document.visibilityState !== "visible") return;
-  if (state.activeView === "calendar" && state.calendarKind === "tasks") {
-    scheduleCalendarRefreshIfStale();
+  if (state.vaultLoaded) {
+    await loadCalendarCache();
+    if (state.activeView === "calendar" && state.calendarKind === "tasks") {
+      scheduleCalendarRefreshIfStale();
+    }
   }
   if (!state.serverVaultWritable) return;
   await checkServerConnection();
@@ -1795,6 +1798,9 @@ async function checkServerConnection() {
       state.connectionLost = false;
       stopConnectionRetry();
       showConnectionBanner("서버에 재연결됐습니다.", "reconnected");
+      if (state.vaultLoaded) {
+        loadCalendarCache().finally(scheduleCalendarRefreshIfStale);
+      }
     }
   } catch {
     if (!state.connectionLost) {
