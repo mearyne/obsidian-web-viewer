@@ -692,7 +692,12 @@ button:disabled {
 
 .bottom-save-status {
   color: var(--muted);
+  flex: 1 1 0;
   font-size: 12px;
+  min-width: 0;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 

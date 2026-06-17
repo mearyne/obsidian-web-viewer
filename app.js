@@ -2672,12 +2672,22 @@ function updateEditorStatus(prefix = "") {
   const bottomSaveStatus = document.getElementById("bottomSaveStatus");
   if (!state.editMode) {
     if (bottomSaveStatus) bottomSaveStatus.hidden = true;
+    if (els.notePath) els.notePath.hidden = false;
+    if (els.editorStatus) {
+      els.editorStatus.hidden = true;
+      els.editorStatus.textContent = "";
+    }
     return;
   }
   const dirty = state.editorDirty ? "수정됨" : "저장됨";
-  els.editorStatus.textContent = `${prefix ? `${prefix} · ` : ""}${state.currentPath} · ${dirty}`;
+  const statusText = `${prefix ? `${prefix} · ` : ""}${state.currentPath} · ${dirty}`;
+  if (els.editorStatus) {
+    els.editorStatus.hidden = true;
+    els.editorStatus.textContent = "";
+  }
+  if (els.notePath) els.notePath.hidden = true;
   if (bottomSaveStatus) {
-    bottomSaveStatus.textContent = prefix || dirty;
+    bottomSaveStatus.textContent = statusText;
     bottomSaveStatus.hidden = false;
     bottomSaveStatus.dataset.state = prefix ? "saving" : (state.editorDirty ? "dirty" : "saved");
   }
