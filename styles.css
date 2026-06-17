@@ -35,6 +35,10 @@
   font-family: var(--app-font);
 }
 
+[hidden] {
+  display: none !important;
+}
+
 :root[data-theme="dark"] {
   color-scheme: dark;
   --bg: #1e1e1e;
@@ -2716,12 +2720,6 @@ button:disabled {
 .calendar-task-wrap.pri-상 .calendar-task { background: color-mix(in srgb, #e74c3c 13%, var(--surface-2)); }
 .calendar-task-wrap.pri-중 .calendar-task { background: color-mix(in srgb, #e6a20f 11%, var(--surface-2)); }
 .calendar-task-wrap.pri-하 .calendar-task { background: var(--surface-2); }
-
-/* Category — right-edge strip */
-.calendar-task-wrap.cat-회사 > .calendar-task { border-right: 3px solid rgba(74, 158, 255, 0.75); }
-.calendar-task-wrap.cat-개인 > .calendar-task { border-right: 3px solid rgba(74, 201, 126, 0.75); }
-.calendar-task-wrap.cat-기타 > .calendar-task { border-right: 3px solid rgba(153, 153, 153, 0.6); }
-.calendar-task-wrap.kind-schedule-task > .calendar-task { border-right: 3px solid #e74c3c; }
 
 /* Kind icons — colored text characters for 일정/할일 */
 .kind-schedule { color: #7b68ee; }

@@ -2245,7 +2245,7 @@ async function persistCurrentEdit({ closeEditor }) {
   updateEditorStatus(closeEditor ? "저장 중" : "자동 저장 중");
   try {
     const nextContent = editorValue();
-    const contentChanged = nextContent !== state.currentContent;
+    const contentChanged = normalizeEditableContent(nextContent) !== normalizeEditableContent(state.currentContent);
     if (!contentChanged && !closeEditor) return;
     if (!contentChanged && closeEditor) {
       state.editMode = false;
@@ -2281,6 +2281,10 @@ async function persistCurrentEdit({ closeEditor }) {
     els.webEditButton.disabled = false;
     updateEditButtons();
   }
+}
+
+function normalizeEditableContent(content) {
+  return String(content || "").replace(/\r\n/g, "\n");
 }
 
 function handleEditorKeydown(event) {
@@ -3806,7 +3810,6 @@ function renderCalendarTask(task, dateKey = task.date, showDelete = false) {
   const wrapMetaClasses = [
     task.category ? `cat-${task.category}` : "",
     task.priority ? `pri-${task.priority}` : "",
-    task.kind === "일정" ? "kind-schedule-task" : "",
     task.kind === "할일" ? "kind-todo-task" : "",
   ].filter(Boolean).join(" ");
   return `
