@@ -628,7 +628,7 @@ async function openRandomMarkdown() {
   const candidates = files.length > 1 && state.currentPath ? files.filter((path) => path !== state.currentPath) : files;
   const path = candidates[Math.floor(Math.random() * candidates.length)];
   if (state.activeView === "calendar") showNoteView();
-  await openFile(path, { revealInTree: false });
+  await openFile(path);
   scrollViewerTop();
 }
 
@@ -1348,14 +1348,13 @@ function nodeInAnyPath(node, paths) {
   return paths.some((prefix) => path === prefix || path.startsWith(`${prefix}/`) || prefix.startsWith(`${path}/`));
 }
 
-async function openFile(path, { revealInTree = true } = {}) {
+async function openFile(path) {
   if (!(await confirmDiscardEdit())) return;
   const node = state.files.get(path);
   if (!node || !isOpenableDocument(node.name)) return;
 
   showLoading(`문서 여는 중: ${node.name}`);
   try {
-    if (revealInTree) expandPathToFile(path);
     const content = await readFileNode(node);
     state.currentPath = path;
     state.currentContent = content;
@@ -1368,27 +1367,9 @@ async function openFile(path, { revealInTree = true } = {}) {
     renderCurrentDocument();
     showNoteView();
     scrollViewerTop();
-    if (revealInTree) {
-      renderTree();
-    } else {
-      scheduleTreeReveal(path);
-    }
   } finally {
     hideLoading();
   }
-}
-
-function scheduleTreeReveal(path) {
-  const reveal = () => {
-    if (state.currentPath !== path) return;
-    expandPathToFile(path);
-    renderTree();
-  };
-  if ("requestIdleCallback" in window) {
-    window.requestIdleCallback(reveal, { timeout: 1200 });
-    return;
-  }
-  window.setTimeout(reveal, 250);
 }
 
 function activeNavigationHistory() {
@@ -2729,7 +2710,7 @@ function updateEditButtons() {
   renderEditSaveButton();
   if (els.newNoteButton) els.newNoteButton.hidden = state.editMode;
   if (els.randomFileButton) els.randomFileButton.hidden = state.editMode;
-  if (els.calendarButton) els.calendarButton.hidden = state.editMode;
+  if (els.calendarButton) els.calendarButton.hidden = false;
   els.markdownToggleButton.disabled = state.editMode;
   els.markdownToggleButton.hidden = state.activeView !== "note";
   if (els.saveEditButton) els.saveEditButton.hidden = true;
