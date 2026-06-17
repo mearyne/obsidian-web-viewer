@@ -694,6 +694,12 @@ button:disabled {
   gap: 8px;
 }
 
+.status-markdown-toggle {
+  flex: 0 0 auto;
+  height: 28px;
+  width: 28px;
+}
+
 .bottom-save-status {
   color: var(--muted);
   font-size: 12px;

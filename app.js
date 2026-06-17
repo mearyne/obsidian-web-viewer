@@ -523,6 +523,7 @@ initSidebarPin();
 loadSavedVaults();
 loadSampleVault();
 arrangeChromeControls();
+updateEditButtons();
 handleUrlAction();
 
 function handleUrlAction() {
@@ -2668,7 +2669,10 @@ function updateEditButtons() {
   const canEdit = canEditNode(state.currentNode) && state.activeView === "note";
   els.editButton.disabled = state.activeView !== "note" || !state.vaultName || !state.currentPath;
   els.webEditButton.disabled = !canEdit || state.editMode;
-  els.webEditButton.hidden = state.activeView !== "note";
+  els.webEditButton.hidden = state.activeView !== "note" || state.editMode;
+  if (els.newNoteButton) els.newNoteButton.hidden = state.editMode;
+  if (els.randomFileButton) els.randomFileButton.hidden = state.editMode;
+  if (els.calendarButton) els.calendarButton.hidden = state.editMode;
   els.markdownToggleButton.disabled = state.editMode;
   if (els.saveEditButton) els.saveEditButton.hidden = !(state.activeView === "note" && state.editMode);
   if (els.editorImageButton) els.editorImageButton.hidden = !(state.editMode && state.serverVaultWritable);
@@ -2678,11 +2682,13 @@ function arrangeChromeControls() {
   const sidebarOptions = document.querySelector(".sidebar-options");
   const noteTitleRow = document.querySelector(".note-title-row");
   const editorToolbar = document.querySelector(".editor-toolbar");
+  const viewControls = document.querySelector(".view-controls");
   if (sidebarOptions && els.fullscreenButton && els.fullscreenButton.parentElement !== sidebarOptions) {
     sidebarOptions.insertBefore(els.fullscreenButton, sidebarOptions.querySelector("#themeButton") || sidebarOptions.firstChild);
   }
-  if (noteTitleRow && els.saveEditButton && els.saveEditButton.parentElement !== noteTitleRow) {
-    noteTitleRow.insertBefore(els.saveEditButton, noteTitleRow.querySelector(".heading-controls") || null);
+  if (viewControls && els.saveEditButton && els.saveEditButton.parentElement !== viewControls) {
+    els.saveEditButton.classList.add("save-edit-button");
+    viewControls.insertBefore(els.saveEditButton, els.webEditButton?.nextSibling || viewControls.firstChild);
   }
   if (editorToolbar && els.editorStatus && els.editorStatus.parentElement !== editorToolbar) {
     editorToolbar.insertBefore(els.editorStatus, editorToolbar.firstChild);
@@ -2699,7 +2705,10 @@ function arrangeChromeControls() {
     saveStatusEl.id = "bottomSaveStatus";
     saveStatusEl.className = "bottom-save-status";
     saveStatusEl.hidden = true;
-    statusBar.append(historyWrap, els.notePath, saveStatusEl, els.syncStatus);
+    if (els.markdownToggleButton) els.markdownToggleButton.classList.add("status-markdown-toggle");
+    statusBar.append(historyWrap);
+    if (els.markdownToggleButton) statusBar.append(els.markdownToggleButton);
+    statusBar.append(els.notePath, saveStatusEl, els.syncStatus);
     document.body.append(statusBar);
     return;
   }
@@ -2708,6 +2717,11 @@ function arrangeChromeControls() {
   if (els.historyBackButton && els.historyBackButton.parentElement !== historyWrap) historyWrap.append(els.historyBackButton);
   if (els.historyForwardButton && els.historyForwardButton.parentElement !== historyWrap) historyWrap.append(els.historyForwardButton);
   if (!historyWrap.parentElement) statusBar.append(historyWrap);
+  if (els.markdownToggleButton) {
+    els.markdownToggleButton.classList.add("status-markdown-toggle");
+    const markdownRef = els.notePath?.parentElement === statusBar ? els.notePath : (els.syncStatus?.parentElement === statusBar ? els.syncStatus : null);
+    if (els.markdownToggleButton.parentElement !== statusBar) statusBar.insertBefore(els.markdownToggleButton, markdownRef);
+  }
   if (els.notePath && els.notePath.parentElement !== statusBar) statusBar.insertBefore(els.notePath, els.syncStatus);
   if (!document.getElementById("bottomSaveStatus")) {
     const el = document.createElement("span");
