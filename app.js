@@ -2487,6 +2487,14 @@ function resizeEditorToContent() {
   els.markdownEditor.style.height = `${Math.max(els.markdownEditor.scrollHeight, els.viewerWrap.clientHeight - 184)}px`;
 }
 
+function keepEditorEndVisible() {
+  const editor = els.markdownEditor;
+  if (editor.selectionEnd < editor.value.length) return;
+  requestAnimationFrame(() => {
+    els.viewerWrap.scrollTop = els.viewerWrap.scrollHeight;
+  });
+}
+
 function holdViewerHeightDuringTransition() {
   const height = Math.max(els.viewerWrap.clientHeight, 1);
   els.viewerWrap.style.minHeight = `${height}px`;
@@ -2688,6 +2696,7 @@ function taskDateTokenFromText(text) {
 function markEditorDirty() {
   if (!state.editMode) return;
   resizeEditorToContent();
+  keepEditorEndVisible();
   state.editorDirty = editorValue() !== state.currentContent;
   updateEditorStatus();
 }
