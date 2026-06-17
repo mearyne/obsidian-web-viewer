@@ -628,7 +628,7 @@ async function openRandomMarkdown() {
   const candidates = files.length > 1 && state.currentPath ? files.filter((path) => path !== state.currentPath) : files;
   const path = candidates[Math.floor(Math.random() * candidates.length)];
   if (state.activeView === "calendar") showNoteView();
-  await openFile(path);
+  await openFile(path, { revealInTree: false });
   scrollViewerTop();
 }
 
@@ -1348,14 +1348,14 @@ function nodeInAnyPath(node, paths) {
   return paths.some((prefix) => path === prefix || path.startsWith(`${prefix}/`) || prefix.startsWith(`${path}/`));
 }
 
-async function openFile(path) {
+async function openFile(path, { revealInTree = true } = {}) {
   if (!(await confirmDiscardEdit())) return;
   const node = state.files.get(path);
   if (!node || !isOpenableDocument(node.name)) return;
 
   showLoading(`문서 여는 중: ${node.name}`);
   try {
-    expandPathToFile(path);
+    if (revealInTree) expandPathToFile(path);
     const content = await readFileNode(node);
     state.currentPath = path;
     state.currentContent = content;
@@ -1368,10 +1368,27 @@ async function openFile(path) {
     renderCurrentDocument();
     showNoteView();
     scrollViewerTop();
-    renderTree();
+    if (revealInTree) {
+      renderTree();
+    } else {
+      scheduleTreeReveal(path);
+    }
   } finally {
     hideLoading();
   }
+}
+
+function scheduleTreeReveal(path) {
+  const reveal = () => {
+    if (state.currentPath !== path) return;
+    expandPathToFile(path);
+    renderTree();
+  };
+  if ("requestIdleCallback" in window) {
+    window.requestIdleCallback(reveal, { timeout: 1200 });
+    return;
+  }
+  window.setTimeout(reveal, 250);
 }
 
 function activeNavigationHistory() {
