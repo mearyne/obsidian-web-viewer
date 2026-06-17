@@ -1362,6 +1362,7 @@ button:disabled {
 .markdown-editor {
   background: var(--surface);
   border: 0;
+  box-sizing: border-box;
   caret-color: var(--accent);
   color: var(--text);
   display: block;
@@ -1371,7 +1372,7 @@ button:disabled {
   min-height: calc(100vh - 184px);
   outline: 0;
   overflow: hidden;
-  padding: 0;
+  padding: 0 0 88px;
   resize: none;
   width: 100%;
 }
