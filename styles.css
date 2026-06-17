@@ -621,20 +621,6 @@ button:disabled {
   color: #c4903f;
 }
 
-.save-edit-button {
-  align-items: center;
-  background: var(--surface-2);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  display: inline-flex;
-  flex: 0 0 auto;
-  font-size: 12px;
-  justify-content: center;
-  min-height: 28px;
-  padding: 0 10px;
-  width: auto;
-}
-
 .app-status-bar {
   align-items: center;
   background: var(--surface);
@@ -743,6 +729,14 @@ button:disabled {
   stroke-linejoin: round;
   stroke-width: 1.8;
   width: 19px;
+}
+
+.icon-button.is-saving-mode {
+  font-size: 13px;
+  font-weight: 700;
+  min-width: 48px;
+  padding: 0 10px;
+  width: auto;
 }
 
 #collapseHeadingsButton,

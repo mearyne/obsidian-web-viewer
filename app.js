@@ -302,7 +302,7 @@ els.collapseHeadingsButton?.addEventListener("click", collapseAllHeadings);
 els.collapseHeadingLevelButton?.addEventListener("click", collapseCurrentHeadingLevel);
 els.expandHeadingLevelButton?.addEventListener("click", expandNextHeadingLevel);
 els.markdownToggleButton.addEventListener("click", toggleMarkdownMode);
-els.webEditButton.addEventListener("click", enterEditMode);
+els.webEditButton.addEventListener("click", handleEditSaveButton);
 els.saveEditButton.addEventListener("click", saveCurrentEdit);
 els.markdownEditor.addEventListener("keydown", handleEditorKeydown);
 els.markdownEditor.addEventListener("input", handleEditorInput);
@@ -2223,6 +2223,14 @@ async function saveCurrentEdit() {
   return persistCurrentEdit({ closeEditor: true });
 }
 
+async function handleEditSaveButton() {
+  if (state.editMode) {
+    await saveCurrentEdit();
+    return;
+  }
+  await enterEditMode();
+}
+
 async function autoSaveCurrentEdit() {
   if (!state.editMode || !state.editorDirty || state.autoSaveInFlight || !canEditNode(state.currentNode)) return;
   return persistCurrentEdit({ closeEditor: false });
@@ -2233,6 +2241,7 @@ async function persistCurrentEdit({ closeEditor }) {
   if (state.autoSaveInFlight) return;
   state.autoSaveInFlight = true;
   els.saveEditButton.disabled = true;
+  els.webEditButton.disabled = true;
   updateEditorStatus(closeEditor ? "저장 중" : "자동 저장 중");
   try {
     const nextContent = editorValue();
@@ -2269,6 +2278,7 @@ async function persistCurrentEdit({ closeEditor }) {
   } finally {
     state.autoSaveInFlight = false;
     els.saveEditButton.disabled = false;
+    els.webEditButton.disabled = false;
     updateEditButtons();
   }
 }
@@ -2668,29 +2678,42 @@ async function writeServerFile(path, content, { backup = true } = {}) {
 function updateEditButtons() {
   const canEdit = canEditNode(state.currentNode) && state.activeView === "note";
   els.editButton.disabled = state.activeView !== "note" || !state.vaultName || !state.currentPath;
-  els.webEditButton.disabled = !canEdit || state.editMode;
-  els.webEditButton.hidden = state.activeView !== "note" || state.editMode;
+  els.webEditButton.disabled = !canEdit || state.autoSaveInFlight;
+  els.webEditButton.hidden = state.activeView !== "note";
+  renderEditSaveButton();
   if (els.newNoteButton) els.newNoteButton.hidden = state.editMode;
   if (els.randomFileButton) els.randomFileButton.hidden = state.editMode;
   if (els.calendarButton) els.calendarButton.hidden = state.editMode;
   els.markdownToggleButton.disabled = state.editMode;
-  if (els.saveEditButton) els.saveEditButton.hidden = !(state.activeView === "note" && state.editMode);
+  if (els.saveEditButton) els.saveEditButton.hidden = true;
   if (els.editorImageButton) els.editorImageButton.hidden = !(state.editMode && state.serverVaultWritable);
+}
+
+function renderEditSaveButton() {
+  if (!els.webEditButton) return;
+  if (state.editMode) {
+    els.webEditButton.classList.add("is-saving-mode");
+    els.webEditButton.setAttribute("aria-label", "저장");
+    els.webEditButton.title = "저장";
+    els.webEditButton.textContent = "저장";
+    return;
+  }
+  els.webEditButton.classList.remove("is-saving-mode");
+  els.webEditButton.setAttribute("aria-label", "웹에서 편집");
+  els.webEditButton.title = "웹에서 편집";
+  els.webEditButton.innerHTML = `
+    <svg aria-hidden="true" viewBox="0 0 24 24">
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+    </svg>
+  `;
 }
 
 function arrangeChromeControls() {
   const sidebarOptions = document.querySelector(".sidebar-options");
-  const noteTitleRow = document.querySelector(".note-title-row");
   const editorToolbar = document.querySelector(".editor-toolbar");
-  const viewControls = document.querySelector(".view-controls");
   if (sidebarOptions && els.fullscreenButton && els.fullscreenButton.parentElement !== sidebarOptions) {
     sidebarOptions.insertBefore(els.fullscreenButton, sidebarOptions.querySelector("#themeButton") || sidebarOptions.firstChild);
-  }
-  if (viewControls && els.saveEditButton && els.saveEditButton.parentElement !== viewControls) {
-    els.saveEditButton.classList.add("save-edit-button");
-    els.saveEditButton.setAttribute("aria-label", "저장");
-    els.saveEditButton.title = "저장";
-    viewControls.insertBefore(els.saveEditButton, els.webEditButton || viewControls.firstChild);
   }
   if (editorToolbar && els.editorStatus && els.editorStatus.parentElement !== editorToolbar) {
     editorToolbar.insertBefore(els.editorStatus, editorToolbar.firstChild);
