@@ -1858,15 +1858,51 @@ button:disabled {
   margin-right: auto;
 }
 
+.task-edit-delete-btn {
+  color: #e74c3c;
+  border-color: #e74c3c !important;
+}
+
+.task-edit-delete-btn:hover {
+  background: rgba(231, 76, 60, 0.1);
+}
+
 .dialog-buttons {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
 }
 
 .dialog-buttons button {
+  border: 1.5px solid var(--line);
+  border-radius: 8px;
   min-height: 36px;
-  padding: 0 16px;
+  padding: 0 14px;
+  white-space: nowrap;
+}
+
+.dialog-buttons button:last-child {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.dialog-buttons button:last-child:hover {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+}
+
+@media (max-width: 480px) {
+  .dialog-buttons {
+    gap: 6px;
+  }
+
+  .task-edit-open-btn {
+    flex: 0 0 100%;
+    margin-right: 0;
+    order: 99;
+  }
 }
 
 #newNoteConfirmButton {
@@ -2366,8 +2402,8 @@ button:disabled {
   .filter-bar-body {
     display: none;
     flex-direction: column;
-    gap: 0;
-    padding: 4px 0 8px;
+    gap: 2px;
+    padding: 6px 0 10px;
   }
 
   .calendar-filter-bar.open .filter-bar-body {
@@ -2375,22 +2411,34 @@ button:disabled {
   }
 
   .filter-group {
-    align-items: center;
-    gap: 6px;
-    padding: 5px 0;
+    align-items: flex-start;
+    gap: 0;
+    padding: 4px 0;
+    flex-direction: column;
+  }
+
+  .filter-label {
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    margin-bottom: 5px;
+    text-transform: uppercase;
+    width: auto;
+  }
+
+  .filter-chips {
+    flex-wrap: wrap;
+    gap: 5px;
   }
 
   .filter-group-sep {
     display: none;
   }
 
-  .filter-label {
-    width: 40px;
-  }
-
   .filter-reset-btn {
     align-self: flex-start;
-    margin-top: 6px;
+    margin-top: 8px;
   }
 }
 

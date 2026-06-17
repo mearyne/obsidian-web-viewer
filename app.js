@@ -149,6 +149,7 @@ const els = {
   taskEditCancelBtn: document.querySelector("#taskEditCancelBtn"),
   taskEditConfirmBtn: document.querySelector("#taskEditConfirmBtn"),
   taskEditOpenFileBtn: document.querySelector("#taskEditOpenFileBtn"),
+  taskEditDeleteBtn: document.querySelector("#taskEditDeleteBtn"),
   taskEditKindChips: document.querySelector("#taskEditKindChips"),
   taskEditCategoryChips: document.querySelector("#taskEditCategoryChips"),
   taskEditPriorityChips: document.querySelector("#taskEditPriorityChips"),
@@ -2225,8 +2226,18 @@ async function persistCurrentEdit({ closeEditor }) {
   updateEditorStatus(closeEditor ? "저장 중" : "자동 저장 중");
   try {
     const nextContent = editorValue();
-    if (nextContent === state.currentContent && !closeEditor) return;
-    const metadata = await writeNodeContent(state.currentNode, nextContent, { backup: nextContent !== state.currentContent, previousContent: state.currentContent });
+    const contentChanged = nextContent !== state.currentContent;
+    if (!contentChanged && !closeEditor) return;
+    if (!contentChanged && closeEditor) {
+      state.editMode = false;
+      updateEditorStatus();
+      stopAutoSave();
+      holdViewerHeightDuringTransition();
+      renderCurrentDocument();
+      showNoteView();
+      return;
+    }
+    const metadata = await writeNodeContent(state.currentNode, nextContent, { backup: true, previousContent: state.currentContent });
     Object.assign(state.currentNode, metadata);
     if (typeof state.currentNode.content === "string") state.currentNode.content = nextContent;
     refreshDirectoryMetadata();
@@ -4867,6 +4878,14 @@ function bindTaskEditDialog() {
 
   els.taskEditCancelBtn?.addEventListener("click", () => {
     els.taskEditDialog.close("cancel");
+  });
+
+  els.taskEditDeleteBtn?.addEventListener("click", async () => {
+    const task = state.taskEditTask;
+    if (!task) return;
+    if (!confirm("태스크를 삭제할까요?")) return;
+    els.taskEditDialog.close("cancel");
+    await deleteCalendarTaskLine(task.path, task.line);
   });
 
   els.taskEditOpenFileBtn?.addEventListener("click", async () => {
