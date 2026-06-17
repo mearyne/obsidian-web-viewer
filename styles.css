@@ -1869,16 +1869,16 @@ button:disabled {
 
 .dialog-buttons {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
   justify-content: flex-end;
 }
 
 .dialog-buttons button {
   border: 1.5px solid var(--line);
   border-radius: 8px;
+  flex-shrink: 1;
   min-height: 36px;
-  padding: 0 14px;
+  padding: 0 10px;
   white-space: nowrap;
 }
 
@@ -1891,18 +1891,6 @@ button:disabled {
 .dialog-buttons button:last-child:hover {
   background: var(--accent-strong);
   border-color: var(--accent-strong);
-}
-
-@media (max-width: 480px) {
-  .dialog-buttons {
-    gap: 6px;
-  }
-
-  .task-edit-open-btn {
-    flex: 0 0 100%;
-    margin-right: 0;
-    order: 99;
-  }
 }
 
 #newNoteConfirmButton {
