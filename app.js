@@ -626,9 +626,7 @@ async function openRandomMarkdown() {
   if (!files.length) return;
 
   const candidates = files.length > 1 && state.currentPath ? files.filter((path) => path !== state.currentPath) : files;
-  const warmCandidates = candidates.filter((path) => typeof state.files.get(path)?.content === "string");
-  const pool = warmCandidates.length ? warmCandidates : candidates;
-  const path = pool[Math.floor(Math.random() * pool.length)];
+  const path = candidates[Math.floor(Math.random() * candidates.length)];
   scheduleRandomMarkdownPrefetch(0);
   if (state.activeView === "calendar") showNoteView();
   await openFile(path);
@@ -1420,7 +1418,9 @@ async function openFile(path) {
   const node = state.files.get(path);
   if (!node || !isOpenableDocument(node.name)) return;
 
-  showLoading(`문서 여는 중: ${node.name}`);
+  const loadingTimer = window.setTimeout(() => {
+    showLoading(`문서 여는 중: ${node.name}`);
+  }, 450);
   try {
     const content = await readFileNode(node);
     state.currentPath = path;
@@ -1435,6 +1435,7 @@ async function openFile(path) {
     showNoteView();
     scrollViewerTop();
   } finally {
+    window.clearTimeout(loadingTimer);
     hideLoading();
   }
 }
