@@ -1,4 +1,8 @@
 const CALENDAR_REFRESH_INTERVAL = 5 * 60 * 1000;
+const TASKS_DIRTY_KEY = "obsidian-web-viewer-tasks-dirty";
+function setTasksDirty() { try { localStorage.setItem(TASKS_DIRTY_KEY, "1"); } catch {} }
+function clearTasksDirty() { try { localStorage.removeItem(TASKS_DIRTY_KEY); } catch {} }
+function isTasksDirty() { try { return localStorage.getItem(TASKS_DIRTY_KEY) === "1"; } catch { return false; } }
 const CALENDAR_GESTURE_RULES = globalThis.CalendarGestureRules || {
   thresholds: {
     dragDistance: 10,
@@ -487,7 +491,6 @@ loadSavedVaults();
 loadSampleVault();
 arrangeChromeControls();
 handleUrlAction();
-setInterval(refreshCalendarIfVisible, CALENDAR_REFRESH_INTERVAL);
 
 function handleUrlAction() {
   const params = new URLSearchParams(window.location.search);
@@ -2738,12 +2741,13 @@ function scheduleCalendarRefresh(delay = 0) {
 
 function scheduleCalendarRefreshIfStale(delay = 0) {
   if (state.activeView !== "calendar" || state.calendarKind !== "tasks") return;
-  if (state.calendarSyncedAt && Date.now() - state.calendarSyncedAt < CALENDAR_REFRESH_INTERVAL) {
-    state.calendarCacheState = "fresh";
-    renderCalendar();
+  if (isTasksDirty()) {
+    clearTasksDirty();
+    scheduleCalendarRefresh(delay);
     return;
   }
-  scheduleCalendarRefresh(delay);
+  state.calendarCacheState = "fresh";
+  renderCalendar();
 }
 
 async function refreshCalendarTasks({ showLoading }) {
@@ -4380,7 +4384,7 @@ function bindDateClick(target) {
   };
 
   target.addEventListener("pointerdown", (event) => {
-    if (event.target.closest(".calendar-task, .calendar-more")) return;
+    if (event.target.closest(".calendar-task, .calendar-more, .agenda-delete-btn")) return;
     const isAgendaDate = target.classList.contains("calendar-agenda-day");
     startX = event.clientX;
     startY = event.clientY;
@@ -4420,7 +4424,7 @@ function bindDateClick(target) {
   });
 
   target.addEventListener("pointerup", async (event) => {
-    if (event.target.closest(".calendar-task, .calendar-more")) return;
+    if (event.target.closest(".calendar-task, .calendar-more, .agenda-delete-btn")) return;
     target.releasePointerCapture?.(event.pointerId);
     clearLongPress();
     const startDate = state.calendarDragStartDate;
@@ -4447,7 +4451,7 @@ function bindDateClick(target) {
   target.addEventListener("pointerleave", clearLongPress);
 
   target.addEventListener("click", async (event) => {
-    if (event.target.closest(".calendar-task, .calendar-more")) return;
+    if (event.target.closest(".calendar-task, .calendar-more, .agenda-delete-btn")) return;
     if (state.calendarDragHandled || Date.now() < state.calendarDateOpenSuppressedUntil || target.dataset.longPressed === "true") {
       target.dataset.longPressed = "";
       return;
@@ -4706,6 +4710,7 @@ function bindTaskCreateDialog() {
     updateTasksForFile(node.path, nextContent);
     refreshRecentFilesCache();
     if (state.activeView === "calendar" && state.calendarKind === "tasks") renderCalendar();
+    else setTasksDirty();
   });
 
   els.taskCreateDialog.addEventListener("keydown", (e) => {
