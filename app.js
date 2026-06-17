@@ -97,6 +97,10 @@ const state = {
   fullscreenFallback: false,
   fontDeviceKey: "",
   sseSource: null,
+  randomMarkdownCacheKey: "",
+  randomMarkdownPaths: [],
+  randomPrefetching: false,
+  randomPrefetchGeneration: 0,
 };
 
 const EXCALIDRAW_PREVIEW_ENABLED = false;
@@ -618,18 +622,76 @@ function setSidebarWidth(width) {
 }
 
 async function openRandomMarkdown() {
-  const randomPrefixes = parsePathList(els.randomPathInput?.value || "");
-  const files = [...state.files.keys()].filter((path) => {
-    if (!path.toLowerCase().endsWith(".md")) return false;
-    return !randomPrefixes.length || randomPrefixes.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
-  });
+  const files = getRandomMarkdownPaths();
   if (!files.length) return;
 
   const candidates = files.length > 1 && state.currentPath ? files.filter((path) => path !== state.currentPath) : files;
-  const path = candidates[Math.floor(Math.random() * candidates.length)];
+  const warmCandidates = candidates.filter((path) => typeof state.files.get(path)?.content === "string");
+  const pool = warmCandidates.length ? warmCandidates : candidates;
+  const path = pool[Math.floor(Math.random() * pool.length)];
+  scheduleRandomMarkdownPrefetch(0);
   if (state.activeView === "calendar") showNoteView();
   await openFile(path);
   scrollViewerTop();
+}
+
+function getRandomMarkdownPaths() {
+  const randomPrefixes = parsePathList(els.randomPathInput?.value || "");
+  const key = randomPrefixes.join("\n");
+  if (state.randomMarkdownCacheKey === key && state.randomMarkdownPaths.length) return state.randomMarkdownPaths;
+  state.randomMarkdownCacheKey = key;
+  state.randomMarkdownPaths = [...state.files.keys()].filter((path) => {
+    if (!path.toLowerCase().endsWith(".md")) return false;
+    return !randomPrefixes.length || randomPrefixes.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
+  });
+  return state.randomMarkdownPaths;
+}
+
+function invalidateRandomMarkdownCache() {
+  state.randomMarkdownCacheKey = "";
+  state.randomMarkdownPaths = [];
+  state.randomPrefetchGeneration += 1;
+}
+
+function scheduleRandomMarkdownPrefetch(delay = 1200) {
+  const generation = state.randomPrefetchGeneration;
+  window.setTimeout(() => {
+    if (generation !== state.randomPrefetchGeneration) return;
+    void prefetchRandomMarkdownFiles(generation);
+  }, delay);
+}
+
+async function prefetchRandomMarkdownFiles(generation) {
+  if (state.randomPrefetching) return;
+  state.randomPrefetching = true;
+  try {
+    const paths = getRandomMarkdownPaths()
+      .map((path) => state.files.get(path))
+      .filter((node) => node && typeof node.content !== "string" && Number(node.size || 0) <= 350_000)
+      .sort((a, b) => Number(a.size || 0) - Number(b.size || 0))
+      .slice(0, 32);
+
+    for (const node of shuffleArray(paths)) {
+      if (generation !== state.randomPrefetchGeneration) return;
+      await waitForBrowser();
+      try {
+        await readFileNode(node);
+      } catch {
+        // Prefetch is best-effort; explicit open will surface read errors.
+      }
+    }
+  } finally {
+    state.randomPrefetching = false;
+  }
+}
+
+function shuffleArray(items) {
+  const array = items.slice();
+  for (let index = array.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [array[index], array[swapIndex]] = [array[swapIndex], array[index]];
+  }
+  return array;
 }
 
 async function loadSavedVaults() {
@@ -790,6 +852,8 @@ async function loadVaultFromHandle(handle) {
     showInitialCalendarView();
     loadCalendarCache().finally(scheduleCalendarRefresh);
     loadRecentFilesCache().finally(refreshRecentFilesCache);
+    invalidateRandomMarkdownCache();
+    scheduleRandomMarkdownPrefetch();
   } finally {
     hideLoading();
   }
@@ -950,6 +1014,8 @@ function hydrateServerVault(vaultName, files, writable = false) {
   }
   loadCalendarCache().finally(scheduleCalendarRefresh);
   loadRecentFilesCache().finally(refreshRecentFilesCache);
+  invalidateRandomMarkdownCache();
+  scheduleRandomMarkdownPrefetch();
   window.dispatchEvent(new CustomEvent("vaultReady"));
 }
 
@@ -965,6 +1031,7 @@ function resetVault() {
   state.editMode = false;
   state.tasks = [];
   state.calendarTaskFiles.clear();
+  invalidateRandomMarkdownCache();
   state.calendarDate = new Date();
   state.calendarRefreshInFlight = false;
   state.calendarRefreshing = false;
@@ -1777,6 +1844,7 @@ async function createAndOpenNote(title, dirPathOverride) {
     refreshDirectoryMetadataFrom(path);
     renderTree();
     refreshRecentFilesCache();
+    invalidateRandomMarkdownCache();
     await openFile(path);
     await enterEditMode();
     return;
@@ -1794,6 +1862,7 @@ async function createAndOpenNote(title, dirPathOverride) {
   refreshDirectoryMetadataFrom(path);
   renderTree();
   refreshRecentFilesCache();
+  invalidateRandomMarkdownCache();
   await openFile(path);
   await enterEditMode();
 }
@@ -2048,6 +2117,8 @@ function handleCalendarFilterInput() {
 function handleRandomPathInput() {
   const value = els.randomPathInput?.value || "";
   localStorage.setItem("obsidian-web-viewer-random-paths", value);
+  invalidateRandomMarkdownCache();
+  scheduleRandomMarkdownPrefetch();
   scheduleSettingsSave();
 }
 
@@ -4033,6 +4104,7 @@ async function deleteVaultFileByPath(filePath) {
     saveCalendarCache();
     refreshDirectoryMetadataFrom(filePath);
     refreshRecentFilesCache();
+    invalidateRandomMarkdownCache();
     if (state.currentPath === filePath) {
       state.currentPath = "";
       state.currentContent = "";
