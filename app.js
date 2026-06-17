@@ -3765,6 +3765,8 @@ function renderCalendarTask(task, dateKey = task.date, showDelete = false) {
   const wrapMetaClasses = [
     task.category ? `cat-${task.category}` : "",
     task.priority ? `pri-${task.priority}` : "",
+    task.kind === "일정" ? "kind-schedule-task" : "",
+    task.kind === "할일" ? "kind-todo-task" : "",
   ].filter(Boolean).join(" ");
   return `
     <div class="calendar-task-wrap${showDelete ? " has-delete" : ""}${hasSubItems ? " has-sub" : ""} ${wrapMetaClasses}"${wrapIndentStyle}>
@@ -4656,7 +4658,7 @@ async function showTaskCreateDialog(dueDate, startDate = "") {
 
   // reset state
   state.taskDialogActiveField = null;
-  state.taskDialogMeta = { kind: null, category: null, priority: null, tags: [] };
+  state.taskDialogMeta = { kind: "할일", category: null, priority: null, tags: [] };
   if (els.taskTitleInput) els.taskTitleInput.value = "";
   if (els.taskStartTimeInput) els.taskStartTimeInput.value = "";
   if (els.taskDueTimeInput) els.taskDueTimeInput.value = "";
@@ -4720,6 +4722,17 @@ function setTaskDialogDate(field, value) {
   btn.dataset.date = value || "";
   btn.textContent = value ? formatDateKorean(value) : (field === "start" ? "날짜 없음" : "날짜 선택");
   btn.classList.toggle("has-date", Boolean(value));
+}
+
+function normalizeTaskTimeInput(input) {
+  if (!input?.value) return "";
+  const match = input.value.match(/^(\d{2}):(\d{2})$/);
+  if (!match) return input.value;
+  const minutes = Number(match[1]) * 60 + Number(match[2]);
+  const rounded = Math.round(minutes / 5) * 5;
+  const normalized = `${String(Math.floor(rounded / 60) % 24).padStart(2, "0")}:${String(rounded % 60).padStart(2, "0")}`;
+  input.value = normalized;
+  return normalized;
 }
 
 function formatDateKorean(dateKey) {
@@ -4846,8 +4859,8 @@ function bindTaskCreateDialog() {
     const { kind, category, priority, tags } = state.taskDialogMeta;
     const hashParts = [kind, category, priority, ...tags].filter(Boolean).map((v) => `#${v}`);
     const metaStr = hashParts.length ? ` ${hashParts.join(" ")}` : "";
-    const startTime = els.taskStartTimeInput?.value || "";
-    const dueTime = els.taskDueTimeInput?.value || "";
+    const startTime = normalizeTaskTimeInput(els.taskStartTimeInput);
+    const dueTime = normalizeTaskTimeInput(els.taskDueTimeInput);
     const startPart = startDate ? ` 🛫 ${startDate}${startTime ? " " + startTime : ""}` : "";
     const duePart = ` 📅 ${dueDate}${dueTime ? " " + dueTime : ""}`;
     const taskLine = `${prefix}- [ ] ${title}${metaStr}${startPart}${duePart}`;
@@ -4918,8 +4931,8 @@ function bindTaskEditDialog() {
     const title = els.taskEditTitleInput?.value.trim() || "";
     const dueDate = els.taskEditDueDateBtn?.dataset.date || "";
     const startDate = els.taskEditStartDateBtn?.dataset.date || "";
-    const dueTime = els.taskEditDueTimeInput?.value || "";
-    const startTime = els.taskEditStartTimeInput?.value || "";
+    const dueTime = normalizeTaskTimeInput(els.taskEditDueTimeInput);
+    const startTime = normalizeTaskTimeInput(els.taskEditStartTimeInput);
     const checked = els.taskEditChecked?.checked || false;
     if (!dueDate) { els.taskEditDueDateBtn?.focus(); return; }
     const task = state.taskEditTask;

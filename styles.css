@@ -2715,6 +2715,7 @@ button:disabled {
 .calendar-task-wrap.cat-회사 > .calendar-task { border-right: 3px solid rgba(74, 158, 255, 0.75); }
 .calendar-task-wrap.cat-개인 > .calendar-task { border-right: 3px solid rgba(74, 201, 126, 0.75); }
 .calendar-task-wrap.cat-기타 > .calendar-task { border-right: 3px solid rgba(153, 153, 153, 0.6); }
+.calendar-task-wrap.kind-schedule-task > .calendar-task { border-right: 3px solid #e74c3c; }
 
 /* Kind icons — colored text characters for 일정/할일 */
 .kind-schedule { color: #7b68ee; }
