@@ -129,6 +129,8 @@ const els = {
   taskStartDateBtn: document.querySelector("#taskStartDateBtn"),
   taskDueDateBtn: document.querySelector("#taskDueDateBtn"),
   taskDatePickerCal: document.querySelector("#taskDatePickerCal"),
+  taskStartTimeInput: document.querySelector("#taskStartTimeInput"),
+  taskDueTimeInput: document.querySelector("#taskDueTimeInput"),
   taskCreateCancelBtn: document.querySelector("#taskCreateCancelBtn"),
   taskCreateConfirmBtn: document.querySelector("#taskCreateConfirmBtn"),
   taskKindChips: document.querySelector("#taskKindChips"),
@@ -142,6 +144,8 @@ const els = {
   taskEditStartDateBtn: document.querySelector("#taskEditStartDateBtn"),
   taskEditDueDateBtn: document.querySelector("#taskEditDueDateBtn"),
   taskEditDatePickerCal: document.querySelector("#taskEditDatePickerCal"),
+  taskEditStartTimeInput: document.querySelector("#taskEditStartTimeInput"),
+  taskEditDueTimeInput: document.querySelector("#taskEditDueTimeInput"),
   taskEditCancelBtn: document.querySelector("#taskEditCancelBtn"),
   taskEditConfirmBtn: document.querySelector("#taskEditConfirmBtn"),
   taskEditOpenFileBtn: document.querySelector("#taskEditOpenFileBtn"),
@@ -3108,6 +3112,8 @@ function parseTasks(content, path) {
       }
 
       const meta = extractTaskMeta(rawText);
+      const dueTime = findTaskTime(rawText, "📅");
+      const startTime = findTaskTime(rawText, "🛫");
       return [
         {
           path,
@@ -3118,6 +3124,8 @@ function parseTasks(content, path) {
           date: displayDate,
           type: dates.due || dates.end ? "due" : dates.scheduled ? "scheduled" : "start",
           dates,
+          dueTime,
+          startTime,
           indent: Math.floor(taskIndentLen / 2),
           subItems,
           kind: meta.kind,
@@ -3215,9 +3223,15 @@ function findTaskDateByMarkers(text, markers) {
 
 function cleanTaskText(text) {
   return text
-    .replace(/(?:\u{1F4C5}|\u{1F6EB}|\u{23F3}|\u{2705}|\u{274C}|due|start|end|scheduled|done|cancelled|canceled)\s*\d{4}-\d{2}-\d{2}/giu, "")
+    .replace(/(?:\u{1F4C5}|\u{1F6EB}|\u{23F3}|\u{2705}|\u{274C}|due|start|end|scheduled|done|cancelled|canceled)\s*\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2})?/giu, "")
     .replace(/#[\p{L}\p{N}_/-]+/gu, "")
     .trim();
+}
+
+function findTaskTime(text, marker) {
+  const escaped = marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = text.match(new RegExp(`${escaped}\\s*\\d{4}-\\d{2}-\\d{2}\\s+(\\d{2}:\\d{2})`, "u"));
+  return match ? match[1] : null;
 }
 
 function extractTaskMeta(text) {
@@ -3670,7 +3684,7 @@ function renderCalendarTask(task, dateKey = task.date, showDelete = false) {
     <div class="calendar-task-wrap${showDelete ? " has-delete" : ""}${hasSubItems ? " has-sub" : ""} ${wrapMetaClasses}"${wrapIndentStyle}>
       <button class="calendar-task ${task.checked ? "done" : ""} ${task.type} ${range ? `range-task ${colorClass}` : ""} ${task.draggingPreview ? "drag-preview" : ""}" type="button" data-path="${escapeAttribute(task.path)}" data-line="${task.line}" data-date="${escapeAttribute(dateKey)}" title="${escapeAttribute(title)}">
         <span>${icon}</span>
-        <span>${escapeHtml(task.text)}</span>
+        <span>${escapeHtml(task.text)}${task.dueTime ? `<span class="task-time-badge">${escapeHtml(task.dueTime)}</span>` : task.startTime ? `<span class="task-time-badge">${escapeHtml(task.startTime)}</span>` : ""}</span>
       </button>
       ${deleteBtn}
       ${inlineSubItems}
@@ -4558,6 +4572,8 @@ async function showTaskCreateDialog(dueDate, startDate = "") {
   state.taskDialogActiveField = null;
   state.taskDialogMeta = { kind: null, category: null, priority: null, tags: [] };
   if (els.taskTitleInput) els.taskTitleInput.value = "";
+  if (els.taskStartTimeInput) els.taskStartTimeInput.value = "";
+  if (els.taskDueTimeInput) els.taskDueTimeInput.value = "";
   setTaskDialogDate("due", dueDate);
   setTaskDialogDate("start", startDate);
   renderTaskDatePicker(null);
@@ -4729,9 +4745,11 @@ function bindTaskCreateDialog() {
     const { kind, category, priority, tags } = state.taskDialogMeta;
     const hashParts = [kind, category, priority, ...tags].filter(Boolean).map((v) => `#${v}`);
     const metaStr = hashParts.length ? ` ${hashParts.join(" ")}` : "";
-    const taskLine = startDate
-      ? `${prefix}- [ ] ${title}${metaStr} 🛫 ${startDate} 📅 ${dueDate}`
-      : `${prefix}- [ ] ${title}${metaStr} 📅 ${dueDate}`;
+    const startTime = els.taskStartTimeInput?.value || "";
+    const dueTime = els.taskDueTimeInput?.value || "";
+    const startPart = startDate ? ` 🛫 ${startDate}${startTime ? " " + startTime : ""}` : "";
+    const duePart = ` 📅 ${dueDate}${dueTime ? " " + dueTime : ""}`;
+    const taskLine = `${prefix}- [ ] ${title}${metaStr}${startPart}${duePart}`;
     const nextContent = content + taskLine + "\n";
     await writeNodeContent(node, nextContent, { backup: false, previousContent: content });
     if (typeof node.content === "string") node.content = nextContent;
@@ -4791,12 +4809,14 @@ function bindTaskEditDialog() {
     const title = els.taskEditTitleInput?.value.trim() || "";
     const dueDate = els.taskEditDueDateBtn?.dataset.date || "";
     const startDate = els.taskEditStartDateBtn?.dataset.date || "";
+    const dueTime = els.taskEditDueTimeInput?.value || "";
+    const startTime = els.taskEditStartTimeInput?.value || "";
     const checked = els.taskEditChecked?.checked || false;
     if (!dueDate) { els.taskEditDueDateBtn?.focus(); return; }
     const task = state.taskEditTask;
     if (!task) return;
     els.taskEditDialog.close("confirm");
-    await saveTaskEdit(task, title, state.taskEditMeta, dueDate, startDate, checked);
+    await saveTaskEdit(task, title, state.taskEditMeta, dueDate, startDate, checked, dueTime, startTime);
   });
 
   els.taskEditDialog.addEventListener("keydown", (e) => {
@@ -4898,6 +4918,8 @@ async function showTaskEditDialog(task) {
   state.taskEditPickerMonth = null;
   if (els.taskEditTitleInput) els.taskEditTitleInput.value = task.text || "";
   if (els.taskEditChecked) els.taskEditChecked.checked = task.checked || false;
+  if (els.taskEditStartTimeInput) els.taskEditStartTimeInput.value = task.startTime || "";
+  if (els.taskEditDueTimeInput) els.taskEditDueTimeInput.value = task.dueTime || "";
   setTaskEditDate("start", task.dates?.start || "");
   setTaskEditDate("due", task.dates?.due || task.dates?.end || task.date || "");
   renderEditTagChips();
@@ -4912,7 +4934,7 @@ async function showTaskEditDialog(task) {
   });
 }
 
-async function saveTaskEdit(task, title, meta, dueDate, startDate, checked) {
+async function saveTaskEdit(task, title, meta, dueDate, startDate, checked, dueTime = "", startTime = "") {
   try {
     const node = state.files.get(task.path);
     if (!node) { alert("파일을 찾을 수 없습니다."); return; }
@@ -4924,8 +4946,9 @@ async function saveTaskEdit(task, title, meta, dueDate, startDate, checked) {
     const { kind, category, priority, tags } = meta;
     const hashParts = [kind, category, priority, ...tags].filter(Boolean).map((v) => `#${v}`);
     const metaStr = hashParts.length ? ` ${hashParts.join(" ")}` : "";
-    const dateStr = startDate ? ` 🛫 ${startDate} 📅 ${dueDate}` : ` 📅 ${dueDate}`;
-    lines[idx] = `${indentStr}- [${checked ? "x" : " "}] ${title}${metaStr}${dateStr}`;
+    const startPart = startDate ? ` 🛫 ${startDate}${startTime ? " " + startTime : ""}` : "";
+    const duePart = ` 📅 ${dueDate}${dueTime ? " " + dueTime : ""}`;
+    lines[idx] = `${indentStr}- [${checked ? "x" : " "}] ${title}${metaStr}${startPart}${duePart}`;
     const newContent = lines.join("\n");
     await writeNodeContent(node, newContent, { backup: false, previousContent: content });
     if (typeof node.content === "string") node.content = newContent;

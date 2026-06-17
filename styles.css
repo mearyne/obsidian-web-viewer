@@ -1610,6 +1610,43 @@ button:disabled {
   outline: none;
 }
 
+.date-time-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.date-time-row .date-picker-btn {
+  flex: 1;
+  min-width: 0;
+}
+
+.time-input {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 13px;
+  padding: 6px 8px;
+  width: 108px;
+  flex-shrink: 0;
+}
+
+.time-input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.task-time-badge {
+  background: var(--surface-3);
+  border-radius: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  margin-left: 5px;
+  padding: 1px 5px;
+  white-space: nowrap;
+}
+
 .task-date-picker-cal {
   background: var(--surface);
   border: 1px solid var(--line);
