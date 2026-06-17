@@ -1681,7 +1681,8 @@ function positionNewNoteDialog() {
   if (!vv) return;
   const keyboardHeight = window.innerHeight - vv.height - vv.offsetTop;
   if (keyboardHeight > 80) {
-    dialog.style.marginTop = `${Math.max(8, vv.offsetTop + 8)}px`;
+    const top = vv.offsetTop + Math.max(8, (vv.height - dialog.offsetHeight) / 2);
+    dialog.style.marginTop = `${top}px`;
     dialog.style.marginBottom = "auto";
   } else {
     dialog.style.marginTop = "";
@@ -4635,6 +4636,21 @@ function positionTaskCreateDialog() {
   }
 }
 
+function positionTaskEditDialog() {
+  const dialog = els.taskEditDialog;
+  if (!dialog || !isTouchPrimaryDevice()) return;
+  const vv = window.visualViewport;
+  if (!vv) return;
+  const keyboardHeight = window.innerHeight - vv.height - vv.offsetTop;
+  if (keyboardHeight > 80) {
+    dialog.style.marginTop = `${Math.max(8, vv.offsetTop + 8)}px`;
+    dialog.style.marginBottom = "auto";
+  } else {
+    dialog.style.marginTop = "";
+    dialog.style.marginBottom = "";
+  }
+}
+
 function setTaskDialogDate(field, value) {
   const btn = field === "start" ? els.taskStartDateBtn : els.taskDueDateBtn;
   if (!btn) return;
@@ -4948,10 +4964,19 @@ async function showTaskEditDialog(task) {
   updateTaskEditMetaUI();
   renderTaskEditDatePicker(null);
   els.taskEditDialog.showModal();
+  positionTaskEditDialog();
+  const vvEdit = window.visualViewport;
+  if (vvEdit) vvEdit.addEventListener("resize", positionTaskEditDialog);
   els.taskEditTitleInput?.focus();
   els.taskEditTitleInput?.select();
   await new Promise((resolve) => {
-    const onClose = () => { els.taskEditDialog.removeEventListener("close", onClose); resolve(); };
+    const onClose = () => {
+      els.taskEditDialog.removeEventListener("close", onClose);
+      if (vvEdit) vvEdit.removeEventListener("resize", positionTaskEditDialog);
+      els.taskEditDialog.style.marginTop = "";
+      els.taskEditDialog.style.marginBottom = "";
+      resolve();
+    };
     els.taskEditDialog.addEventListener("close", onClose);
   });
 }
