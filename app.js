@@ -1120,6 +1120,25 @@ function refreshDirectoryMetadata() {
   });
 }
 
+function refreshDirectoryMetadataFrom(path) {
+  const parts = normalizeVaultPath(path || "").split("/").filter(Boolean);
+  const paths = [""];
+  let current = "";
+  parts.slice(0, -1).forEach((part) => {
+    current = current ? `${current}/${part}` : part;
+    paths.push(current);
+  });
+  paths.reverse().forEach((dirPath) => {
+    const dir = state.directories.get(dirPath);
+    if (!dir) return;
+    const children = [...dir.children.values()];
+    dir.size = children.reduce((sum, node) => sum + (node.size || 0), 0);
+    dir.fileCount = children.reduce((sum, node) => sum + (node.kind === "directory" ? node.fileCount || 0 : 1), 0);
+    dir.updatedAt = children.reduce((latest, node) => Math.max(latest, node.updatedAt || 0), 0);
+    dir.createdAt = children.reduce((latest, node) => Math.max(latest, node.createdAt || node.updatedAt || 0), 0);
+  });
+}
+
 function expandAllTree(event) {
   event?.stopPropagation();
   setTreeCollapsed(false);
@@ -1478,7 +1497,7 @@ async function deleteCurrentFileNode(node) {
     state.tasks = state.tasks.filter((task) => task.path !== path);
     state.calendarTaskFiles.delete(path);
     saveCalendarCache();
-    refreshDirectoryMetadata();
+    refreshDirectoryMetadataFrom(path);
     renderTree();
     els.notePath.textContent = "문서를 선택하세요";
     els.noteTitle.textContent = "Obsidian Markdown Viewer";
@@ -1706,6 +1725,7 @@ function showNewNoteDialog(defaultTitle) {
       resolve(prompt("새 노트 제목:", defaultTitle));
       return;
     }
+    let settled = false;
     els.newNoteTitleInput.value = defaultTitle;
     els.newNoteDialog.showModal();
     positionNewNoteDialog();
@@ -1715,7 +1735,9 @@ function showNewNoteDialog(defaultTitle) {
       els.newNoteTitleInput.select();
     });
     const finish = (result) => {
-      els.newNoteDialog.close();
+      if (settled) return;
+      settled = true;
+      if (els.newNoteDialog.open) els.newNoteDialog.close();
       els.newNoteDialog.removeEventListener("close", onClose);
       els.newNoteCancelButton.removeEventListener("click", onCancel);
       if (vv) vv.removeEventListener("resize", positionNewNoteDialog);
@@ -1723,10 +1745,9 @@ function showNewNoteDialog(defaultTitle) {
       els.newNoteDialog.style.marginBottom = "";
       resolve(result);
     };
-    const onClose = () => finish(els.newNoteDialog.returnValue === "cancel" ? null : els.newNoteTitleInput.value);
+    const onClose = () => finish(els.newNoteDialog.returnValue === "confirm" ? els.newNoteTitleInput.value : null);
     const onCancel = () => {
-      els.newNoteDialog.returnValue = "cancel";
-      els.newNoteDialog.close();
+      finish(null);
     };
     els.newNoteDialog.returnValue = "";
     els.newNoteDialog.addEventListener("close", onClose, { once: true });
@@ -1754,7 +1775,7 @@ async function createAndOpenNote(title, dirPathOverride) {
     state.files.set(path, node);
     const dir = state.directories.get(dirPath || "");
     if (dir) dir.children.set(node.name, node);
-    refreshDirectoryMetadata();
+    refreshDirectoryMetadataFrom(path);
     renderTree();
     await openFile(path);
     await enterEditMode();
@@ -1770,7 +1791,7 @@ async function createAndOpenNote(title, dirPathOverride) {
   state.files.set(path, node);
   const dir = state.directories.get(dirPath || "");
   if (dir) dir.children.set(node.name, node);
-  refreshDirectoryMetadata();
+  refreshDirectoryMetadataFrom(path);
   renderTree();
   await openFile(path);
   await enterEditMode();
@@ -4005,11 +4026,18 @@ async function deleteVaultFileByPath(filePath) {
   try {
     const res = await fetch(`/api/vault-file?path=${encodeURIComponent(filePath)}`, { method: "DELETE" });
     if (!res.ok) throw new Error("delete failed");
-    await loadSampleVault();
+    removeFileNode(filePath);
+    state.tasks = state.tasks.filter((task) => task.path !== filePath);
+    state.calendarTaskFiles.delete(filePath);
+    saveCalendarCache();
+    refreshDirectoryMetadataFrom(filePath);
     if (state.currentPath === filePath) {
       state.currentPath = "";
+      state.currentContent = "";
+      state.currentNode = null;
       els.markdownView.innerHTML = "<h3>파일이 삭제됐습니다.</h3>";
     }
+    renderTree();
     renderCalendar();
   } catch {
     alert("삭제에 실패했습니다.");
@@ -5168,7 +5196,7 @@ async function getOrCreateDailyNote(date) {
     const node = { name: `${date}.md`, path, content: initialContent, serverBacked: true, kind: "file", ...metadata };
     state.files.set(path, node);
     state.directories.get(dirPath).children.set(node.name, node);
-    refreshDirectoryMetadata();
+    refreshDirectoryMetadataFrom(path);
     renderTree();
     return node;
   }
@@ -5184,7 +5212,7 @@ async function getOrCreateDailyNote(date) {
   const node = { name: `${date}.md`, path, handle, dirHandle, kind: "file", ...metadata };
   state.files.set(path, node);
   state.directories.get(dirPath).children.set(node.name, node);
-  refreshDirectoryMetadata();
+  refreshDirectoryMetadataFrom(path);
   renderTree();
   return node;
 }
