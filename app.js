@@ -31,6 +31,7 @@ const state = {
   calendarTaskFiles: new Map(),
   calendarDate: new Date(),
   calendarMode: "month",
+  vaultSyncing: false,
   calendarRefreshInFlight: false,
   calendarRefreshTimer: null,
   calendarFilterTimer: null,
@@ -1740,10 +1741,19 @@ async function createAndOpenNote(title, dirPathOverride) {
 }
 
 function handleSyncStatusClick() {
-  if (state.activeView !== "calendar" || state.calendarKind !== "tasks") return;
-  state.calendarSyncedAt = 0;
-  state.calendarCacheState = "empty";
-  refreshCalendarTasks({ showLoading: true });
+  if (state.activeView === "calendar" && state.calendarKind === "tasks") {
+    state.calendarSyncedAt = 0;
+    state.calendarCacheState = "empty";
+    refreshCalendarTasks({ showLoading: true });
+    return;
+  }
+  if (state.vaultSyncing) return;
+  state.vaultSyncing = true;
+  updateSyncStatus();
+  loadSampleVault().finally(() => {
+    state.vaultSyncing = false;
+    updateSyncStatus();
+  });
 }
 
 async function handleVisibilityChange() {
@@ -3411,12 +3421,15 @@ function handleCalendarResize() {
 
 function updateSyncStatus() {
   if (!els.syncStatus) return;
+  els.syncStatus.hidden = false;
+
   if (state.activeView !== "calendar" || state.calendarKind !== "tasks") {
-    els.syncStatus.hidden = true;
+    els.syncStatus.className = `sync-status ${state.vaultSyncing ? "refreshing" : "idle"}`;
+    els.syncStatus.textContent = "↻";
+    els.syncStatus.title = state.vaultSyncing ? "동기화 중..." : "동기화";
     return;
   }
 
-  els.syncStatus.hidden = false;
   els.syncStatus.className = `sync-status ${state.calendarRefreshing ? "refreshing" : state.calendarCacheState}`;
 
   if (state.calendarRefreshing) {

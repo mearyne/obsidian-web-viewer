@@ -599,6 +599,11 @@ button:disabled {
   padding: 0 6px;
 }
 
+.sync-status.idle {
+  border-color: var(--muted);
+  color: var(--muted);
+}
+
 .sync-status.refreshing {
   animation: sync-spin 900ms linear infinite;
   border-color: var(--accent);
