@@ -2600,19 +2600,10 @@ button:disabled {
 .calendar-task-wrap.cat-개인::after { background: rgba(74, 201, 126, 0.55); }
 .calendar-task-wrap.cat-기타::after { background: rgba(153, 153, 153, 0.4); }
 
-/* Priority dot — small colored circle before text */
-.task-pri-dot {
-  border-radius: 50%;
-  display: inline-block;
-  flex-shrink: 0;
-  height: 7px;
-  margin-right: 4px;
-  vertical-align: middle;
-  width: 7px;
-}
-.task-pri-dot.pri-dot-상 { background: #e74c3c; }
-.task-pri-dot.pri-dot-중 { background: #e6a20f; }
-.task-pri-dot.pri-dot-하 { background: #4a9eff; }
+/* Kind icons — colored text characters for 일정/할일 */
+.kind-schedule { color: #7b68ee; }
+.kind-todo { color: #44b36b; }
+
 
 .calendar-cell.task-drop-target,
 .calendar-agenda-day.task-drop-target {

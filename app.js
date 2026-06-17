@@ -3631,14 +3631,11 @@ function renderCalendarTask(task, dateKey = task.date, showDelete = false) {
     task.category ? `cat-${task.category}` : "",
     task.priority ? `pri-${task.priority}` : "",
   ].filter(Boolean).join(" ");
-  const priDot = task.priority
-    ? `<span class="task-pri-dot pri-dot-${task.priority}" aria-hidden="true"></span>`
-    : "";
   return `
     <div class="calendar-task-wrap${showDelete ? " has-delete" : ""}${hasSubItems ? " has-sub" : ""} ${wrapMetaClasses}"${wrapIndentStyle}>
       <button class="calendar-task ${task.checked ? "done" : ""} ${task.type} ${range ? `range-task ${colorClass}` : ""} ${task.draggingPreview ? "drag-preview" : ""}" type="button" data-path="${escapeAttribute(task.path)}" data-line="${task.line}" data-date="${escapeAttribute(dateKey)}" title="${escapeAttribute(title)}">
         <span>${icon}</span>
-        <span>${priDot}${escapeHtml(task.text)}</span>
+        <span>${escapeHtml(task.text)}</span>
       </button>
       ${deleteBtn}
       ${inlineSubItems}
@@ -4902,9 +4899,9 @@ function taskDisplayIcon(task) {
   if (task.tags && task.tags.length > 0) {
     return TAG_EMOJI_MAP[task.tags[0]] || "🏷️";
   }
-  if (task.kind === "일정") return "🗓";
-  if (task.kind === "할일") return "☑";
-  return "·";
+  if (task.kind === "일정") return '<span class="kind-schedule">🗓</span>';
+  if (task.kind === "할일") return '<span class="kind-todo">☑</span>';
+  return taskTypeIcon(task.type);
 }
 
 function normalizeVaultPath(path) {
