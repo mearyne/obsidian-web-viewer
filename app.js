@@ -7182,6 +7182,7 @@ function renderTabStrip() {
     }
   }
 
+  const isMobile = window.matchMedia("(max-width: 780px)").matches;
   const sidebarOpen = document.body.classList.contains("sidebar-open");
   const sidebarToggleHtml = !isMobile
     ? `<button class="tab-sidebar-toggle icon-button" type="button" aria-expanded="${sidebarOpen}" aria-label="${sidebarOpen ? "문서 목록 닫기" : "문서 목록 열기"}" title="문서 목록">☰</button>`

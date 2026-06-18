@@ -1130,7 +1130,7 @@ button:disabled {
 }
 
 .heading-controls-overlay {
-  bottom: 20px;
+  bottom: 56px;
   display: flex;
   gap: 4px;
   position: fixed;
@@ -3867,9 +3867,11 @@ button.calendar-more {
 
 /* PC: tab strip above note-header inside content-pane */
 @media (min-width: 781px) {
-  .content-pane { grid-template-rows: auto auto 1fr; }
+  .content-pane { grid-template-rows: auto auto 1fr; padding-bottom: 0; }
   .tab-strip { order: -1; }
   .header-left { display: none; }
+  .note-header { justify-content: flex-end; }
+  .viewer-wrap { padding-bottom: 60px; }
 }
 
 /* Mobile: tab strip above status bar (fixed) */
