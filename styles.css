@@ -552,11 +552,11 @@ button:disabled {
   background: var(--surface);
   border-bottom: 1px solid var(--line);
   display: flex;
-  gap: 20px;
+  gap: 16px;
   justify-content: space-between;
-  min-height: 54px;
+  min-height: 46px;
   min-width: 0;
-  padding: 10px 22px;
+  padding: 6px 16px;
   position: sticky;
   top: 0;
   z-index: 16;

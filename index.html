@@ -148,7 +148,17 @@
           </section>
           <article id="calendarView" class="calendar-view" hidden></article>
         </section>
+        <div class="split-drop-zone" aria-hidden="true"><span>분할 보기로 열기</span></div>
       </main>
+      <div id="splitPane" class="split-pane" hidden>
+        <header class="split-header">
+          <span id="splitTitle" class="split-title"></span>
+          <button id="splitCloseButton" class="icon-button" type="button" title="분할 닫기">×</button>
+        </header>
+        <section class="split-viewer-wrap">
+          <article id="splitMarkdownView" class="markdown-body"></article>
+        </section>
+      </div>
     </div>
     <div id="syncStatus" class="sync-status sync-status-bar" hidden></div>
     <div id="connectionBanner" class="connection-banner" hidden></div>
@@ -182,6 +192,10 @@
           <label class="option-field">
             <span>캘린더 row 글자 크기</span>
             <input id="calendarRowFontSizeInput" type="number" min="6" max="22" step="0.5" />
+          </label>
+          <label class="option-field">
+            <span>본문 최대 너비 (px)</span>
+            <input id="contentMaxWidthInput" type="number" min="400" max="1600" step="10" placeholder="760" />
           </label>
           <label class="option-field">
             <span>본문 정렬</span>
