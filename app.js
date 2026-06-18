@@ -414,21 +414,21 @@ function handleGlobalKeydown(event) {
     return;
   }
 
-  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.code === "KeyN") {
+  if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && event.code === "KeyN") {
     event.preventDefault();
     event.stopPropagation();
     openNewNote();
     return;
   }
 
-  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.code === "KeyT") {
+  if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && event.code === "KeyT") {
     event.preventDefault();
     event.stopPropagation();
     void createTab();
     return;
   }
 
-  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.code === "KeyW") {
+  if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && event.code === "KeyW") {
     event.preventDefault();
     event.stopPropagation();
     void closeTab(state.activeTabId);
@@ -7119,12 +7119,13 @@ function renderTabStrip() {
     const isActive = tab.id === state.activeTabId;
     const title = escapeHtml(tab.title || "새 탭");
     const pinMark = tab.pinned ? '<span class="tab-pin">📌</span>' : "";
-    const draggable = tab.path ? ' draggable="true"' : "";
+    const isMobile = window.matchMedia("(max-width: 780px)").matches;
+    const draggable = (tab.path && !isMobile) ? ' draggable="true"' : "";
     return `<div class="tab-item${isActive ? " active" : ""}${tab.pinned ? " pinned" : ""}" data-tab-id="${escapeAttribute(tab.id)}" data-tab-path="${escapeAttribute(tab.path || "")}" title="${title}"${draggable}>
       ${pinMark}<span class="tab-title">${title}</span>
       <button class="tab-close" data-tab-id="${escapeAttribute(tab.id)}" title="${tab.pinned ? "핀 해제" : "탭 닫기"}" type="button">×</button>
     </div>`;
-  }).join("") + `<button class="tab-new" type="button" title="새 탭 (Ctrl+T)">+</button>`;
+  }).join("") + `<button class="tab-new" type="button" title="새 탭 (Alt+T)">+</button>`;
 
   strip.querySelectorAll(".tab-item").forEach((el) => {
     el.addEventListener("click", (e) => {
