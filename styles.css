@@ -547,8 +547,17 @@ button:disabled {
   padding-bottom: 44px;
 }
 
-/* Hide tab strip when only one tab open */
-.single-tab .tab-strip { display: none; }
+/* Single tab: hide tab items, keep + button visible */
+.single-tab .tab-item { display: none; }
+.single-tab .tab-strip {
+  border-bottom: none;
+  min-height: 0;
+}
+.single-tab .tab-new {
+  font-size: 12px;
+  opacity: 0.45;
+  padding: 2px 10px;
+}
 
 .note-header {
   align-items: center;
@@ -1119,15 +1128,16 @@ button:disabled {
 }
 
 .viewer-wrap:has(.calendar-view:not([hidden])) {
-  display: flex;
-  flex-direction: column;
   overflow: hidden;
   padding: 0;
 }
 
 .viewer-wrap:has(.calendar-view:not([hidden])) .calendar-view {
-  flex: 1;
-  min-height: 0;
+  bottom: 0;
+  left: 0;
+  position: absolute;
+  right: 0;
+  top: 0;
 }
 
 .loading-overlay {
