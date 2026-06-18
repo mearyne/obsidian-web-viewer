@@ -2483,15 +2483,22 @@ function setEditorValue(value) {
 }
 
 function resizeEditorToContent() {
+  const scrollTop = els.viewerWrap.scrollTop;
   els.markdownEditor.style.height = "auto";
   els.markdownEditor.style.height = `${Math.max(els.markdownEditor.scrollHeight, els.viewerWrap.clientHeight - 184)}px`;
+  els.viewerWrap.scrollTop = scrollTop;
 }
 
 function keepEditorEndVisible() {
   const editor = els.markdownEditor;
   if (editor.selectionEnd < editor.value.length) return;
   requestAnimationFrame(() => {
-    els.viewerWrap.scrollTop = els.viewerWrap.scrollHeight;
+    const wrap = els.viewerWrap;
+    const editorBottom = editor.offsetTop + editor.offsetHeight;
+    const visibleBottom = wrap.scrollTop + wrap.clientHeight;
+    if (editorBottom > visibleBottom) {
+      wrap.scrollTop = editorBottom - wrap.clientHeight;
+    }
   });
 }
 
