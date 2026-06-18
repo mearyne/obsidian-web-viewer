@@ -45,6 +45,7 @@ const state = {
   holidayRenderTimer: null,
   metadataSyncedAt: 0,
   recentFiles: { updated: [], created: [] },
+  recentlyOpenedPaths: [],
   calendarKind: "tasks",
   matrixPeriodDays: 1,
   mobileCalendarMode: "agenda",
@@ -180,6 +181,7 @@ const els = {
   noteTitle: document.querySelector("#noteTitle"),
   syncStatus: document.querySelector("#syncStatus"),
   viewerWrap: document.querySelector(".viewer-wrap"),
+  newTabPage: document.querySelector("#newTabPage"),
   markdownView: document.querySelector("#markdownView"),
   editorShell: document.querySelector("#editorShell"),
   markdownEditor: document.querySelector("#markdownEditor"),
@@ -1437,6 +1439,7 @@ async function openFile(path) {
     const curTab = activeTab();
     if (curTab) { curTab.path = path; curTab.title = displayDocumentTitle(node.name); }
     renderTabStrip();
+    pushRecentlyOpened(path, displayDocumentTitle(node.name));
     updateEditButtons();
     renderCurrentDocument();
     renderDoneAt = performance.now();
@@ -3458,6 +3461,7 @@ function waitForBrowser() {
 function showNoteView() {
   state.activeView = "note";
   document.documentElement.classList.remove("matrix-mode");
+  if (els.newTabPage) els.newTabPage.hidden = true;
   els.markdownView.hidden = false;
   els.editorShell.hidden = true;
   els.calendarView.hidden = true;
@@ -6985,8 +6989,10 @@ function activeTab() {
 
 function initTabs() {
   loadPinnedTabs();
+  loadRecentlyOpened();
   renderTabStrip();
   void loadPinnedTabsFromVault();
+  void loadRecentlyOpenedFromVault();
 }
 
 async function createTab(path = null) {
@@ -6994,17 +7000,7 @@ async function createTab(path = null) {
   state.tabs.push({ id, path: null, title: "새 탭", pinned: false, scrollTop: 0 });
   await switchTab(id);
   if (path) await openFile(path);
-  else {
-    state.currentPath = null;
-    state.currentContent = "";
-    state.currentNode = null;
-    els.markdownView.innerHTML = "";
-    els.noteTitle.textContent = "새 탭";
-    if (els.notePath) els.notePath.textContent = "";
-    updateEditButtons();
-    updateHistoryButtons();
-    showNoteView();
-  }
+  else showEmptyTab();
 }
 
 async function switchTab(id) {
@@ -7034,15 +7030,7 @@ async function switchTab(id) {
     state.navigatingHistory = wasNavigating;
     requestAnimationFrame(() => { els.viewerWrap.scrollTop = tab.scrollTop || 0; });
   } else {
-    state.currentPath = null;
-    state.currentContent = "";
-    state.currentNode = null;
-    els.markdownView.innerHTML = "";
-    els.noteTitle.textContent = "새 탭";
-    if (els.notePath) els.notePath.textContent = "";
-    updateEditButtons();
-    updateHistoryButtons();
-    showNoteView();
+    showEmptyTab();
   }
 }
 
@@ -7218,6 +7206,106 @@ function showAllTabsOverlay() {
   });
   overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
   document.body.append(overlay);
+}
+
+const RECENTLY_OPENED_KEY = "obsidian-web-viewer-recently-opened";
+const RECENTLY_OPENED_VAULT_PATH = ".viewer-recently-opened.json";
+const RECENTLY_OPENED_MAX = 30;
+
+function pushRecentlyOpened(path, title) {
+  const entry = { path, title: title || displayDocumentTitle(path.split("/").pop() || path) };
+  state.recentlyOpenedPaths = [
+    entry,
+    ...state.recentlyOpenedPaths.filter((e) => e.path !== path),
+  ].slice(0, RECENTLY_OPENED_MAX);
+  try { localStorage.setItem(RECENTLY_OPENED_KEY, JSON.stringify(state.recentlyOpenedPaths)); } catch {}
+  void saveRecentlyOpenedToVault();
+}
+
+function loadRecentlyOpened() {
+  try {
+    const stored = localStorage.getItem(RECENTLY_OPENED_KEY);
+    if (stored) state.recentlyOpenedPaths = JSON.parse(stored);
+  } catch {}
+}
+
+async function loadRecentlyOpenedFromVault() {
+  if (!state.serverVaultWritable) return;
+  try {
+    const res = await fetch("/api/vault-file?path=" + encodeURIComponent(RECENTLY_OPENED_VAULT_PATH));
+    if (!res.ok) return;
+    const data = await res.json();
+    const vaultList = JSON.parse(data.content || "[]");
+    if (!vaultList?.length) return;
+    // Merge: vault list wins for entries not in local (vault is cross-device source of truth)
+    const localPaths = new Set(state.recentlyOpenedPaths.map((e) => e.path));
+    const merged = [...state.recentlyOpenedPaths];
+    for (const e of vaultList) {
+      if (!localPaths.has(e.path)) merged.push(e);
+    }
+    // Sort by vault order for entries only in vault, keeping local-first order
+    state.recentlyOpenedPaths = merged.slice(0, RECENTLY_OPENED_MAX);
+    try { localStorage.setItem(RECENTLY_OPENED_KEY, JSON.stringify(state.recentlyOpenedPaths)); } catch {}
+    // Re-render new tab page if currently showing one
+    if (!state.currentPath && els.newTabPage && !els.newTabPage.hidden) renderNewTabPage();
+  } catch {}
+}
+
+async function saveRecentlyOpenedToVault() {
+  if (!state.serverVaultWritable) return;
+  try {
+    await fetch("/api/vault-file?path=" + encodeURIComponent(RECENTLY_OPENED_VAULT_PATH), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: JSON.stringify(state.recentlyOpenedPaths, null, 2), backup: false }),
+    });
+  } catch {}
+}
+
+function showEmptyTab() {
+  state.currentPath = null;
+  state.currentContent = "";
+  state.currentNode = null;
+  els.markdownView.hidden = true;
+  els.editorShell.hidden = true;
+  if (els.calendarView) els.calendarView.hidden = true;
+  els.noteTitle.textContent = "새 탭";
+  if (els.notePath) els.notePath.textContent = "";
+  updateEditButtons();
+  updateHistoryButtons();
+  renderNewTabPage();
+  if (els.newTabPage) els.newTabPage.hidden = false;
+  state.activeView = "note";
+  document.documentElement.classList.remove("matrix-mode");
+  updateSyncStatus?.();
+}
+
+function renderNewTabPage() {
+  if (!els.newTabPage) return;
+  const list = state.recentlyOpenedPaths.filter((e) => e.path && state.files.has(e.path));
+  els.newTabPage.innerHTML = `
+    <div class="new-tab-content">
+      <h2 class="new-tab-title">새 탭</h2>
+      ${list.length ? `
+        <section class="new-tab-section">
+          <h3 class="new-tab-section-title">최근 열었던 파일</h3>
+          <ul class="new-tab-list">
+            ${list.map((e) => `
+              <li class="new-tab-item">
+                <button type="button" class="new-tab-file-btn" data-path="${escapeAttribute(e.path)}">
+                  <span class="new-tab-file-name">${escapeHtml(e.title || e.path.split("/").pop())}</span>
+                  <span class="new-tab-file-path">${escapeHtml(e.path)}</span>
+                </button>
+              </li>
+            `).join("")}
+          </ul>
+        </section>
+      ` : `<p class="new-tab-empty">아직 열었던 파일이 없습니다.</p>`}
+    </div>
+  `;
+  els.newTabPage.querySelectorAll(".new-tab-file-btn").forEach((btn) => {
+    btn.addEventListener("click", () => void openFile(btn.dataset.path));
+  });
 }
 
 async function renameCurrentFile(newTitle) {
