@@ -176,6 +176,7 @@ const els = {
   contentFontSizeInput: document.querySelector("#contentFontSizeInput"),
   calendarRowFontSizeInput: document.querySelector("#calendarRowFontSizeInput"),
   contentAlignSelect: document.querySelector("#contentAlignSelect"),
+  contentMaxWidthInput: document.querySelector("#contentMaxWidthInput"),
   vaultStatus: document.querySelector("#vaultStatus"),
   notePath: document.querySelector("#notePath"),
   noteTitle: document.querySelector("#noteTitle"),
@@ -303,6 +304,11 @@ els.calendarRowFontSizeInput?.addEventListener("input", () => {
 });
 els.calendarRowFontSizeInput?.addEventListener("change", updateCalendarRowFontSize);
 els.contentAlignSelect?.addEventListener("change", updateContentAlign);
+els.contentMaxWidthInput?.addEventListener("input", () => {
+  const v = Number(els.contentMaxWidthInput.value);
+  if (Number.isFinite(v) && v >= 400) document.documentElement.style.setProperty("--line-width", `${Math.max(400, Math.min(1600, v))}px`);
+});
+els.contentMaxWidthInput?.addEventListener("change", updateContentMaxWidth);
 els.viewerWrap.addEventListener("click", closeSidebarFromMain);
 els.calendarView.addEventListener("wheel", handleCalendarWheel, { passive: false });
 els.calendarView.addEventListener("pointerdown", handleCalendarSwipeStart, true);
@@ -2090,9 +2096,11 @@ function applyDeviceDisplayOptions() {
   const contentSize = readNumberOption(deviceOptionStorageKey("content-font-size", deviceKey), 16, 10, 28);
   const rowSize = readNumberOption(deviceOptionStorageKey("calendar-row-font-size", deviceKey), deviceKey === "mobile" ? 10.8 : 14.4, 6, 22);
   const align = readChoiceOption(deviceOptionStorageKey("content-align", deviceKey), "soft-center", ["left", "soft-center", "center"]);
+  const maxWidth = readNumberOption("obsidian-web-viewer-content-max-width", 760, 400, 1600);
   setContentFontSize(contentSize, { persist: false });
   setCalendarRowFontSize(rowSize, { persist: false });
   setContentAlign(align, { persist: false });
+  setContentMaxWidth(maxWidth, { persist: false });
 }
 
 function readNumberOption(key, fallback, min, max) {
@@ -2131,6 +2139,18 @@ function setCalendarRowFontSize(size, { persist }) {
 
 function updateContentAlign() {
   setContentAlign(els.contentAlignSelect?.value || "soft-center", { persist: true });
+}
+
+function updateContentMaxWidth() {
+  const value = Number(els.contentMaxWidthInput?.value || 760);
+  const width = Math.max(400, Math.min(1600, Number.isFinite(value) ? value : 760));
+  setContentMaxWidth(width, { persist: true });
+}
+
+function setContentMaxWidth(width, { persist }) {
+  document.documentElement.style.setProperty("--line-width", `${width}px`);
+  if (els.contentMaxWidthInput) els.contentMaxWidthInput.value = String(width);
+  if (persist) localStorage.setItem("obsidian-web-viewer-content-max-width", String(width));
 }
 
 function setContentAlign(align, { persist }) {
