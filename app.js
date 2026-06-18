@@ -3502,7 +3502,8 @@ function showCalendarView() {
   document.documentElement.classList.toggle("matrix-mode", state.calendarKind === "matrix");
   updateCalendarTitle();
   const tab = activeTab();
-  if (tab) tab.view = "calendar";
+  if (tab) { tab.view = "calendar"; tab.title = "캘린더"; renderTabStrip(); }
+  if (els.newTabPage) els.newTabPage.hidden = true;
   els.markdownView.hidden = true;
   els.editorShell.hidden = true;
   els.calendarView.hidden = false;
