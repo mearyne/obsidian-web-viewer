@@ -4095,3 +4095,29 @@ button.calendar-more {
 
 #matrixButton { display: none; }
 
+
+.tab-context-menu {
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, #ddd);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+  min-width: 120px;
+  overflow: hidden;
+  padding: 4px 0;
+}
+
+.tab-context-menu button {
+  background: none;
+  border: none;
+  color: var(--color-text, #222);
+  cursor: pointer;
+  display: block;
+  font-size: 14px;
+  padding: 8px 16px;
+  text-align: left;
+  width: 100%;
+}
+
+.tab-context-menu button:hover {
+  background: var(--color-hover, rgba(0,0,0,0.07));
+}

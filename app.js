@@ -1017,8 +1017,8 @@ function hydrateServerVault(vaultName, files, writable = false) {
   state.vaultLoaded = true;
   if (firstLoad) {
     state.calendarDate = new Date();
-    showInitialCalendarView();
     connectSSE();
+    void restoreActiveTab();
   }
   loadCalendarCache().finally(scheduleCalendarRefresh);
   loadRecentFilesCache().finally(refreshRecentFilesCache);
@@ -7017,7 +7017,9 @@ function activeTab() {
 }
 
 function initTabs() {
-  loadPinnedTabs();
+  if (!loadOpenTabs()) {
+    loadPinnedTabs();
+  }
   loadRecentlyOpened();
   renderTabStrip();
   void loadPinnedTabsFromVault();
@@ -7100,6 +7102,59 @@ function pinTab(id) {
   renderTabStrip();
 }
 
+function showTabContextMenu(x, y, tabId) {
+  document.querySelector(".tab-context-menu")?.remove();
+  const tab = state.tabs.find((t) => t.id === tabId);
+  if (!tab) return;
+  const menu = document.createElement("div");
+  menu.className = "tab-context-menu";
+  menu.innerHTML = `<button type="button">${tab.pinned ? "고정 해제" : "고정하기"}</button>`;
+  menu.style.cssText = `position:fixed;left:${x}px;top:${y}px;z-index:9999;`;
+  menu.querySelector("button").addEventListener("click", () => { menu.remove(); pinTab(tabId); });
+  const dismiss = (e) => { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener("mousedown", dismiss, true); document.removeEventListener("touchstart", dismiss, true); } };
+  document.addEventListener("mousedown", dismiss, true);
+  document.addEventListener("touchstart", dismiss, true);
+  document.body.append(menu);
+  // Clamp to viewport
+  const rect = menu.getBoundingClientRect();
+  if (rect.right > window.innerWidth) menu.style.left = (window.innerWidth - rect.width - 4) + "px";
+  if (rect.bottom > window.innerHeight) menu.style.top = (y - rect.height) + "px";
+}
+
+const OPEN_TABS_KEY = "obsidian-web-viewer-open-tabs";
+
+function saveOpenTabs() {
+  const data = {
+    tabs: state.tabs.map((t) => ({ id: t.id, path: t.path, title: t.title, pinned: t.pinned, scrollTop: t.scrollTop, view: t.view || null })),
+    activeTabId: state.activeTabId,
+  };
+  try { localStorage.setItem(OPEN_TABS_KEY, JSON.stringify(data)); } catch {}
+}
+
+function loadOpenTabs() {
+  try {
+    const stored = localStorage.getItem(OPEN_TABS_KEY);
+    if (!stored) return false;
+    const data = JSON.parse(stored);
+    if (!data?.tabs?.length) return false;
+    state.tabs = data.tabs.map((t) => ({ id: t.id || generateTabId(), path: t.path || null, title: t.title || "새 탭", pinned: !!t.pinned, scrollTop: t.scrollTop || 0, view: t.view || null }));
+    state.activeTabId = data.activeTabId || state.tabs[0].id;
+    return true;
+  } catch { return false; }
+}
+
+async function restoreActiveTab() {
+  const tab = state.tabs.find((t) => t.id === state.activeTabId);
+  if (tab?.view === "calendar") {
+    showInitialCalendarView();
+  } else if (tab?.path && state.files.has(tab.path)) {
+    await openFile(tab.path);
+    requestAnimationFrame(() => { els.viewerWrap.scrollTop = tab.scrollTop || 0; });
+  } else {
+    showInitialCalendarView();
+  }
+}
+
 function renderTabStrip() {
   const contentPane = document.querySelector(".content-pane");
   if (!contentPane) return;
@@ -7134,8 +7189,18 @@ function renderTabStrip() {
     });
     el.addEventListener("contextmenu", (e) => {
       e.preventDefault();
-      pinTab(el.dataset.tabId);
+      showTabContextMenu(e.clientX, e.clientY, el.dataset.tabId);
     });
+    let longPressTimer = null;
+    el.addEventListener("touchstart", (e) => {
+      longPressTimer = setTimeout(() => {
+        longPressTimer = null;
+        const touch = e.touches[0];
+        showTabContextMenu(touch.clientX, touch.clientY, el.dataset.tabId);
+      }, 500);
+    }, { passive: true });
+    el.addEventListener("touchend", () => { clearTimeout(longPressTimer); longPressTimer = null; });
+    el.addEventListener("touchmove", () => { clearTimeout(longPressTimer); longPressTimer = null; });
     if (el.draggable) {
       el.addEventListener("dragstart", (e) => {
         e.dataTransfer.setData("text/plain", el.dataset.tabPath);
@@ -7162,6 +7227,7 @@ function renderTabStrip() {
     const activeEl = strip.querySelector(".tab-item.active");
     if (activeEl) activeEl.scrollIntoView({ block: "nearest", inline: "nearest" });
   });
+  saveOpenTabs();
 }
 
 function savePinnedTabs() {
