@@ -85,6 +85,14 @@ const server = http.createServer((req, res) => {
       return;
     }
 
+    if (req.method === "PATCH") {
+      receiveBody(req, (error, body) => {
+        if (error) { sendJson(res, 400, { error: "Invalid request body" }); return; }
+        renameVaultFile(url.searchParams.get("path"), body, res);
+      });
+      return;
+    }
+
     if (req.method === "PUT") {
       receiveBody(req, (error, body) => {
         if (error) {
@@ -526,6 +534,32 @@ function writeCalendarCache(key, body, res) {
     sendJson(res, 200, { ok: true, syncedAt: cached.syncedAt });
   } catch (error) {
     sendJson(res, 500, { error: error.message || "Calendar cache write failed" });
+  }
+}
+
+function renameVaultFile(requestedPath, body, res) {
+  if (readOnly) { sendJson(res, 403, { error: "Vault is read-only" }); return; }
+  let parsed;
+  try { parsed = JSON.parse(body || "{}"); } catch { sendJson(res, 400, { error: "Invalid JSON" }); return; }
+  const newName = (parsed.newName || "").replace(/[/\\:*?"<>|]/g, "").trim();
+  if (!newName) { sendJson(res, 400, { error: "newName required" }); return; }
+  const safePath = normalizeVaultPath(requestedPath || "");
+  const oldFull = resolveVaultFilePath(safePath);
+  if (!oldFull || !isIndexedFile(safePath)) { sendJson(res, 403, { error: "Invalid vault file path" }); return; }
+  const dir = path.dirname(oldFull);
+  const newFull = path.resolve(dir, newName);
+  if (!newFull.startsWith(vaultRoot + path.sep) && newFull !== vaultRoot) { sendJson(res, 403, { error: "Invalid target path" }); return; }
+  const newSafePath = normalizeVaultPath(path.relative(vaultRoot, newFull));
+  try {
+    fs.renameSync(oldFull, newFull);
+    forgetTextFileCache(safePath);
+    const createdTimes = readCreatedTimes();
+    if (createdTimes[safePath]) { createdTimes[newSafePath] = createdTimes[safePath]; delete createdTimes[safePath]; }
+    writeCreatedTimes(createdTimes);
+    sendJson(res, 200, { ok: true, path: newSafePath });
+    broadcastVaultEvent("file-renamed", { oldPath: safePath, path: newSafePath });
+  } catch (error) {
+    sendJson(res, 500, { error: error.message || "Rename failed" });
   }
 }
 

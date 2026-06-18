@@ -540,7 +540,7 @@ button:disabled {
 .content-pane {
   background: var(--surface);
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto auto 1fr;
   height: 100vh;
   min-height: 100vh;
   min-width: 0;
@@ -3725,3 +3725,181 @@ button.calendar-more {
   opacity: 1;
   background: transparent !important;
 }
+
+/* ─── Tab strip ─────────────────────────────────────────────────────────────── */
+
+.tab-strip {
+  align-items: center;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex-shrink: 0;
+  gap: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  user-select: none;
+}
+
+.tab-strip::-webkit-scrollbar { display: none; }
+
+.tab-item {
+  align-items: center;
+  border-right: 1px solid var(--line);
+  cursor: pointer;
+  display: flex;
+  flex-shrink: 0;
+  font-size: 12px;
+  gap: 4px;
+  max-width: 160px;
+  min-width: 80px;
+  padding: 6px 8px 6px 10px;
+  position: relative;
+  transition: background 0.1s;
+  white-space: nowrap;
+}
+
+.tab-item:hover { background: var(--surface-2); }
+.tab-item.active { background: var(--surface-2); font-weight: 500; }
+.tab-item.active::after {
+  background: var(--accent-strong);
+  bottom: 0;
+  content: "";
+  height: 2px;
+  left: 0;
+  position: absolute;
+  right: 0;
+}
+.tab-item.pinned .tab-pin { font-size: 10px; }
+
+.tab-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tab-close {
+  background: none;
+  border: none;
+  border-radius: 3px;
+  color: var(--fg-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  font-size: 14px;
+  line-height: 1;
+  opacity: 0;
+  padding: 0 2px;
+  transition: opacity 0.1s;
+}
+.tab-item:hover .tab-close,
+.tab-item.active .tab-close { opacity: 1; }
+.tab-close:hover { background: var(--line); color: var(--fg); }
+
+.tab-new {
+  background: none;
+  border: none;
+  color: var(--fg-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  font-size: 18px;
+  line-height: 1;
+  padding: 4px 10px;
+}
+.tab-new:hover { color: var(--fg); }
+
+/* PC: tab strip above note-header inside content-pane */
+@media (min-width: 781px) {
+  .content-pane { grid-template-rows: auto auto 1fr; }
+  .tab-strip { order: -1; }
+}
+
+/* Mobile: tab strip above status bar (fixed) */
+@media (max-width: 780px) {
+  .tab-strip {
+    bottom: 44px;
+    left: 0;
+    position: fixed;
+    right: 0;
+    z-index: 44;
+  }
+  .content-pane { padding-bottom: 88px; }
+  .tab-item { font-size: 11px; max-width: 120px; min-width: 60px; padding: 5px 6px 5px 8px; }
+  .mobile-status-nav { align-items: center; display: flex; gap: 2px; }
+  .mobile-tabs-btn { font-size: 13px; font-weight: 600; min-width: 28px; }
+}
+
+/* All-tabs overlay (mobile) */
+.all-tabs-overlay {
+  background: rgba(0,0,0,0.5);
+  bottom: 0;
+  left: 0;
+  position: fixed;
+  right: 0;
+  top: 0;
+  z-index: 200;
+}
+
+.all-tabs-panel {
+  background: var(--surface);
+  border-radius: 12px 12px 0 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  left: 0;
+  max-height: 60vh;
+  overflow: hidden;
+  position: absolute;
+  right: 0;
+}
+
+.all-tabs-header {
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  font-weight: 600;
+  justify-content: space-between;
+  padding: 14px 16px 10px;
+}
+
+.all-tabs-close {
+  background: none;
+  border: none;
+  color: var(--fg-muted);
+  cursor: pointer;
+  font-size: 18px;
+}
+
+.all-tabs-list {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.all-tabs-item {
+  background: none;
+  border: none;
+  color: var(--fg);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 10px 16px;
+  text-align: left;
+}
+.all-tabs-item:hover { background: var(--surface-2); }
+.all-tabs-item.active { font-weight: 600; }
+
+/* Editable title in edit mode */
+.editable-title {
+  border-bottom: 2px solid var(--accent-strong);
+  border-radius: 2px;
+  cursor: text;
+  min-width: 40px;
+  outline: none;
+  padding: 1px 4px;
+}
+
+/* Status bar image button */
+.status-image-btn { display: none; }
+.editing-mode .status-image-btn { display: flex; }
+

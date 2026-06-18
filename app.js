@@ -72,6 +72,7 @@ const state = {
   sidebarResize: null,
   sidebarPinned: false,
   activeTabId: "main",
+  tabs: [{ id: "main", path: null, title: "새 탭", pinned: false, scrollTop: 0 }],
   navigationHistories: new Map(),
   navigatingHistory: false,
   lightboxImages: [],
@@ -406,6 +407,30 @@ function handleGlobalKeydown(event) {
     return;
   }
 
+  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.code === "KeyT") {
+    event.preventDefault();
+    event.stopPropagation();
+    void createTab();
+    return;
+  }
+
+  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.code === "KeyW") {
+    event.preventDefault();
+    event.stopPropagation();
+    void closeTab(state.activeTabId);
+    return;
+  }
+
+  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey) {
+    const digitMatch = event.code.match(/^Digit([1-9])$/);
+    if (digitMatch) {
+      const idx = parseInt(digitMatch[1], 10) - 1;
+      const tab = state.tabs[idx];
+      if (tab) { event.preventDefault(); event.stopPropagation(); void switchTab(tab.id); }
+      return;
+    }
+  }
+
   if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key === ",") {
     event.preventDefault();
     event.stopPropagation();
@@ -541,6 +566,7 @@ initSidebarPin();
 loadSavedVaults();
 loadSampleVault();
 arrangeChromeControls();
+initTabs();
 updateEditButtons();
 handleUrlAction();
 
@@ -1264,7 +1290,9 @@ function renderDirChildren(dir, parent, matcher, folderPaths, excludePaths = [])
         node.collapsed = !node.collapsed;
         renderTree();
       } else if (isOpenableDocument(node.name)) {
-        await openFile(node.path);
+        const isMobileSearch = window.matchMedia("(max-width: 780px)").matches && els.searchInput?.value?.trim();
+        if (isMobileSearch) await openFileInNewTab(node.path);
+        else await openFile(node.path);
       }
     });
     group.append(row);
@@ -1406,6 +1434,9 @@ async function openFile(path) {
     pushNavigationHistory({ type: "file", path });
     els.notePath.textContent = path;
     els.noteTitle.textContent = displayDocumentTitle(node.name);
+    const curTab = activeTab();
+    if (curTab) { curTab.path = path; curTab.title = displayDocumentTitle(node.name); }
+    renderTabStrip();
     updateEditButtons();
     renderCurrentDocument();
     renderDoneAt = performance.now();
@@ -2302,6 +2333,11 @@ async function enterEditMode() {
   holdViewerHeightDuringTransition();
   state.editMode = true;
   state.editorDirty = false;
+  if (els.noteTitle && state.currentNode) {
+    els.noteTitle.contentEditable = "true";
+    els.noteTitle.classList.add("editable-title");
+    els.noteTitle.dataset.originalTitle = els.noteTitle.textContent;
+  }
   setEditorValue(state.currentContent);
   els.markdownView.hidden = true;
   els.calendarView.hidden = true;
@@ -2362,6 +2398,10 @@ async function persistCurrentEdit({ closeEditor }) {
     refreshRecentFilesCache();
     renderTree();
     if (closeEditor) {
+      const newTitle = els.noteTitle?.contentEditable === "true" ? els.noteTitle.textContent.trim() : null;
+      const originalTitle = els.noteTitle?.dataset.originalTitle;
+      if (els.noteTitle) { els.noteTitle.contentEditable = "false"; els.noteTitle.classList.remove("editable-title"); }
+      if (newTitle && originalTitle && newTitle !== originalTitle) await renameCurrentFile(newTitle);
       state.editMode = false;
       updateEditorStatus();
       stopAutoSave();
@@ -2855,6 +2895,19 @@ function arrangeChromeControls() {
   if (editorToolbar && els.editorStatus && els.editorStatus.parentElement !== editorToolbar) {
     editorToolbar.insertBefore(els.editorStatus, editorToolbar.firstChild);
   }
+  // Build image button if not yet in DOM
+  if (!document.getElementById("editorImageButton")) {
+    const imgBtn = document.createElement("button");
+    imgBtn.id = "editorImageButton";
+    imgBtn.type = "button";
+    imgBtn.className = "editor-image-btn status-image-btn";
+    imgBtn.setAttribute("aria-label", "이미지 첨부");
+    imgBtn.title = "이미지 첨부";
+    imgBtn.innerHTML = `<svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>`;
+    imgBtn.addEventListener("click", () => els.editorImageInput?.click());
+    els.editorImageButton = imgBtn;
+  }
+
   let statusBar = document.querySelector(".app-status-bar");
   if (!statusBar) {
     statusBar = document.createElement("footer");
@@ -2870,7 +2923,26 @@ function arrangeChromeControls() {
     if (els.markdownToggleButton) els.markdownToggleButton.classList.add("status-markdown-toggle");
     statusBar.append(historyWrap);
     if (els.markdownToggleButton) statusBar.append(els.markdownToggleButton);
-    statusBar.append(els.notePath, saveStatusEl, els.syncStatus);
+    statusBar.append(els.notePath, saveStatusEl, els.editorImageButton, els.syncStatus);
+
+    // Mobile-only: tab count + refresh buttons
+    const mobileNav = document.createElement("div");
+    mobileNav.className = "mobile-status-nav";
+    const mobileTabsBtn = document.createElement("button");
+    mobileTabsBtn.type = "button";
+    mobileTabsBtn.className = "mobile-tabs-btn icon-button";
+    mobileTabsBtn.title = "전체 탭";
+    mobileTabsBtn.textContent = "1";
+    mobileTabsBtn.addEventListener("click", showAllTabsOverlay);
+    const mobileRefreshBtn = document.createElement("button");
+    mobileRefreshBtn.type = "button";
+    mobileRefreshBtn.className = "icon-button";
+    mobileRefreshBtn.title = "새로고침";
+    mobileRefreshBtn.textContent = "↺";
+    mobileRefreshBtn.addEventListener("click", () => window.location.reload());
+    mobileNav.append(mobileTabsBtn, mobileRefreshBtn);
+    statusBar.append(mobileNav);
+
     document.body.append(statusBar);
     return;
   }
@@ -2890,7 +2962,10 @@ function arrangeChromeControls() {
     el.id = "bottomSaveStatus";
     el.className = "bottom-save-status";
     el.hidden = true;
-    statusBar.insertBefore(el, els.syncStatus);
+    statusBar.insertBefore(el, els.editorImageButton || els.syncStatus);
+  }
+  if (els.editorImageButton && els.editorImageButton.parentElement !== statusBar) {
+    statusBar.insertBefore(els.editorImageButton, els.syncStatus);
   }
   if (els.syncStatus && els.syncStatus.parentElement !== statusBar) statusBar.append(els.syncStatus);
 }
@@ -6896,4 +6971,282 @@ function escapeHtml(value) {
 
 function escapeAttribute(value) {
   return escapeHtml(value).replace(/`/g, "&#096;");
+}
+
+// ─── Tab management ───────────────────────────────────────────────────────────
+
+function generateTabId() {
+  return "t" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+}
+
+function activeTab() {
+  return state.tabs.find((t) => t.id === state.activeTabId) ?? state.tabs[0];
+}
+
+function initTabs() {
+  loadPinnedTabs();
+  renderTabStrip();
+  void loadPinnedTabsFromVault();
+}
+
+async function createTab(path = null) {
+  const id = generateTabId();
+  state.tabs.push({ id, path: null, title: "새 탭", pinned: false, scrollTop: 0 });
+  await switchTab(id);
+  if (path) await openFile(path);
+  else {
+    state.currentPath = null;
+    state.currentContent = "";
+    state.currentNode = null;
+    els.markdownView.innerHTML = "";
+    els.noteTitle.textContent = "새 탭";
+    if (els.notePath) els.notePath.textContent = "";
+    updateEditButtons();
+    updateHistoryButtons();
+    showNoteView();
+  }
+}
+
+async function switchTab(id) {
+  if (id === state.activeTabId && state.tabs.find((t) => t.id === id)) return;
+  if (state.editMode) {
+    if (state.editorDirty && !state.autoSaveInFlight) {
+      await persistCurrentEdit({ closeEditor: false });
+    }
+    if (els.noteTitle) { els.noteTitle.contentEditable = "false"; els.noteTitle.classList.remove("editable-title"); }
+    state.editMode = false;
+    els.editorShell.hidden = true;
+    els.markdownView.hidden = false;
+    stopAutoSave();
+    updateEditButtons();
+  }
+  const cur = activeTab();
+  if (cur) cur.scrollTop = els.viewerWrap.scrollTop;
+  state.activeTabId = id;
+  renderTabStrip();
+  updateHistoryButtons();
+  const tab = state.tabs.find((t) => t.id === id);
+  if (!tab) return;
+  if (tab.path && state.files.has(tab.path)) {
+    const wasNavigating = state.navigatingHistory;
+    state.navigatingHistory = true;
+    await openFile(tab.path);
+    state.navigatingHistory = wasNavigating;
+    requestAnimationFrame(() => { els.viewerWrap.scrollTop = tab.scrollTop || 0; });
+  } else {
+    state.currentPath = null;
+    state.currentContent = "";
+    state.currentNode = null;
+    els.markdownView.innerHTML = "";
+    els.noteTitle.textContent = "새 탭";
+    if (els.notePath) els.notePath.textContent = "";
+    updateEditButtons();
+    updateHistoryButtons();
+    showNoteView();
+  }
+}
+
+async function closeTab(id) {
+  const tab = state.tabs.find((t) => t.id === id);
+  if (!tab) return;
+  if (tab.pinned) {
+    tab.pinned = false;
+    savePinnedTabs();
+    renderTabStrip();
+    return;
+  }
+  const idx = state.tabs.indexOf(tab);
+  state.tabs.splice(idx, 1);
+  if (state.tabs.length === 0) {
+    state.tabs.push({ id: generateTabId(), path: null, title: "새 탭", pinned: false, scrollTop: 0 });
+  }
+  if (state.activeTabId === id) {
+    const newIdx = Math.max(0, Math.min(idx, state.tabs.length - 1));
+    state.activeTabId = null;
+    await switchTab(state.tabs[newIdx].id);
+  } else {
+    renderTabStrip();
+  }
+}
+
+function pinTab(id) {
+  const tab = state.tabs.find((t) => t.id === id);
+  if (!tab) return;
+  tab.pinned = !tab.pinned;
+  savePinnedTabs();
+  renderTabStrip();
+}
+
+function renderTabStrip() {
+  const contentPane = document.querySelector(".content-pane");
+  if (!contentPane) return;
+  let strip = document.querySelector(".tab-strip");
+  if (!strip) {
+    strip = document.createElement("div");
+    strip.className = "tab-strip";
+    contentPane.insertBefore(strip, contentPane.firstChild);
+    // Mobile: also insert before status bar
+    const statusBar = document.querySelector(".app-status-bar");
+    if (statusBar && window.matchMedia("(max-width: 780px)").matches) {
+      document.body.insertBefore(strip, statusBar);
+    }
+  }
+
+  strip.innerHTML = state.tabs.map((tab) => {
+    const isActive = tab.id === state.activeTabId;
+    const title = escapeHtml(tab.title || "새 탭");
+    const pinMark = tab.pinned ? '<span class="tab-pin">📌</span>' : "";
+    return `<div class="tab-item${isActive ? " active" : ""}${tab.pinned ? " pinned" : ""}" data-tab-id="${escapeAttribute(tab.id)}" title="${title}">
+      ${pinMark}<span class="tab-title">${title}</span>
+      <button class="tab-close" data-tab-id="${escapeAttribute(tab.id)}" title="${tab.pinned ? "핀 해제" : "탭 닫기"}" type="button">×</button>
+    </div>`;
+  }).join("") + `<button class="tab-new" type="button" title="새 탭 (Ctrl+T)">+</button>`;
+
+  strip.querySelectorAll(".tab-item").forEach((el) => {
+    el.addEventListener("click", (e) => {
+      if (e.target.closest(".tab-close")) return;
+      void switchTab(el.dataset.tabId);
+    });
+    el.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      pinTab(el.dataset.tabId);
+    });
+  });
+  strip.querySelectorAll(".tab-close").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      void closeTab(btn.dataset.tabId);
+    });
+  });
+  strip.querySelector(".tab-new")?.addEventListener("click", () => void createTab());
+
+  const mobileTabsBtn = document.querySelector(".mobile-tabs-btn");
+  if (mobileTabsBtn) mobileTabsBtn.textContent = state.tabs.length;
+
+  requestAnimationFrame(() => {
+    const activeEl = strip.querySelector(".tab-item.active");
+    if (activeEl) activeEl.scrollIntoView({ block: "nearest", inline: "nearest" });
+  });
+}
+
+function savePinnedTabs() {
+  const pinned = state.tabs.filter((t) => t.pinned).map((t) => ({ path: t.path, title: t.title }));
+  try { localStorage.setItem("obsidian-web-viewer-pinned-tabs", JSON.stringify(pinned)); } catch {}
+  void savePinnedTabsToVault(pinned);
+}
+
+async function savePinnedTabsToVault(pinned) {
+  if (!state.serverVaultWritable) return;
+  try {
+    await fetch("/api/vault-file?path=" + encodeURIComponent(".viewer-pinned-tabs.json"), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: JSON.stringify(pinned, null, 2), backup: false }),
+    });
+  } catch {}
+}
+
+function loadPinnedTabs() {
+  let pinned = null;
+  try {
+    const stored = localStorage.getItem("obsidian-web-viewer-pinned-tabs");
+    if (stored) pinned = JSON.parse(stored);
+  } catch {}
+  if (!pinned?.length) return;
+  for (const p of pinned) {
+    if (!p.path) continue;
+    if (!state.tabs.find((t) => t.path === p.path)) {
+      state.tabs.push({ id: generateTabId(), path: p.path, title: p.title || "새 탭", pinned: true, scrollTop: 0 });
+    } else {
+      const existing = state.tabs.find((t) => t.path === p.path);
+      if (existing) existing.pinned = true;
+    }
+  }
+}
+
+async function loadPinnedTabsFromVault() {
+  if (!state.serverVaultWritable) return;
+  try {
+    const res = await fetch("/api/vault-file?path=" + encodeURIComponent(".viewer-pinned-tabs.json"));
+    if (!res.ok) return;
+    const data = await res.json();
+    const pinned = JSON.parse(data.content || "[]");
+    if (!pinned?.length) return;
+    localStorage.setItem("obsidian-web-viewer-pinned-tabs", JSON.stringify(pinned));
+    let changed = false;
+    for (const p of pinned) {
+      if (!p.path) continue;
+      if (!state.tabs.find((t) => t.path === p.path)) {
+        state.tabs.push({ id: generateTabId(), path: p.path, title: p.title || "새 탭", pinned: true, scrollTop: 0 });
+        changed = true;
+      } else {
+        const existing = state.tabs.find((t) => t.path === p.path);
+        if (existing && !existing.pinned) { existing.pinned = true; changed = true; }
+      }
+    }
+    if (changed) renderTabStrip();
+  } catch {}
+}
+
+async function openFileInNewTab(path) {
+  const id = generateTabId();
+  state.tabs.push({ id, path: null, title: "새 탭", pinned: false, scrollTop: 0 });
+  state.activeTabId = id;
+  renderTabStrip();
+  await openFile(path);
+}
+
+function showAllTabsOverlay() {
+  const existing = document.querySelector(".all-tabs-overlay");
+  if (existing) { existing.remove(); return; }
+  const overlay = document.createElement("div");
+  overlay.className = "all-tabs-overlay";
+  overlay.innerHTML = `<div class="all-tabs-panel">
+    <div class="all-tabs-header"><span>열린 탭 (${state.tabs.length})</span><button class="all-tabs-close" type="button">×</button></div>
+    <div class="all-tabs-list">${state.tabs.map((tab) =>
+      `<button class="all-tabs-item${tab.id === state.activeTabId ? " active" : ""}" data-tab-id="${escapeAttribute(tab.id)}" type="button">
+        ${tab.pinned ? "📌 " : ""}${escapeHtml(tab.title || "새 탭")}
+      </button>`
+    ).join("")}</div>
+  </div>`;
+  overlay.querySelector(".all-tabs-close")?.addEventListener("click", () => overlay.remove());
+  overlay.querySelectorAll(".all-tabs-item").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      overlay.remove();
+      await switchTab(btn.dataset.tabId);
+    });
+  });
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
+  document.body.append(overlay);
+}
+
+async function renameCurrentFile(newTitle) {
+  const node = state.currentNode;
+  if (!node || !node.serverBacked) return;
+  const ext = node.name.includes(".") ? node.name.substring(node.name.lastIndexOf(".")) : "";
+  const newName = newTitle.replace(/[/\\:*?"<>|]/g, "").trim() + ext;
+  if (!newName || newName === node.name) return;
+  try {
+    const res = await fetch(`/api/vault-file?path=${encodeURIComponent(node.path)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ newName }),
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    const newPath = data.path;
+    state.files.delete(node.path);
+    const dir = node.path.includes("/") ? node.path.substring(0, node.path.lastIndexOf("/") + 1) : "";
+    node.path = newPath || dir + newName;
+    node.name = newName;
+    state.files.set(node.path, node);
+    state.currentPath = node.path;
+    if (typeof node.content === "string") node.content = state.currentContent;
+    const tab = activeTab();
+    if (tab) { tab.path = node.path; tab.title = displayDocumentTitle(newName); }
+    els.noteTitle.textContent = displayDocumentTitle(newName);
+    if (els.notePath) els.notePath.textContent = node.path;
+    renderTabStrip();
+    renderTree();
+  } catch {}
 }
