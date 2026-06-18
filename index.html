@@ -72,17 +72,7 @@
             <button id="sidebarToggle" class="icon-button" type="button" aria-label="문서 목록 열기" aria-expanded="false">
               <span aria-hidden="true">☰</span>
             </button>
-            <div>
-              <p id="notePath" class="note-path">문서를 선택하세요</p>
-              <div class="note-title-row">
-                <h2 id="noteTitle">Obsidian Markdown Viewer</h2>
-                <div class="heading-controls">
-                  <button id="collapseHeadingsButton" class="icon-button" type="button" aria-label="헤더 모두 접기" title="헤더 모두 접기">−∞</button>
-                  <button id="collapseHeadingLevelButton" class="icon-button" type="button" aria-label="헤더 한단계 접기" title="헤더 한단계 접기">−1</button>
-                  <button id="expandHeadingLevelButton" class="icon-button" type="button" aria-label="헤더 한단계 펼치기" title="헤더 한단계 펼치기">+1</button>
-                </div>
-              </div>
-            </div>
+            <p id="notePath" class="note-path">문서를 선택하세요</p>
           </div>
           <div class="view-controls">
             <button id="historyBackButton" class="icon-button" type="button" disabled aria-label="이전 페이지" title="이전 페이지">←</button>
@@ -130,6 +120,9 @@
             </div>
           </div>
           <article id="newTabPage" class="new-tab-page" hidden></article>
+          <div id="noteTitleArea" class="note-title-area" hidden>
+            <h2 id="noteTitle">Obsidian Markdown Viewer</h2>
+          </div>
           <article id="markdownView" class="markdown-body empty-state">
             <h3>왼쪽 문서 목록에서 Markdown 파일을 선택하세요</h3>
             <p>Obsidian 폴더 구조, wiki link, 이미지 embed, callout, frontmatter를 기본적으로 표시합니다.</p>
@@ -147,6 +140,11 @@
             </div>
           </section>
           <article id="calendarView" class="calendar-view" hidden></article>
+          <div class="heading-controls-overlay" id="headingControlsOverlay" hidden>
+            <button id="collapseHeadingsButton" class="icon-button" type="button" aria-label="헤더 모두 접기" title="헤더 모두 접기">−∞</button>
+            <button id="collapseHeadingLevelButton" class="icon-button" type="button" aria-label="헤더 한단계 접기" title="헤더 한단계 접기">−1</button>
+            <button id="expandHeadingLevelButton" class="icon-button" type="button" aria-label="헤더 한단계 펼치기" title="헤더 한단계 펼치기">+1</button>
+          </div>
         </section>
         <div class="split-drop-zone" aria-hidden="true"><span>분할 보기로 열기</span></div>
       </main>

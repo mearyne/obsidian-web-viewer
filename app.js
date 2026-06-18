@@ -195,6 +195,8 @@ const els = {
   editorImageButton: document.querySelector("#editorImageButton"),
   editorImageInput: document.querySelector("#editorImageInput"),
   calendarView: document.querySelector("#calendarView"),
+  noteTitleArea: document.querySelector("#noteTitleArea"),
+  headingControlsOverlay: document.querySelector("#headingControlsOverlay"),
   loadingOverlay: document.querySelector("#loadingOverlay"),
   loadingText: document.querySelector("#loadingText"),
   markdownToggleButton: document.querySelector("#markdownToggleButton"),
@@ -602,6 +604,8 @@ function openSidebar() {
   document.body.classList.add("sidebar-open");
   els.sidebarToggle.setAttribute("aria-expanded", "true");
   els.sidebarToggle.setAttribute("aria-label", "문서 목록 닫기");
+  const tabToggle = document.querySelector(".tab-sidebar-toggle");
+  if (tabToggle) { tabToggle.setAttribute("aria-expanded", "true"); tabToggle.setAttribute("aria-label", "문서 목록 닫기"); }
 }
 
 function closeSidebarFromOutside(event) {
@@ -3016,6 +3020,8 @@ function toggleSidebar(event) {
   }
   els.sidebarToggle.setAttribute("aria-expanded", String(open));
   els.sidebarToggle.setAttribute("aria-label", open ? "문서 목록 닫기" : "문서 목록 열기");
+  const tabToggle = document.querySelector(".tab-sidebar-toggle");
+  if (tabToggle) { tabToggle.setAttribute("aria-expanded", String(open)); tabToggle.setAttribute("aria-label", open ? "문서 목록 닫기" : "문서 목록 열기"); }
 }
 
 function closeSidebar() {
@@ -3023,6 +3029,8 @@ function closeSidebar() {
   document.body.classList.remove("sidebar-open");
   els.sidebarToggle.setAttribute("aria-expanded", "false");
   els.sidebarToggle.setAttribute("aria-label", "문서 목록 열기");
+  const tabToggle = document.querySelector(".tab-sidebar-toggle");
+  if (tabToggle) { tabToggle.setAttribute("aria-expanded", "false"); tabToggle.setAttribute("aria-label", "문서 목록 열기"); }
 }
 
 function toggleOptionsMenu(event) {
@@ -3491,6 +3499,8 @@ function showNoteView() {
   els.markdownView.hidden = false;
   els.editorShell.hidden = true;
   els.calendarView.hidden = true;
+  if (els.noteTitleArea) els.noteTitleArea.hidden = false;
+  if (els.headingControlsOverlay) els.headingControlsOverlay.hidden = false;
   els.calendarButton.classList.remove("active");
   updateCalendarKindButton();
   updateSyncStatus();
@@ -3507,6 +3517,8 @@ function showCalendarView() {
   els.markdownView.hidden = true;
   els.editorShell.hidden = true;
   els.calendarView.hidden = false;
+  if (els.noteTitleArea) els.noteTitleArea.hidden = true;
+  if (els.headingControlsOverlay) els.headingControlsOverlay.hidden = true;
   els.calendarButton.classList.add("active");
   els.matrixButton?.classList.toggle("active", state.calendarKind === "matrix");
   updateCalendarKindButton();
@@ -7170,11 +7182,15 @@ function renderTabStrip() {
     }
   }
 
-  strip.innerHTML = state.tabs.map((tab) => {
+  const sidebarOpen = document.body.classList.contains("sidebar-open");
+  const sidebarToggleHtml = !isMobile
+    ? `<button class="tab-sidebar-toggle icon-button" type="button" aria-expanded="${sidebarOpen}" aria-label="${sidebarOpen ? "문서 목록 닫기" : "문서 목록 열기"}" title="문서 목록">☰</button>`
+    : "";
+
+  strip.innerHTML = sidebarToggleHtml + state.tabs.map((tab) => {
     const isActive = tab.id === state.activeTabId;
     const title = escapeHtml(tab.title || "새 탭");
     const pinMark = tab.pinned ? '<span class="tab-pin">📌</span>' : "";
-    const isMobile = window.matchMedia("(max-width: 780px)").matches;
     const draggable = (tab.path && !isMobile) ? ' draggable="true"' : "";
     return `<div class="tab-item${isActive ? " active" : ""}${tab.pinned ? " pinned" : ""}" data-tab-id="${escapeAttribute(tab.id)}" data-tab-path="${escapeAttribute(tab.path || "")}" title="${title}"${draggable}>
       ${pinMark}<span class="tab-title">${title}</span>
@@ -7219,6 +7235,10 @@ function renderTabStrip() {
     });
   });
   strip.querySelector(".tab-new")?.addEventListener("click", () => void createTab());
+  strip.querySelector(".tab-sidebar-toggle")?.addEventListener("click", () => {
+    if (document.body.classList.contains("sidebar-open")) closeSidebar();
+    else openSidebar();
+  });
 
   const mobileTabsBtn = document.querySelector(".mobile-tabs-btn");
   if (mobileTabsBtn) mobileTabsBtn.textContent = state.tabs.length;
@@ -7382,6 +7402,8 @@ function showEmptyTab() {
   els.markdownView.hidden = true;
   els.editorShell.hidden = true;
   if (els.calendarView) els.calendarView.hidden = true;
+  if (els.noteTitleArea) els.noteTitleArea.hidden = true;
+  if (els.headingControlsOverlay) els.headingControlsOverlay.hidden = true;
   els.noteTitle.textContent = "새 탭";
   if (els.notePath) els.notePath.textContent = "";
   updateEditButtons();
