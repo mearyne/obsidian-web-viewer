@@ -67,6 +67,16 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 These guidelines are working if: fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
 
+## 6. NAS Deployment
+
+To deploy the latest code on NAS:
+
+```bash
+git fetch origin && git reset --hard origin/main && docker-compose up -d --build
+```
+
+Use `reset --hard` instead of `pull` to avoid conflicts from local changes on the NAS.
+
 ## 5. Commit and Push
 
 After completing requested code or configuration changes, automatically commit and push the agent's own changes.
