@@ -3096,6 +3096,17 @@ button:disabled {
   text-decoration: line-through;
 }
 
+.calendar-task.deferred {
+  opacity: 0.7;
+  font-style: italic;
+  border-style: dashed;
+}
+
+.matrix-task.deferred {
+  opacity: 0.7;
+  font-style: italic;
+}
+
 .calendar-task.dragging {
   cursor: grabbing;
   opacity: 0.72;

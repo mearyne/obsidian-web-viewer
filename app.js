@@ -147,6 +147,7 @@ const els = {
   taskEditDialog: document.querySelector("#taskEditDialog"),
   taskEditTitleInput: document.querySelector("#taskEditTitleInput"),
   taskEditChecked: document.querySelector("#taskEditChecked"),
+  taskEditDeferred: document.querySelector("#taskEditDeferred"),
   taskEditStartDateBtn: document.querySelector("#taskEditStartDateBtn"),
   taskEditDueDateBtn: document.querySelector("#taskEditDueDateBtn"),
   taskEditDatePickerCal: document.querySelector("#taskEditDatePickerCal"),
@@ -3451,10 +3452,11 @@ function parseTasks(content, path) {
   const lines = content.replace(/\r\n/g, "\n").split("\n");
   return lines.flatMap((line, index) => {
       const taskIndentLen = normalizeLineIndent(line).length;
-      const match = line.match(/^\s*[-*+]\s+\[([ xX-])\]\s*(.*)$/);
+      const match = line.match(/^\s*[-*+]\s+\[([ xX>-])\]\s*(.*)$/);
       if (!match) return [];
 
-      const checked = match[1].toLowerCase() === "x" || match[1] === "-";
+      const deferred = match[1] === ">";
+      const checked = !deferred && (match[1].toLowerCase() === "x" || match[1] === "-");
       const rawText = match[2].trim();
       const dates = extractTaskDates(rawText);
       const implicitDailyDate = dailyDateFromPath(path);
@@ -3482,6 +3484,7 @@ function parseTasks(content, path) {
           path,
           line: index + 1,
           checked,
+          deferred,
           text: cleanTaskText(rawText),
           rawText,
           date: displayDate,
@@ -3833,7 +3836,7 @@ function renderMatrixQuadrant(quadrant) {
 function renderMatrixTask(task) {
   const due = task.dates?.due || task.dates?.end || task.dates?.scheduled || task.dates?.start || task.date || "";
   return `
-    <button class="matrix-task ${task.checked ? "done" : ""}" type="button" draggable="true" data-path="${escapeAttribute(task.path)}" data-line="${task.line}" title="${escapeAttribute(`${task.path}: ${task.rawText || task.text}`)}">
+    <button class="matrix-task ${task.checked ? "done" : task.deferred ? "deferred" : ""}" type="button" draggable="true" data-path="${escapeAttribute(task.path)}" data-line="${task.line}" title="${escapeAttribute(`${task.path}: ${task.rawText || task.text}`)}">
       <span class="matrix-task-title"><span class="matrix-task-icon" aria-hidden="true">${taskDisplayIcon(task)}</span>${escapeHtml(task.text)}</span>
       <span class="matrix-task-meta">${escapeHtml(due)}${task.priority ? ` · ${escapeHtml(task.priority)}` : ""}</span>
     </button>
@@ -4402,7 +4405,7 @@ function renderCalendarTask(task, dateKey = task.date, showDelete = false) {
   ].filter(Boolean).join(" ");
   return `
     <div class="calendar-task-wrap${showDelete ? " has-delete" : ""}${hasSubItems ? " has-sub" : ""} ${wrapMetaClasses}"${wrapIndentStyle}>
-      <button class="calendar-task ${task.checked ? "done" : ""} ${task.type} ${range ? `range-task ${colorClass}` : ""} ${task.draggingPreview ? "drag-preview" : ""}" type="button" data-path="${escapeAttribute(task.path)}" data-line="${task.line}" data-date="${escapeAttribute(dateKey)}" title="${escapeAttribute(title)}">
+      <button class="calendar-task ${task.checked ? "done" : task.deferred ? "deferred" : ""} ${task.type} ${range ? `range-task ${colorClass}` : ""} ${task.draggingPreview ? "drag-preview" : ""}" type="button" data-path="${escapeAttribute(task.path)}" data-line="${task.line}" data-date="${escapeAttribute(dateKey)}" title="${escapeAttribute(title)}">
         <span>${icon}</span>
         <span>${escapeHtml(task.text)}${task.dueTime ? `<span class="task-time-badge">${escapeHtml(task.dueTime)}</span>` : task.startTime ? `<span class="task-time-badge">${escapeHtml(task.startTime)}</span>` : ""}</span>
       </button>
@@ -4997,10 +5000,10 @@ async function persistTaskCheckedState(node, path, lineNumber, checked, content)
   const queueKey = `${path}:${lineNumber}`;
   const lines = content.replace(/\r\n/g, "\n").split("\n");
   const index = lineNumber - 1;
-  if (!lines[index] || !/^\s*[-*+]\s+\[[ xX-]\]/.test(lines[index])) return;
+  if (!lines[index] || !/^\s*[-*+]\s+\[[ xX>-]\]/.test(lines[index])) return;
 
   const taskDate = formatDate(new Date());
-  const nextLine = lines[index].replace(/^(\s*[-*+]\s+\[)([ xX-])(\])(.*)$/, (_, head, currentChecked, tail, rest) => {
+  const nextLine = lines[index].replace(/^(\s*[-*+]\s+\[)([ xX>-])(\])(.*)$/, (_, head, currentChecked, tail, rest) => {
     const cleanRest = rest.replace(/\s*\u{2705}\s*\d{4}-\d{2}-\d{2}/gu, "");
     return `${head}${checked ? "x" : " "}${tail}${cleanRest}${checked ? ` \u{2705} ${taskDate}` : ""}`;
   });
@@ -5590,6 +5593,13 @@ function bindTaskEditDialog() {
     renderTaskEditDatePicker(state.taskEditActiveField);
   });
 
+  els.taskEditChecked?.addEventListener("change", () => {
+    if (els.taskEditChecked.checked && els.taskEditDeferred) els.taskEditDeferred.checked = false;
+  });
+  els.taskEditDeferred?.addEventListener("change", () => {
+    if (els.taskEditDeferred.checked && els.taskEditChecked) els.taskEditChecked.checked = false;
+  });
+
   els.taskEditCancelBtn?.addEventListener("click", () => {
     els.taskEditDialog.close("cancel");
   });
@@ -5621,12 +5631,13 @@ function bindTaskEditDialog() {
     const dueTime = normalizeTaskTimeInput(els.taskEditDueTimeInput);
     const startTime = normalizeTaskTimeInput(els.taskEditStartTimeInput);
     const checked = els.taskEditChecked?.checked || false;
+    const deferred = els.taskEditDeferred?.checked || false;
     if (!dueDate) { els.taskEditDueDateBtn?.focus(); return; }
     const task = state.taskEditTask;
     if (!task) return;
     const subItemsText = els.taskEditSubItemsInput?.value || "";
     els.taskEditDialog.close("confirm");
-    await saveTaskEdit(task, title, state.taskEditMeta, dueDate, startDate, checked, dueTime, startTime, subItemsText);
+    await saveTaskEdit(task, title, state.taskEditMeta, dueDate, startDate, checked, dueTime, startTime, subItemsText, deferred);
   });
 
   els.taskEditDialog.addEventListener("keydown", (e) => {
@@ -5747,6 +5758,7 @@ async function showTaskEditDialog(task) {
   state.taskEditPickerMonth = null;
   if (els.taskEditTitleInput) els.taskEditTitleInput.value = task.text || "";
   if (els.taskEditChecked) els.taskEditChecked.checked = task.checked || false;
+  if (els.taskEditDeferred) els.taskEditDeferred.checked = task.deferred || false;
   if (els.taskEditStartTimeInput) els.taskEditStartTimeInput.value = task.startTime || "";
   if (els.taskEditDueTimeInput) els.taskEditDueTimeInput.value = task.dueTime || "";
   renderTaskEditSubItems(task.subItems);
@@ -5792,7 +5804,7 @@ function normalizeTaskSubItemsInput(value) {
     .map((line) => (/^[-*+]\s+/.test(line) ? line : `- ${line.replace(/^[-*+]\s*/, "")}`));
 }
 
-async function saveTaskEdit(task, title, meta, dueDate, startDate, checked, dueTime = "", startTime = "", subItemsText = "") {
+async function saveTaskEdit(task, title, meta, dueDate, startDate, checked, dueTime = "", startTime = "", subItemsText = "", deferred = false) {
   try {
     const node = state.files.get(task.path);
     if (!node) { alert("파일을 찾을 수 없습니다."); return; }
@@ -5807,7 +5819,8 @@ async function saveTaskEdit(task, title, meta, dueDate, startDate, checked, dueT
     const metaStr = hashParts.length ? ` ${hashParts.join(" ")}` : "";
     const startPart = startDate ? ` 🛫 ${startDate}${startTime ? " " + startTime : ""}` : "";
     const duePart = ` 📅 ${dueDate}${dueTime ? " " + dueTime : ""}`;
-    lines[idx] = `${indentStr}- [${checked ? "x" : " "}] ${title}${metaStr}${startPart}${duePart}`;
+    const statusChar = checked ? "x" : deferred ? ">" : " ";
+    lines[idx] = `${indentStr}- [${statusChar}] ${title}${metaStr}${startPart}${duePart}`;
     let childEnd = idx + 1;
     while (childEnd < lines.length) {
       if (lines[childEnd].trim() === "") break;
