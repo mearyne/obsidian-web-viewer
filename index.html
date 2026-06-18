@@ -148,7 +148,17 @@
           </section>
           <article id="calendarView" class="calendar-view" hidden></article>
         </section>
+        <div class="split-drop-zone" aria-hidden="true"><span>분할 보기로 열기</span></div>
       </main>
+      <div id="splitPane" class="split-pane" hidden>
+        <header class="split-header">
+          <span id="splitTitle" class="split-title"></span>
+          <button id="splitCloseButton" class="icon-button" type="button" title="분할 닫기">×</button>
+        </header>
+        <section class="split-viewer-wrap">
+          <article id="splitMarkdownView" class="markdown-body"></article>
+        </section>
+      </div>
     </div>
     <div id="syncStatus" class="sync-status sync-status-bar" hidden></div>
     <div id="connectionBanner" class="connection-banner" hidden></div>

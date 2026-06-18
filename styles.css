@@ -547,18 +547,6 @@ button:disabled {
   padding-bottom: 44px;
 }
 
-/* Single tab: hide tab items, keep + button visible */
-.single-tab .tab-item { display: none; }
-.single-tab .tab-strip {
-  border-bottom: none;
-  min-height: 0;
-}
-.single-tab .tab-new {
-  font-size: 12px;
-  opacity: 0.45;
-  padding: 2px 10px;
-}
-
 .note-header {
   align-items: center;
   background: var(--surface);
@@ -1129,15 +1117,6 @@ button:disabled {
 
 .viewer-wrap:has(.calendar-view:not([hidden])) {
   overflow: hidden;
-  padding: 0;
-}
-
-.viewer-wrap:has(.calendar-view:not([hidden])) .calendar-view {
-  bottom: 0;
-  left: 0;
-  position: absolute;
-  right: 0;
-  top: 0;
 }
 
 .loading-overlay {
@@ -2423,6 +2402,7 @@ button:disabled {
 }
 
 .calendar-view {
+  height: calc(100vh - 176px);
   margin: 0 auto;
   max-width: 1180px;
   overflow: hidden;
@@ -3444,6 +3424,8 @@ button.calendar-more {
   }
 
   .calendar-view {
+    height: calc(100vh - 156px);
+    height: calc(100dvh - 156px);
     margin: 0;
     max-width: none;
     min-width: 0;
@@ -3832,7 +3814,6 @@ button.calendar-more {
   .tab-strip { order: -1; }
 }
 
-
 /* Mobile: tab strip above status bar (fixed) */
 @media (max-width: 780px) {
   .tab-strip {
@@ -4002,5 +3983,113 @@ button.calendar-more {
 
 @media (max-width: 780px) {
   .new-tab-page { padding: 24px 16px; }
+}
+
+/* ─── Split view ─────────────────────────────────────────────────────────────── */
+
+.app-shell.split-view {
+  display: flex;
+  flex-direction: row;
+}
+
+.app-shell.split-view .content-pane {
+  flex: 1;
+  min-width: 0;
+}
+
+.split-pane {
+  border-left: 2px solid var(--line);
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  height: 100vh;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.split-header {
+  align-items: center;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+  justify-content: space-between;
+  min-height: 46px;
+  padding: 6px 12px;
+}
+
+.split-title {
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.split-viewer-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 20px 20px 48px;
+}
+
+.split-viewer-wrap .markdown-body {
+  margin: 0 auto;
+  max-width: var(--line-width);
+}
+
+/* Drop zone: right 40% of content-pane, appears while dragging a tab */
+.content-pane { position: relative; }
+
+.split-drop-zone {
+  align-items: center;
+  bottom: 0;
+  color: var(--fg);
+  display: none;
+  font-size: 14px;
+  font-weight: 600;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+  top: 0;
+  transition: opacity 0.15s;
+  width: 40%;
+  z-index: 20;
+}
+
+.split-drop-zone::before {
+  background: var(--accent-strong);
+  border-radius: 8px 0 0 8px;
+  bottom: 8px;
+  content: "";
+  left: 0;
+  position: absolute;
+  right: 0;
+  top: 8px;
+  z-index: -1;
+}
+
+.dragging-tab .split-drop-zone {
+  display: flex;
+  opacity: 0.18;
+  pointer-events: auto;
+}
+
+.dragging-tab .split-drop-zone.drag-over {
+  opacity: 0.45;
+}
+
+.sidebar-pinned.split-view .content-pane {
+  margin-left: min(var(--sidebar-width), 90vw);
+}
+
+@media (max-width: 780px) {
+  .split-pane { display: none; }
 }
 
