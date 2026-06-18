@@ -197,6 +197,7 @@ const els = {
   calendarView: document.querySelector("#calendarView"),
   noteTitleArea: document.querySelector("#noteTitleArea"),
   headingControlsOverlay: document.querySelector("#headingControlsOverlay"),
+  viewControlsOverlay: document.querySelector("#viewControlsOverlay"),
   loadingOverlay: document.querySelector("#loadingOverlay"),
   loadingText: document.querySelector("#loadingText"),
   markdownToggleButton: document.querySelector("#markdownToggleButton"),
@@ -3501,6 +3502,7 @@ function showNoteView() {
   els.calendarView.hidden = true;
   if (els.noteTitleArea) els.noteTitleArea.hidden = false;
   if (els.headingControlsOverlay) els.headingControlsOverlay.hidden = false;
+  if (els.viewControlsOverlay) els.viewControlsOverlay.hidden = false;
   els.calendarButton.classList.remove("active");
   updateCalendarKindButton();
   updateSyncStatus();
@@ -3519,6 +3521,7 @@ function showCalendarView() {
   els.calendarView.hidden = false;
   if (els.noteTitleArea) els.noteTitleArea.hidden = true;
   if (els.headingControlsOverlay) els.headingControlsOverlay.hidden = true;
+  if (els.viewControlsOverlay) els.viewControlsOverlay.hidden = false;
   els.calendarButton.classList.add("active");
   els.matrixButton?.classList.toggle("active", state.calendarKind === "matrix");
   updateCalendarKindButton();
@@ -7405,6 +7408,7 @@ function showEmptyTab() {
   if (els.calendarView) els.calendarView.hidden = true;
   if (els.noteTitleArea) els.noteTitleArea.hidden = true;
   if (els.headingControlsOverlay) els.headingControlsOverlay.hidden = true;
+  if (els.viewControlsOverlay) els.viewControlsOverlay.hidden = true;
   els.noteTitle.textContent = "새 탭";
   if (els.notePath) els.notePath.textContent = "";
   updateEditButtons();

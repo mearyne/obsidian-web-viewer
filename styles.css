@@ -873,6 +873,7 @@ button:disabled {
 
 @media (min-width: 781px) {
   .header-left { display: none; }
+  .note-header { display: none; }
 }
 
 .note-path {
@@ -1136,6 +1137,20 @@ button:disabled {
   position: fixed;
   right: 20px;
   z-index: 50;
+}
+
+.view-controls-overlay {
+  display: flex;
+  gap: 4px;
+  position: fixed;
+  right: 16px;
+  top: 52px;
+  z-index: 40;
+}
+
+.view-controls-overlay > .icon-button {
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  border-radius: 4px;
 }
 
 :root[data-content-align="left"] .note-title-area {
@@ -2108,10 +2123,13 @@ button:disabled {
 .task-edit-header {
   align-items: center;
   display: flex;
-  justify-content: space-between;
+  gap: 8px;
 }
 
-.task-edit-header h3 { margin: 0; }
+.task-edit-header h3 {
+  flex: 1;
+  margin: 0;
+}
 
 .task-edit-done-label {
   align-items: center;
