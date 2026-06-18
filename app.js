@@ -176,11 +176,6 @@ const els = {
   contentFontSizeInput: document.querySelector("#contentFontSizeInput"),
   calendarRowFontSizeInput: document.querySelector("#calendarRowFontSizeInput"),
   contentAlignSelect: document.querySelector("#contentAlignSelect"),
-  contentMaxWidthInput: document.querySelector("#contentMaxWidthInput"),
-  splitPane: document.querySelector("#splitPane"),
-  splitTitle: document.querySelector("#splitTitle"),
-  splitCloseButton: document.querySelector("#splitCloseButton"),
-  splitMarkdownView: document.querySelector("#splitMarkdownView"),
   vaultStatus: document.querySelector("#vaultStatus"),
   notePath: document.querySelector("#notePath"),
   noteTitle: document.querySelector("#noteTitle"),
@@ -308,13 +303,6 @@ els.calendarRowFontSizeInput?.addEventListener("input", () => {
 });
 els.calendarRowFontSizeInput?.addEventListener("change", updateCalendarRowFontSize);
 els.contentAlignSelect?.addEventListener("change", updateContentAlign);
-els.contentMaxWidthInput?.addEventListener("input", () => {
-  const v = Number(els.contentMaxWidthInput.value);
-  if (Number.isFinite(v) && v >= 400) document.documentElement.style.setProperty("--line-width", `${Math.max(400, Math.min(1600, v))}px`);
-});
-els.contentMaxWidthInput?.addEventListener("change", updateContentMaxWidth);
-els.splitCloseButton?.addEventListener("click", closeSplitPane);
-initSplitDropZone();
 els.viewerWrap.addEventListener("click", closeSidebarFromMain);
 els.calendarView.addEventListener("wheel", handleCalendarWheel, { passive: false });
 els.calendarView.addEventListener("pointerdown", handleCalendarSwipeStart, true);
@@ -1449,7 +1437,7 @@ async function openFile(path) {
     els.notePath.textContent = path;
     els.noteTitle.textContent = displayDocumentTitle(node.name);
     const curTab = activeTab();
-    if (curTab) { curTab.path = path; curTab.title = displayDocumentTitle(node.name); curTab.view = null; }
+    if (curTab) { curTab.path = path; curTab.title = displayDocumentTitle(node.name); }
     renderTabStrip();
     pushRecentlyOpened(path, displayDocumentTitle(node.name));
     updateEditButtons();
@@ -2102,11 +2090,9 @@ function applyDeviceDisplayOptions() {
   const contentSize = readNumberOption(deviceOptionStorageKey("content-font-size", deviceKey), 16, 10, 28);
   const rowSize = readNumberOption(deviceOptionStorageKey("calendar-row-font-size", deviceKey), deviceKey === "mobile" ? 10.8 : 14.4, 6, 22);
   const align = readChoiceOption(deviceOptionStorageKey("content-align", deviceKey), "soft-center", ["left", "soft-center", "center"]);
-  const maxWidth = readNumberOption("obsidian-web-viewer-content-max-width", 760, 400, 1600);
   setContentFontSize(contentSize, { persist: false });
   setCalendarRowFontSize(rowSize, { persist: false });
   setContentAlign(align, { persist: false });
-  setContentMaxWidth(maxWidth, { persist: false });
 }
 
 function readNumberOption(key, fallback, min, max) {
@@ -2154,17 +2140,6 @@ function setContentAlign(align, { persist }) {
   if (persist) localStorage.setItem(deviceOptionStorageKey("content-align"), nextAlign);
 }
 
-function updateContentMaxWidth() {
-  const value = Number(els.contentMaxWidthInput?.value || 760);
-  const width = Math.max(400, Math.min(1600, Number.isFinite(value) ? value : 760));
-  setContentMaxWidth(width, { persist: true });
-}
-
-function setContentMaxWidth(width, { persist }) {
-  document.documentElement.style.setProperty("--line-width", `${width}px`);
-  if (els.contentMaxWidthInput) els.contentMaxWidthInput.value = String(width);
-  if (persist) localStorage.setItem("obsidian-web-viewer-content-max-width", String(width));
-}
 
 function handleCalendarFilterInput() {
   const value = els.calendarPathInput?.value || "";
@@ -3501,8 +3476,6 @@ function showCalendarView() {
   state.activeView = "calendar";
   document.documentElement.classList.toggle("matrix-mode", state.calendarKind === "matrix");
   updateCalendarTitle();
-  const tab = activeTab();
-  if (tab) tab.view = "calendar";
   els.markdownView.hidden = true;
   els.editorShell.hidden = true;
   els.calendarView.hidden = false;
@@ -7051,13 +7024,7 @@ async function switchTab(id) {
   updateHistoryButtons();
   const tab = state.tabs.find((t) => t.id === id);
   if (!tab) return;
-  if (tab.view === "calendar") {
-    if (els.calendarView.children.length > 0) {
-      showCalendarView();
-    } else {
-      await buildCalendarView();
-    }
-  } else if (tab.path && state.files.has(tab.path)) {
+  if (tab.path && state.files.has(tab.path)) {
     const wasNavigating = state.navigatingHistory;
     state.navigatingHistory = true;
     await openFile(tab.path);
@@ -7119,8 +7086,7 @@ function renderTabStrip() {
     const isActive = tab.id === state.activeTabId;
     const title = escapeHtml(tab.title || "새 탭");
     const pinMark = tab.pinned ? '<span class="tab-pin">📌</span>' : "";
-    const draggable = tab.path ? ' draggable="true"' : "";
-    return `<div class="tab-item${isActive ? " active" : ""}${tab.pinned ? " pinned" : ""}" data-tab-id="${escapeAttribute(tab.id)}" data-tab-path="${escapeAttribute(tab.path || "")}" title="${title}"${draggable}>
+    return `<div class="tab-item${isActive ? " active" : ""}${tab.pinned ? " pinned" : ""}" data-tab-id="${escapeAttribute(tab.id)}" title="${title}">
       ${pinMark}<span class="tab-title">${title}</span>
       <button class="tab-close" data-tab-id="${escapeAttribute(tab.id)}" title="${tab.pinned ? "핀 해제" : "탭 닫기"}" type="button">×</button>
     </div>`;
@@ -7135,16 +7101,6 @@ function renderTabStrip() {
       e.preventDefault();
       pinTab(el.dataset.tabId);
     });
-    if (el.draggable) {
-      el.addEventListener("dragstart", (e) => {
-        e.dataTransfer.setData("text/plain", el.dataset.tabPath);
-        e.dataTransfer.effectAllowed = "copy";
-        document.querySelector(".app-shell")?.classList.add("dragging-tab");
-      });
-      el.addEventListener("dragend", () => {
-        document.querySelector(".app-shell")?.classList.remove("dragging-tab");
-      });
-    }
   });
   strip.querySelectorAll(".tab-close").forEach((btn) => {
     btn.addEventListener("click", (e) => {
@@ -7385,57 +7341,3 @@ async function renameCurrentFile(newTitle) {
   } catch {}
 }
 
-// ─── Split view ───────────────────────────────────────────────────────────────
-
-function initSplitDropZone() {
-  const dropZone = document.querySelector(".split-drop-zone");
-  if (!dropZone) return;
-  dropZone.addEventListener("dragover", (e) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "copy";
-    dropZone.classList.add("drag-over");
-  });
-  dropZone.addEventListener("dragleave", () => {
-    dropZone.classList.remove("drag-over");
-  });
-  dropZone.addEventListener("drop", (e) => {
-    e.preventDefault();
-    dropZone.classList.remove("drag-over");
-    document.querySelector(".app-shell")?.classList.remove("dragging-tab");
-    const path = e.dataTransfer.getData("text/plain");
-    if (path) void openInSplitPane(path);
-  });
-}
-
-async function openInSplitPane(path) {
-  const node = state.files.get(path);
-  if (!node) return;
-  try {
-    const content = await readFileNode(node);
-    if (!els.splitPane || !els.splitMarkdownView) return;
-    els.splitTitle.textContent = displayDocumentTitle(node.name);
-    if (isMarkdownDocument(node.name)) {
-      els.splitMarkdownView.innerHTML = renderMarkdown(content, { path });
-      bindWikiLinks(els.splitMarkdownView);
-      void hydrateVaultImages(els.splitMarkdownView);
-      void hydrateEmbeddedDocuments(els.splitMarkdownView);
-      arrangeImageGroups(els.splitMarkdownView);
-      bindImageLightbox(els.splitMarkdownView);
-    } else {
-      const pre = document.createElement("pre");
-      pre.textContent = content;
-      els.splitMarkdownView.replaceChildren(pre);
-    }
-    els.splitPane.hidden = false;
-    document.querySelector(".app-shell")?.classList.add("split-view");
-  } catch (err) {
-    console.error("split pane open failed", err);
-  }
-}
-
-function closeSplitPane() {
-  if (!els.splitPane) return;
-  els.splitPane.hidden = true;
-  document.querySelector(".app-shell")?.classList.remove("split-view");
-  els.splitMarkdownView.innerHTML = "";
-}

@@ -540,13 +540,11 @@ button:disabled {
 .content-pane {
   background: var(--surface);
   display: grid;
-  flex: 1;
   grid-template-rows: auto auto 1fr;
   height: 100vh;
   min-height: 100vh;
   min-width: 0;
   padding-bottom: 44px;
-  position: relative;
 }
 
 /* Hide tab strip when only one tab open */
@@ -3824,108 +3822,6 @@ button.calendar-more {
   .tab-strip { order: -1; }
 }
 
-/* ─── Split view ─────────────────────────────────────────────────────────────── */
-
-.app-shell.split-view {
-  display: flex;
-  flex-direction: row;
-}
-
-.app-shell.split-view .content-pane {
-  height: 100vh;
-  min-width: 0;
-}
-
-.split-pane {
-  border-left: 2px solid var(--line);
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  height: 100vh;
-  min-width: 0;
-  overflow: hidden;
-}
-
-.split-header {
-  align-items: center;
-  background: var(--surface);
-  border-bottom: 1px solid var(--line);
-  display: flex;
-  flex-shrink: 0;
-  gap: 8px;
-  justify-content: space-between;
-  min-height: 42px;
-  padding: 6px 12px;
-}
-
-.split-title {
-  color: var(--fg);
-  font-size: 13px;
-  font-weight: 500;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.split-viewer-wrap {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding: 20px 20px 48px;
-}
-
-.split-viewer-wrap .markdown-body {
-  margin: 0 auto;
-  max-width: var(--line-width);
-}
-
-/* Drop zone overlay on right side of content-pane */
-.split-drop-zone {
-  align-items: center;
-  bottom: 0;
-  color: var(--fg);
-  display: none;
-  font-size: 14px;
-  font-weight: 600;
-  justify-content: center;
-  opacity: 0;
-  pointer-events: none;
-  position: absolute;
-  right: 0;
-  top: 0;
-  transition: opacity 0.15s;
-  width: 40%;
-  z-index: 20;
-}
-
-.split-drop-zone::before {
-  background: var(--accent-strong);
-  border-radius: 8px 0 0 8px;
-  bottom: 8px;
-  content: "";
-  left: 0;
-  position: absolute;
-  right: 0;
-  top: 8px;
-  z-index: -1;
-}
-
-.dragging-tab .split-drop-zone {
-  display: flex;
-  opacity: 0.18;
-  pointer-events: auto;
-}
-
-.dragging-tab .split-drop-zone.drag-over {
-  opacity: 0.45;
-}
-
-/* Sidebar pinned + split view */
-.sidebar-pinned.split-view .content-pane {
-  margin-left: min(var(--sidebar-width), 90vw);
-}
 
 /* Mobile: tab strip above status bar (fixed) */
 @media (max-width: 780px) {
