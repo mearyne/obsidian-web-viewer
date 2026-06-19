@@ -597,7 +597,7 @@ function handleGlobalKeydown(event) {
     if (event.key.toLowerCase() === "r") {
       event.preventDefault();
       event.stopPropagation();
-      openRandomMarkdown();
+      openRandomMarkdown({ showProgress: true });
       return;
     }
     if (event.key.toLowerCase() === "c") {
@@ -631,7 +631,7 @@ function handleGlobalKeydown(event) {
   } else if (!event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && (event.code === "KeyR" || event.key.toLowerCase() === "r")) {
     event.preventDefault();
     event.stopPropagation();
-    void openRandomMarkdown();
+    void openRandomMarkdown({ showProgress: true });
   } else if (event.key === "Escape") {
     closeOptionsMenu();
     closeImageLightbox();
@@ -757,10 +757,10 @@ function setSidebarWidth(width) {
   document.documentElement.style.setProperty("--sidebar-width", `${Math.round(clamped)}px`);
 }
 
-async function openRandomMarkdown() {
+async function openRandomMarkdown({ showProgress = false } = {}) {
   const files = getRandomMarkdownPaths();
   if (!files.length) {
-    alert("조건에 맞는 랜덤 파일이 없습니다.");
+    alert(showProgress ? "랜덤 파일: 0개 중 0개" : "조건에 맞는 랜덤 파일이 없습니다.");
     return;
   }
 
@@ -769,7 +769,7 @@ async function openRandomMarkdown() {
   const nonCurrentCandidates = candidates.filter((path) => path !== state.currentPath);
   if (nonCurrentCandidates.length) candidates = nonCurrentCandidates;
   if (!candidates.length) {
-    alert("조건에 맞는 새 랜덤 파일이 없습니다.");
+    alert(showProgress ? randomProgressText(files, seen) : "조건에 맞는 새 랜덤 파일이 없습니다.");
     return;
   }
 
@@ -777,6 +777,7 @@ async function openRandomMarkdown() {
   if (state.activeView === "calendar") showNoteView();
   await openFile(path);
   seen.add(path);
+  if (showProgress) showAppToast(randomProgressText(files, seen));
   scrollViewerTop();
 }
 
@@ -807,6 +808,11 @@ function getRandomSeenForActiveTab() {
   const tabId = state.activeTabId || "main";
   if (!state.randomSeenByTab.has(tabId)) state.randomSeenByTab.set(tabId, new Set());
   return state.randomSeenByTab.get(tabId);
+}
+
+function randomProgressText(files, seen) {
+  const openedCount = files.reduce((count, path) => count + (seen.has(path) ? 1 : 0), 0);
+  return `랜덤 파일: ${files.length}개 중 ${openedCount}개`;
 }
 
 function pickRandomMarkdownPath(candidates) {
