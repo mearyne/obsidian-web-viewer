@@ -6217,7 +6217,7 @@ async function saveTaskEdit(task, title, meta, dueDate, startDate, checked, dueT
     if (typeof node.content === "string") node.content = newContent;
     if (state.currentPath === node.path) {
       state.currentContent = newContent;
-      if (!state.editMode) renderCurrentDocument();
+      if (state.activeView === "note" && !state.editMode) renderCurrentDocument();
     }
     updateTasksForFile(task.path, newContent);
   } catch {
