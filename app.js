@@ -392,6 +392,10 @@ els.themeButton.addEventListener("click", toggleTheme);
 els.sidebarResizeHandle.addEventListener("pointerdown", startSidebarResize);
 els.noteTitle?.addEventListener("click", showFullCurrentTitle);
 els.noteTitle?.addEventListener("pointerdown", startNoteTitleLongPress);
+els.notePath?.addEventListener("click", () => {
+  if (!state.currentPath) return;
+  navigator.clipboard?.writeText(state.currentPath).catch(() => {});
+});
 els.noteTitle?.addEventListener("pointerup", clearNoteTitleLongPress);
 els.noteTitle?.addEventListener("pointerleave", clearNoteTitleLongPress);
 els.noteTitle?.addEventListener("pointercancel", clearNoteTitleLongPress);
@@ -543,10 +547,22 @@ function handleGlobalKeydown(event) {
       renderCalendar();
       return;
     }
-    if (event.key.toLowerCase() === "e") {
+    if (event.key.toLowerCase() === "e" || event.key.toLowerCase() === "w") {
       event.preventDefault();
       event.stopPropagation();
       enterEditMode();
+      return;
+    }
+    if (event.key.toLowerCase() === "n") {
+      event.preventDefault();
+      event.stopPropagation();
+      openNewNote();
+      return;
+    }
+    if (event.key.toLowerCase() === "t" && state.activeView !== "calendar") {
+      event.preventDefault();
+      event.stopPropagation();
+      void showTaskCreateDialog(formatDate(new Date()));
       return;
     }
     if (event.key.toLowerCase() === "r") {
@@ -1526,7 +1542,8 @@ async function openFile(path) {
     state.currentNode = node;
     state.editMode = false;
     pushNavigationHistory({ type: "file", path });
-    els.notePath.textContent = path;
+    els.notePath.textContent = displayDocumentTitle(node.name);
+    els.notePath.title = path;
     els.noteTitle.textContent = displayDocumentTitle(node.name);
     const curTab = activeTab();
     const pinnedTabChanged = curTab?.pinned && (curTab.path !== path || curTab.title !== displayDocumentTitle(node.name));
@@ -2063,7 +2080,6 @@ async function createAndOpenNote(title, dirPathOverride) {
     refreshRecentFilesCache();
     invalidateRandomMarkdownCache();
     await openFile(path);
-    await enterEditMode();
     return;
   }
 
@@ -2081,7 +2097,6 @@ async function createAndOpenNote(title, dirPathOverride) {
   refreshRecentFilesCache();
   invalidateRandomMarkdownCache();
   await openFile(path);
-  await enterEditMode();
 }
 
 function handleSyncStatusClick() {
@@ -3031,18 +3046,12 @@ function updateEditorStatus(prefix = "") {
     }
     return;
   }
-  const dirty = state.editorDirty ? "수정됨" : "저장됨";
-  const statusText = `${prefix ? `${prefix} · ` : ""}${state.currentPath} · ${dirty}`;
   if (els.editorStatus) {
     els.editorStatus.hidden = true;
     els.editorStatus.textContent = "";
   }
-  if (els.notePath) els.notePath.hidden = true;
-  if (bottomSaveStatus) {
-    bottomSaveStatus.textContent = statusText;
-    bottomSaveStatus.hidden = false;
-    bottomSaveStatus.dataset.state = prefix ? "saving" : (state.editorDirty ? "dirty" : "saved");
-  }
+  if (els.notePath) els.notePath.hidden = false;
+  if (bottomSaveStatus) bottomSaveStatus.hidden = true;
 }
 
 function startAutoSave() {
@@ -4742,12 +4751,8 @@ function renderSubItemsHtml(subItems) {
     const listItem = body.match(/^[-*+]\s+(.*)$/);
     const rendered = renderSubItemContent((listItem ? listItem[1] : body).trim());
     const indentStyle = indent ? ` style="margin-left: ${Math.min(48, indent.length * 4)}px"` : "";
-    if (listItem) {
-      if (rendered.startsWith("<img")) return rendered;
-      return `<div class="task-sub-bullet"${indentStyle}><span>•</span>${rendered}</div>`;
-    }
     if (rendered.startsWith("<img")) return rendered;
-    return `<div class="task-sub-text"${indentStyle}>${rendered}</div>`;
+    return `<div class="task-sub-bullet"${indentStyle}><span>•</span>${rendered}</div>`;
   }).join("");
 }
 
