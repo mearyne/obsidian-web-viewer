@@ -1373,8 +1373,8 @@ function renderDirChildren(dir, parent, matcher, folderPaths, excludePaths = [])
         node.collapsed = !node.collapsed;
         renderTree();
       } else if (isOpenableDocument(node.name)) {
-        const isMobileSearch = window.matchMedia("(max-width: 780px)").matches && els.searchInput?.value?.trim();
-        if (isMobileSearch) await openFileInNewTab(node.path);
+        const isSearchMode = els.searchInput?.value?.trim().length >= 2 || Boolean(state.contentSearchMatches);
+        if (isSearchMode) await openFileInNewTab(node.path);
         else await openFile(node.path);
       }
     });
@@ -1386,7 +1386,7 @@ function renderDirChildren(dir, parent, matcher, folderPaths, excludePaths = [])
       snippetEl.className = "tree-content-snippet";
       const escaped = state.contentSearchQuery.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       snippetEl.innerHTML = escapeHtml(snippet).replace(new RegExp(`(${escaped})`, "gi"), `<mark>$1</mark>`);
-      snippetEl.addEventListener("click", () => openFile(node.path));
+      snippetEl.addEventListener("click", () => void openFileInNewTab(node.path));
       group.append(snippetEl);
     }
 
@@ -4865,9 +4865,9 @@ function bindCalendarEvents() {
         event.stopPropagation();
         const task = state.tasks.find((t) => t.path === path && t.line === line);
         if (task) await showTaskEditDialog(task);
-        else await openFile(path);
+        else await openFileInNewTab(path);
       } else if (path) {
-        await openFile(path);
+        await openFileInNewTab(path);
       }
     });
   });
