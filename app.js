@@ -3802,12 +3802,13 @@ function parseTasks(content, path) {
       if (!displayDate) return [];
 
       const subItems = [];
+      const childIndentLen = taskIndentLen + 2;
       for (let i = index + 1; i < lines.length; i++) {
         const subLine = lines[i];
         if (subLine.trim() === "") break;
         const subIndent = normalizeLineIndent(subLine).length;
         if (subIndent <= taskIndentLen) break;
-        subItems.push(subLine.trim());
+        subItems.push(subLine.slice(Math.min(subLine.length, childIndentLen)));
       }
 
       const meta = extractTaskMeta(rawText);
@@ -4705,16 +4706,17 @@ function renderSubItemContent(content) {
 function renderSubItemsHtml(subItems) {
   if (!subItems || !subItems.length) return "";
   return subItems.map((item) => {
-    const listItem = item.match(/^[-*+]\s+(.*)$/);
+    const indent = item.match(/^(\s*)/)?.[1] || "";
+    const body = item.slice(indent.length);
+    const listItem = body.match(/^[-*+]\s+(.*)$/);
+    const rendered = renderSubItemContent((listItem ? listItem[1] : body).trim());
+    const indentStyle = indent ? ` style="margin-left: ${Math.min(48, indent.length * 4)}px"` : "";
     if (listItem) {
-      const content = listItem[1].trim();
-      const rendered = renderSubItemContent(content);
       if (rendered.startsWith("<img")) return rendered;
-      return `<div class="task-sub-bullet"><span>•</span>${rendered}</div>`;
+      return `<div class="task-sub-bullet"${indentStyle}><span>•</span>${rendered}</div>`;
     }
-    const rendered = renderSubItemContent(item);
     if (rendered.startsWith("<img")) return rendered;
-    return `<div class="task-sub-text">${rendered}</div>`;
+    return `<div class="task-sub-text"${indentStyle}>${rendered}</div>`;
   }).join("");
 }
 
@@ -5390,7 +5392,7 @@ async function persistTaskCheckedState(node, path, lineNumber, checked, content)
     if (state.editMode) {
       setEditorValue(nextContent);
       markEditorDirty();
-    } else {
+    } else if (state.activeView === "note") {
       renderCurrentDocument();
     }
   }
@@ -5436,7 +5438,7 @@ async function moveCalendarTaskDate(path, lineNumber, targetDate, sourceDate = "
     if (state.editMode) {
       setEditorValue(nextContent);
       markEditorDirty();
-    } else {
+    } else if (state.activeView === "note") {
       renderCurrentDocument();
     }
   }
@@ -5481,7 +5483,7 @@ async function moveTaskToMatrixQuadrant(path, lineNumber, placement) {
     if (state.editMode) {
       setEditorValue(nextContent);
       markEditorDirty();
-    } else {
+    } else if (state.activeView === "note") {
       renderCurrentDocument();
     }
   }
@@ -5906,7 +5908,7 @@ function bindTaskCreateDialog() {
     if (typeof node.content === "string") node.content = nextContent;
     if (state.currentPath === node.path) {
       state.currentContent = nextContent;
-      if (!state.editMode) renderCurrentDocument();
+      if (state.activeView === "note" && !state.editMode) renderCurrentDocument();
     }
     updateTasksForFile(node.path, nextContent);
     refreshRecentFilesCache();
@@ -6013,8 +6015,13 @@ function handleTaskSubItemsEnter(event) {
   event.preventDefault();
   const textarea = event.currentTarget;
   const { selectionStart, selectionEnd, value } = textarea;
-  textarea.value = `${value.slice(0, selectionStart)}\n- ${value.slice(selectionEnd)}`;
-  const next = selectionStart + 3;
+  const line = currentEditorLine(value, selectionStart).text;
+  const indent = line.match(/^(\s*)/)?.[1] || "";
+  const body = line.slice(indent.length);
+  const bullet = body.match(/^[-*+]\s+/)?.[0] || "- ";
+  const insertion = `\n${indent}${bullet}`;
+  textarea.value = `${value.slice(0, selectionStart)}${insertion}${value.slice(selectionEnd)}`;
+  const next = selectionStart + insertion.length;
   textarea.setSelectionRange(next, next);
 }
 
@@ -6145,16 +6152,27 @@ function renderTaskEditSubItems(subItems) {
 
 function taskSubItemsToEditableText(subItems) {
   if (!subItems || !subItems.length) return "";
-  return subItems.map((item) => (/^[-*+]\s+/.test(item) ? item : `- ${item}`)).join("\n");
+  return subItems
+    .map((item) => {
+      const line = String(item || "").replace(/\r\n/g, "\n");
+      const indent = line.match(/^(\s*)/)?.[1] || "";
+      const body = line.slice(indent.length);
+      return /^[-*+]\s+/.test(body) ? `${indent}${body}` : `${indent}- ${body}`;
+    })
+    .join("\n");
 }
 
 function normalizeTaskSubItemsInput(value) {
   return (value || "")
     .replace(/\r\n/g, "\n")
     .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => (/^[-*+]\s+/.test(line) ? line : `- ${line.replace(/^[-*+]\s*/, "")}`));
+    .map((line) => line.replace(/\s+$/g, ""))
+    .filter((line) => line.trim())
+    .map((line) => {
+      const indent = line.match(/^(\s*)/)?.[1] || "";
+      const body = line.slice(indent.length);
+      return /^[-*+]\s+/.test(body) ? `${indent}${body}` : `${indent}- ${body.replace(/^[-*+]\s*/, "")}`;
+    });
 }
 
 async function saveTaskEdit(task, title, meta, dueDate, startDate, checked, dueTime = "", startTime = "", subItemsText = "", deferred = false) {
