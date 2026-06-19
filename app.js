@@ -1984,6 +1984,10 @@ function connectSSE() {
 
   es.addEventListener("file-changed", async (e) => {
     const { path, updatedAt } = JSON.parse(e.data);
+    if (path === DEVICE_TABS_VAULT_PATH) {
+      if (!state.currentPath && els.newTabPage && !els.newTabPage.hidden) void loadAndRenderDeviceTabs();
+      return;
+    }
     const node = state.files.get(path);
     if (node) {
       node.content = undefined;
@@ -7163,6 +7167,7 @@ function saveOpenTabs() {
     activeTabId: state.activeTabId,
   };
   try { localStorage.setItem(OPEN_TABS_KEY, JSON.stringify(data)); } catch {}
+  debouncedSaveOpenTabsToVault();
 }
 
 function loadOpenTabs() {
@@ -7367,6 +7372,46 @@ function showAllTabsOverlay() {
 const RECENTLY_OPENED_KEY = "obsidian-web-viewer-recently-opened";
 const RECENTLY_OPENED_VAULT_PATH = ".viewer-recently-opened.json";
 const RECENTLY_OPENED_MAX = 30;
+const DEVICE_TABS_VAULT_PATH = ".viewer-open-tabs.json";
+const DEVICE_ID_KEY = "obsidian-web-viewer-device-id";
+const DEVICE_TABS_STALE_MS = 2 * 60 * 60 * 1000;
+
+function getDeviceId() {
+  let id = localStorage.getItem(DEVICE_ID_KEY);
+  if (!id) { id = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem(DEVICE_ID_KEY, id); }
+  return id;
+}
+
+let _saveDeviceTabsTimer = null;
+function debouncedSaveOpenTabsToVault() {
+  clearTimeout(_saveDeviceTabsTimer);
+  _saveDeviceTabsTimer = setTimeout(() => void saveOpenTabsToVault(), 3000);
+}
+
+async function saveOpenTabsToVault() {
+  if (!state.serverVaultWritable) return;
+  const deviceId = getDeviceId();
+  let allDeviceTabs = {};
+  try {
+    const res = await fetch("/api/vault-file?path=" + encodeURIComponent(DEVICE_TABS_VAULT_PATH));
+    if (res.ok) { const d = await res.json(); allDeviceTabs = JSON.parse(d.content || "{}"); }
+  } catch {}
+  const now = Date.now();
+  for (const id of Object.keys(allDeviceTabs)) {
+    if (now - allDeviceTabs[id].updatedAt > DEVICE_TABS_STALE_MS) delete allDeviceTabs[id];
+  }
+  allDeviceTabs[deviceId] = {
+    tabs: state.tabs.filter((t) => t.path).map((t) => ({ path: t.path, title: t.title })),
+    updatedAt: now,
+  };
+  try {
+    await fetch("/api/vault-file?path=" + encodeURIComponent(DEVICE_TABS_VAULT_PATH), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: JSON.stringify(allDeviceTabs, null, 2), backup: false }),
+    });
+  } catch {}
+}
 
 function pushRecentlyOpened(path, title) {
   const entry = { path, title: title || displayDocumentTitle(path.split("/").pop() || path) };
@@ -7441,30 +7486,60 @@ function showEmptyTab() {
 
 function renderNewTabPage() {
   if (!els.newTabPage) return;
-  const list = state.recentlyOpenedPaths.filter((e) => e.path && state.files.has(e.path));
   els.newTabPage.innerHTML = `
     <div class="new-tab-content">
       <h2 class="new-tab-title">새 탭</h2>
-      ${list.length ? `
-        <section class="new-tab-section">
-          <h3 class="new-tab-section-title">최근 열었던 파일</h3>
-          <ul class="new-tab-list">
-            ${list.map((e) => `
-              <li class="new-tab-item">
-                <button type="button" class="new-tab-file-btn" data-path="${escapeAttribute(e.path)}">
-                  <span class="new-tab-file-name">${escapeHtml(e.title || e.path.split("/").pop())}</span>
-                  <span class="new-tab-file-path">${escapeHtml(e.path)}</span>
-                </button>
-              </li>
-            `).join("")}
-          </ul>
-        </section>
-      ` : `<p class="new-tab-empty">아직 열었던 파일이 없습니다.</p>`}
+      <section class="new-tab-section" id="deviceTabsSection">
+        <h3 class="new-tab-section-title">다른 기기에서 열려있는 탭</h3>
+        <p class="new-tab-empty">불러오는 중...</p>
+      </section>
     </div>
   `;
-  els.newTabPage.querySelectorAll(".new-tab-file-btn").forEach((btn) => {
-    btn.addEventListener("click", () => void openFile(btn.dataset.path));
-  });
+  void loadAndRenderDeviceTabs();
+}
+
+async function loadAndRenderDeviceTabs() {
+  const section = document.getElementById("deviceTabsSection");
+  if (!section) return;
+  const emptyEl = section.querySelector(".new-tab-empty");
+  if (!state.serverVaultWritable) {
+    if (emptyEl) emptyEl.textContent = "다른 기기에서 열려있는 탭이 없습니다.";
+    return;
+  }
+  try {
+    const res = await fetch("/api/vault-file?path=" + encodeURIComponent(DEVICE_TABS_VAULT_PATH));
+    if (!res.ok) { if (emptyEl) emptyEl.textContent = "다른 기기에서 열려있는 탭이 없습니다."; return; }
+    const data = await res.json();
+    const allDeviceTabs = JSON.parse(data.content || "{}");
+    const deviceId = getDeviceId();
+    const now = Date.now();
+    const otherDevices = Object.entries(allDeviceTabs)
+      .filter(([id, e]) => id !== deviceId && now - e.updatedAt <= DEVICE_TABS_STALE_MS && e.tabs?.length)
+      .sort(([, a], [, b]) => b.updatedAt - a.updatedAt);
+    if (!otherDevices.length) {
+      if (emptyEl) emptyEl.textContent = "다른 기기에서 열려있는 탭이 없습니다.";
+      return;
+    }
+    section.innerHTML = `
+      <h3 class="new-tab-section-title">다른 기기에서 열려있는 탭</h3>
+      <ul class="new-tab-list">
+        ${otherDevices.flatMap(([, entry]) => (entry.tabs || []).map((tab) => `
+          <li class="new-tab-item">
+            <button type="button" class="new-tab-file-btn" data-path="${escapeAttribute(tab.path)}">
+              <span class="new-tab-file-name">${escapeHtml(tab.title || tab.path.split("/").pop())}</span>
+              <span class="new-tab-file-path">${escapeHtml(tab.path)}</span>
+            </button>
+          </li>
+        `)).join("")}
+      </ul>
+    `;
+    section.querySelectorAll(".new-tab-file-btn").forEach((btn) => {
+      btn.addEventListener("click", () => void openFile(btn.dataset.path));
+    });
+  } catch {
+    const el = section.querySelector(".new-tab-empty");
+    if (el) el.textContent = "다른 기기에서 열려있는 탭이 없습니다.";
+  }
 }
 
 async function renameCurrentFile(newTitle) {
