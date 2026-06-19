@@ -496,6 +496,13 @@ function handleGlobalKeydown(event) {
 
   if (isTypingTarget(event.target)) return;
 
+  if (!event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && event.code === "KeyT") {
+    event.preventDefault();
+    event.stopPropagation();
+    void createTab();
+    return;
+  }
+
   if (event.altKey && !event.ctrlKey && !event.metaKey && event.code === "Digit1") {
     event.preventDefault();
     event.stopPropagation();
@@ -7986,8 +7993,8 @@ function renderTodayFilesSection() {
       <span class="new-tab-file-path">${escapeHtml(n.path)}</span>
     </button></li>`).join("")}</ul>` : `<p class="new-tab-empty">오늘 ${kind} 파일 없음</p>`;
   if (!todayCreated.length && !todayUpdated.length) return "";
-  return `<section class="new-tab-section">
-    <h3 class="new-tab-section-title">오늘 활동</h3>
+  return `<section class="new-tab-section new-tab-section-today">
+    <h3 class="new-tab-section-title"><span aria-hidden="true">☀</span>오늘 활동</h3>
     ${todayCreated.length ? `<h4 class="new-tab-sub-title">새로 만든 파일</h4>${renderList(todayCreated, "생성한")}` : ""}
     ${todayUpdated.length ? `<h4 class="new-tab-sub-title">수정한 파일</h4>${renderList(todayUpdated, "수정한")}` : ""}
   </section>`;
@@ -7999,8 +8006,8 @@ function renderNewTabPage() {
     <div class="new-tab-content">
       <h2 class="new-tab-title">새 탭</h2>
       ${renderTodayFilesSection()}
-      <section class="new-tab-section" id="localTabsSection">
-        <h3 class="new-tab-section-title">이 브라우저의 탭</h3>
+      <section class="new-tab-section new-tab-section-local" id="localTabsSection">
+        <h3 class="new-tab-section-title"><span aria-hidden="true">▣</span>이 브라우저의 탭</h3>
         <ul class="new-tab-list">
           ${state.tabs.filter((tab) => !tab.pinned).map((tab) => `
             <li class="new-tab-item">
@@ -8012,8 +8019,8 @@ function renderNewTabPage() {
           `).join("")}
         </ul>
       </section>
-      <section class="new-tab-section" id="deviceTabsSection">
-        <h3 class="new-tab-section-title">다른 기기에서 열려있는 탭</h3>
+      <section class="new-tab-section new-tab-section-device" id="deviceTabsSection">
+        <h3 class="new-tab-section-title"><span aria-hidden="true">⇄</span>다른 기기에서 열려있는 탭</h3>
         <p class="new-tab-empty">불러오는 중...</p>
       </section>
     </div>
@@ -8050,7 +8057,7 @@ async function loadAndRenderDeviceTabs() {
       return;
     }
     section.innerHTML = `
-      <h3 class="new-tab-section-title">다른 기기에서 열려있는 탭</h3>
+      <h3 class="new-tab-section-title"><span aria-hidden="true">⇄</span>다른 기기에서 열려있는 탭</h3>
       <div class="new-tab-device-list">
         ${otherDevices.map(([id, entry], index) => `
           <section class="new-tab-device-group">
