@@ -8097,28 +8097,12 @@ function renderNewTabPage() {
     <div class="new-tab-content">
       <h2 class="new-tab-title">새 탭</h2>
       ${renderTodayFilesSection()}
-      <section class="new-tab-section new-tab-section-local" id="localTabsSection">
-        <h3 class="new-tab-section-title"><span aria-hidden="true">▣</span>이 브라우저의 탭</h3>
-        <ul class="new-tab-list">
-          ${state.tabs.filter((tab) => !tab.pinned).map((tab) => `
-            <li class="new-tab-item">
-              <button type="button" class="new-tab-file-btn${tab.id === state.activeTabId ? " active" : ""}" data-tab-id="${escapeAttribute(tab.id)}">
-                <span class="new-tab-file-name">${escapeHtml(tab.title || "새 탭")}</span>
-                <span class="new-tab-file-path">${escapeHtml(tab.path || "비어 있음")}</span>
-              </button>
-            </li>
-          `).join("")}
-        </ul>
-      </section>
       <section class="new-tab-section new-tab-section-device" id="deviceTabsSection">
         <h3 class="new-tab-section-title"><span aria-hidden="true">⇄</span>다른 기기에서 열려있는 탭</h3>
         <p class="new-tab-empty">불러오는 중...</p>
       </section>
     </div>
   `;
-  els.newTabPage.querySelectorAll("[data-tab-id]").forEach((btn) => {
-    btn.addEventListener("click", () => void switchTab(btn.dataset.tabId));
-  });
   els.newTabPage.querySelectorAll("[data-path]").forEach((btn) => {
     btn.addEventListener("click", () => void openFile(btn.dataset.path));
   });
