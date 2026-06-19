@@ -2404,7 +2404,7 @@ function setCalendarRowHeight(height) {
 }
 
 function defaultCalendarRowHeight(deviceKey = currentFontDeviceKey()) {
-  return deviceKey === "mobile" ? 27 : 50;
+  return deviceKey === "mobile" ? 27 : 35;
 }
 
 function updateContentMaxWidth() {

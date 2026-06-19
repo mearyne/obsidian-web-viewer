@@ -20,7 +20,7 @@
   --app-font: "Inter", "Segoe UI", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   --content-font-size: 16px;
   --calendar-row-font-size: 14.4px;
-  --calendar-row-height: 50px;
+  --calendar-row-height: 35px;
   --range-bg-0: #efeaff;
   --range-border-0: #7057d6;
   --range-bg-1: #e5f7ed;
@@ -3093,7 +3093,7 @@ button:disabled {
 
 .calendar-shell.calendar-mode-month .calendar-tasks {
   align-content: start;
-  grid-template-rows: repeat(var(--calendar-row-count, 5), var(--calendar-row-height, 50px));
+  grid-template-rows: repeat(var(--calendar-row-count, 5), var(--calendar-row-height, 35px));
 }
 
 .matrix-shell {
