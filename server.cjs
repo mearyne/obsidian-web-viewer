@@ -415,7 +415,8 @@ function updateDeviceTabs(body, res) {
 
   const allDeviceTabs = pruneDeviceTabs(readDeviceTabs());
   const now = Date.now();
-  allDeviceTabs[deviceId] = { tabs, updatedAt: now };
+  const deviceName = typeof payload.deviceName === "string" ? payload.deviceName.slice(0, 120) : "";
+  allDeviceTabs[deviceId] = { tabs, updatedAt: now, deviceName };
 
   try {
     const filePath = resolveVaultFilePath(DEVICE_TABS_VAULT_PATH);
@@ -449,6 +450,7 @@ function pruneDeviceTabs(allDeviceTabs) {
     pruned[id] = {
       tabs: Array.isArray(entry?.tabs) ? entry.tabs : [],
       updatedAt,
+      deviceName: typeof entry?.deviceName === "string" ? entry.deviceName : "",
     };
   }
   return pruned;

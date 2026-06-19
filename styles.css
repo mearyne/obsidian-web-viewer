@@ -225,14 +225,38 @@ button:disabled {
   padding: 0 10px 6px;
 }
 
+.search-status-row {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+  padding: 0 10px 8px;
+}
+
 .search-status {
   color: var(--muted);
+  flex: 1 1 auto;
   font-size: 11px;
-  padding: 0 12px 8px;
+  min-width: 0;
 }
 
 .search-status[data-state="empty"] {
   color: var(--danger);
+}
+
+.content-search-toggle {
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--muted);
+  flex: 0 0 auto;
+  font-size: 11px;
+  min-height: 28px;
+  padding: 0 8px;
+}
+
+.content-search-toggle[aria-pressed="true"] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .search-box {
@@ -4024,6 +4048,32 @@ button.calendar-more {
   letter-spacing: 0.08em;
   margin: 0 0 10px;
   text-transform: uppercase;
+}
+
+.new-tab-device-list {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.new-tab-device-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.new-tab-device-title {
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 650;
+  margin: 0;
+}
+
+.new-tab-device-title span {
+  color: var(--fg-muted);
+  font-size: 11px;
+  font-weight: 500;
+  margin-left: 4px;
 }
 
 .new-tab-list {

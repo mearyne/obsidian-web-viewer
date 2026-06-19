@@ -57,6 +57,9 @@ const state = {
   contentSearchTimer: null,
   contentSearchQuery: "",
   contentSearchMatches: null,
+  contentSearchSnippetsVisible: false,
+  searchTreeAutoExpand: true,
+  renderedSearchQuery: "",
   vaultLoaded: false,
   taskDialogActiveField: null,
   taskDialogPickerMonth: null,
@@ -136,6 +139,7 @@ const els = {
   imagePathInput: document.querySelector("#imagePathInput"),
   searchExcludeInput: document.querySelector("#searchExcludeInput"),
   searchStatus: document.querySelector("#searchStatus"),
+  contentSearchToggleButton: document.querySelector("#contentSearchToggleButton"),
   taskCreateDialog: document.querySelector("#taskCreateDialog"),
   taskTitleInput: document.querySelector("#taskTitleInput"),
   taskStartDateBtn: document.querySelector("#taskStartDateBtn"),
@@ -286,6 +290,7 @@ els.sidebarPinButton?.addEventListener("click", toggleSidebarPin);
 els.searchInput.addEventListener("input", renderTree);
 els.caseSearchToggle.addEventListener("change", renderTree);
 els.regexSearchToggle.addEventListener("change", renderTree);
+els.contentSearchToggleButton?.addEventListener("click", toggleContentSearchSnippets);
 els.treeSortSelect.addEventListener("change", updateTreeSortMode);
 els.treeSortDirectionButton.addEventListener("click", toggleTreeSortDirection);
 els.expandTreeButton.addEventListener("click", expandAllTree);
@@ -1111,12 +1116,18 @@ function renderTree() {
   const previousScrollTop = els.fileTree.scrollTop;
   els.fileTree.replaceChildren();
   const query = els.searchInput.value;
+  const trimmedQuery = query.trim();
+  if (trimmedQuery !== state.renderedSearchQuery) {
+    state.renderedSearchQuery = trimmedQuery;
+    state.searchTreeAutoExpand = trimmedQuery.length >= 2;
+  }
   const matcher = query.length >= 2 ? createSearchMatcher(query, {
     regexMode: els.regexSearchToggle.checked,
     caseSensitive: els.caseSearchToggle.checked,
   }) : null;
   const folderPaths = parsePathList(els.folderPathInput?.value || "");
   const excludePaths = matcher ? state.searchExcludePaths : [];
+  if (matcher && state.searchTreeAutoExpand) expandMatchingDirectories(matcher, folderPaths, excludePaths);
   const rootFragment = document.createDocumentFragment();
   const matchCount = renderDirChildren(state.root, rootFragment, matcher, folderPaths, excludePaths);
   els.fileTree.append(rootFragment);
@@ -1128,12 +1139,20 @@ function updateSearchStatus(query, matchCount) {
   if (!els.searchStatus) return;
   if (!query || query.length < 2) {
     els.searchStatus.hidden = true;
+    if (els.searchStatus.parentElement?.classList.contains("search-status-row")) els.searchStatus.parentElement.hidden = true;
+    if (els.contentSearchToggleButton) els.contentSearchToggleButton.hidden = true;
     state.contentSearchMatches = null;
     state.contentSearchQuery = "";
     window.clearTimeout(state.contentSearchTimer);
     return;
   }
   els.searchStatus.hidden = false;
+  if (els.searchStatus.parentElement?.classList.contains("search-status-row")) els.searchStatus.parentElement.hidden = false;
+  if (els.contentSearchToggleButton) {
+    els.contentSearchToggleButton.hidden = false;
+    els.contentSearchToggleButton.textContent = state.contentSearchSnippetsVisible ? "본문 내용 숨기기" : "본문 내용 보기";
+    els.contentSearchToggleButton.setAttribute("aria-pressed", String(state.contentSearchSnippetsVisible));
+  }
   const contentCount = state.contentSearchMatches ? state.contentSearchMatches.size : null;
   const contentPart = contentCount === null ? " | 내용 검색 중…" : contentCount > 0 ? ` | 내용 ${contentCount}개` : "";
   if (matchCount === 0 && !contentCount) {
@@ -1144,6 +1163,11 @@ function updateSearchStatus(query, matchCount) {
     els.searchStatus.dataset.state = "found";
   }
   scheduleContentSearch(query);
+}
+
+function toggleContentSearchSnippets() {
+  state.contentSearchSnippetsVisible = !state.contentSearchSnippetsVisible;
+  renderTree();
 }
 
 function scheduleContentSearch(query) {
@@ -1168,6 +1192,13 @@ async function runContentSearch(query) {
     const results = await res.json();
     if (query !== state.contentSearchQuery) return;
     state.contentSearchMatches = new Map(results.map((r) => [r.path, r.snippet]));
+    if (state.searchTreeAutoExpand) {
+      const matcher = createSearchMatcher(query, {
+        regexMode: els.regexSearchToggle.checked,
+        caseSensitive: els.caseSearchToggle.checked,
+      });
+      expandMatchingDirectories(matcher, parsePathList(els.folderPathInput?.value || ""), state.searchExcludePaths);
+    }
     renderTree();
   } catch {
     if (query !== state.contentSearchQuery) return;
@@ -1246,10 +1277,22 @@ function revealCurrentFileInTree(event) {
 }
 
 function setTreeCollapsed(collapsed) {
+  if (els.searchInput?.value?.trim().length >= 2) {
+    state.searchTreeAutoExpand = !collapsed;
+  }
   state.directories.forEach((dir, path) => {
     if (path) dir.collapsed = collapsed;
   });
   renderTree();
+}
+
+function expandMatchingDirectories(matcher, folderPaths, excludePaths = []) {
+  state.directories.forEach((dir, path) => {
+    if (!path) return;
+    if (dirHasMatch(dir, matcher, folderPaths, excludePaths)) {
+      dir.collapsed = false;
+    }
+  });
 }
 
 function expandPathToFile(path) {
@@ -1279,7 +1322,7 @@ function renderDirChildren(dir, parent, matcher, folderPaths, excludePaths = [])
 
     const group = document.createElement("div");
     group.className = "tree-group";
-    if (node.kind === "directory" && node.collapsed && !matcher) group.classList.add("collapsed");
+    if (node.kind === "directory" && node.collapsed) group.classList.add("collapsed");
 
     const row = document.createElement("button");
     row.type = "button";
@@ -1295,7 +1338,7 @@ function renderDirChildren(dir, parent, matcher, folderPaths, excludePaths = [])
 
     const toggle = document.createElement("span");
     toggle.className = "tree-toggle";
-    toggle.textContent = node.kind === "directory" ? (node.collapsed && !matcher ? "›" : "⌄") : "";
+    toggle.textContent = node.kind === "directory" ? (node.collapsed ? "›" : "⌄") : "";
 
     const name = document.createElement("span");
     name.className = "tree-name";
@@ -1321,7 +1364,7 @@ function renderDirChildren(dir, parent, matcher, folderPaths, excludePaths = [])
     });
     group.append(row);
 
-    if (hasContentMatch) {
+    if (hasContentMatch && state.contentSearchSnippetsVisible) {
       const snippet = state.contentSearchMatches.get(node.path);
       const snippetEl = document.createElement("div");
       snippetEl.className = "tree-content-snippet";
@@ -7586,6 +7629,14 @@ function getDeviceId() {
   return id;
 }
 
+function getDeviceName() {
+  const ua = navigator.userAgent || "";
+  const platform = navigator.userAgentData?.platform || navigator.platform || "";
+  const browser = ua.includes("Edg/") ? "Edge" : ua.includes("Chrome/") ? "Chrome" : ua.includes("Firefox/") ? "Firefox" : ua.includes("Safari/") ? "Safari" : "Browser";
+  const device = /Mobi|Android|iPhone|iPad/i.test(ua) ? "Mobile" : "Desktop";
+  return `${platform || device} ${browser}`.trim();
+}
+
 function debouncedSaveOpenTabsToVault() {
   clearTimeout(_saveDeviceTabsTimer);
   _saveDeviceTabsTimer = setTimeout(() => void saveOpenTabsToVault(), 250);
@@ -7594,12 +7645,13 @@ function debouncedSaveOpenTabsToVault() {
 async function saveOpenTabsToVault() {
   if (!state.serverVaultWritable) return;
   const deviceId = getDeviceId();
+  const deviceName = getDeviceName();
   const tabs = state.tabs.filter((t) => t.path).map((t) => ({ path: t.path, title: t.title }));
   try {
     await fetch("/api/device-tabs", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ deviceId, tabs }),
+      body: JSON.stringify({ deviceId, deviceName, tabs }),
       cache: "no-store",
     });
   } catch {}
@@ -7718,16 +7770,23 @@ async function loadAndRenderDeviceTabs() {
     }
     section.innerHTML = `
       <h3 class="new-tab-section-title">다른 기기에서 열려있는 탭</h3>
-      <ul class="new-tab-list">
-        ${otherDevices.flatMap(([, entry]) => (entry.tabs || []).map((tab) => `
-          <li class="new-tab-item">
-            <button type="button" class="new-tab-file-btn" data-path="${escapeAttribute(tab.path)}">
-              <span class="new-tab-file-name">${escapeHtml(tab.title || tab.path.split("/").pop())}</span>
-              <span class="new-tab-file-path">${escapeHtml(tab.path)}</span>
-            </button>
-          </li>
-        `)).join("")}
-      </ul>
+      <div class="new-tab-device-list">
+        ${otherDevices.map(([id, entry], index) => `
+          <section class="new-tab-device-group">
+            <h4 class="new-tab-device-title">${escapeHtml(entry.deviceName || `기기 ${index + 1}`)} <span>${escapeHtml(shortDeviceId(id))}</span></h4>
+            <ul class="new-tab-list">
+              ${(entry.tabs || []).map((tab) => `
+                <li class="new-tab-item">
+                  <button type="button" class="new-tab-file-btn" data-path="${escapeAttribute(tab.path)}">
+                    <span class="new-tab-file-name">${escapeHtml(tab.title || tab.path.split("/").pop())}</span>
+                    <span class="new-tab-file-path">${escapeHtml(tab.path)}</span>
+                  </button>
+                </li>
+              `).join("")}
+            </ul>
+          </section>
+        `).join("")}
+      </div>
     `;
     section.querySelectorAll(".new-tab-file-btn").forEach((btn) => {
       btn.addEventListener("click", () => void openFile(btn.dataset.path));
@@ -7736,6 +7795,10 @@ async function loadAndRenderDeviceTabs() {
     const el = section.querySelector(".new-tab-empty");
     if (el) el.textContent = "다른 기기에서 열려있는 탭이 없습니다.";
   }
+}
+
+function shortDeviceId(id) {
+  return String(id || "").slice(-6).toUpperCase();
 }
 
 async function renameCurrentFile(newTitle) {
