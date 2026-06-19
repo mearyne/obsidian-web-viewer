@@ -4504,20 +4504,8 @@ function renderCalendarRows(items, context, rowLimit, renderer) {
 
 function syncCalendarRowLimit() {
   if (state.activeView !== "calendar" || state.calendarMode !== "month" || els.calendarView.hidden) return;
-  const cell = els.calendarView.querySelector(".calendar-cell");
-  const day = els.calendarView.querySelector(".calendar-day");
-  const tasks = els.calendarView.querySelector(".calendar-tasks");
-  if (!cell || !day || !tasks) return;
-  const styles = getComputedStyle(cell);
-  const tasksStyles = getComputedStyle(tasks);
-  const verticalPadding = parseFloat(styles.paddingTop) + parseFloat(styles.paddingBottom);
-  const dayHeight = day.offsetHeight + parseFloat(getComputedStyle(day).marginBottom || 0);
-  const available = Math.max(0, cell.clientHeight - verticalPadding - dayHeight);
-  const gap = parseFloat(tasksStyles.rowGap || tasksStyles.gap || 0);
-  const rowHeight = window.matchMedia("(max-width: 780px)").matches ? 13 : 21;
-  const nextLimit = Math.max(1, Math.min(5, Math.floor((available + gap) / (rowHeight + gap))));
-  if (nextLimit !== state.calendarRowLimit) {
-    state.calendarRowLimit = nextLimit;
+  if (state.calendarRowLimit !== 5) {
+    state.calendarRowLimit = 5;
     renderCalendar();
   }
 }

@@ -4007,8 +4007,31 @@ button.calendar-more {
   }
   .content-pane { padding-bottom: 88px; }
   .tab-item { font-size: 11px; max-width: 120px; min-width: 60px; padding: 5px 6px 5px 8px; }
-  .mobile-status-nav { align-items: center; display: flex; gap: 2px; }
   .mobile-tabs-btn { font-size: 13px; font-weight: 600; min-width: 28px; }
+}
+
+@media (max-width: 780px) {
+  .calendar-toolbar {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 8px 10px;
+  }
+
+  .calendar-month-nav {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .calendar-date-jump {
+    flex: 0 0 auto;
+    min-width: 128px;
+    width: auto;
+  }
+
+  .calendar-mode-switch {
+    flex: 0 0 auto;
+    margin-left: auto;
+  }
 }
 
 /* All-tabs overlay (mobile) */
