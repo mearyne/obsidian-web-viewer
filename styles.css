@@ -4094,6 +4094,9 @@ button.calendar-more {
 }
 
 .new-tab-content {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
   margin: 0 auto;
   max-width: 760px;
 }
@@ -4103,6 +4106,13 @@ button.calendar-more {
   font-size: 22px;
   font-weight: 600;
   margin: 0 0 28px;
+}
+
+.new-tab-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
 }
 
 .new-tab-section-title {
@@ -4121,9 +4131,13 @@ button.calendar-more {
 }
 
 .new-tab-device-group {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  padding: 12px;
 }
 
 .new-tab-device-title {
@@ -4154,6 +4168,7 @@ button.calendar-more {
   background: var(--surface-2);
   border: 1px solid var(--line);
   border-radius: 8px;
+  box-sizing: border-box;
   color: var(--fg);
   cursor: pointer;
   display: flex;
@@ -4178,8 +4193,8 @@ button.calendar-more {
   font-size: 14px;
   font-weight: 650;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  white-space: normal;
   width: 100%;
 }
 
@@ -4189,7 +4204,6 @@ button.calendar-more {
   line-height: 1.35;
   overflow: hidden;
   overflow-wrap: anywhere;
-  text-overflow: ellipsis;
   white-space: normal;
   width: 100%;
 }
