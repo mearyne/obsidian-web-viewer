@@ -1,5 +1,7 @@
 const TASKS_DIRTY_KEY = "obsidian-web-viewer-tasks-dirty";
 const EDITOR_AUTO_SAVE_INTERVAL = 30 * 1000;
+const DOCUMENT_OPEN_SLOW_STEP_MS = 120;
+const DOCUMENT_OPEN_SLOW_TOTAL_MS = 500;
 function setTasksDirty() { try { localStorage.setItem(TASKS_DIRTY_KEY, "1"); } catch {} }
 function clearTasksDirty() { try { localStorage.removeItem(TASKS_DIRTY_KEY); } catch {} }
 function isTasksDirty() { try { return localStorage.getItem(TASKS_DIRTY_KEY) === "1"; } catch { return false; } }
@@ -1487,13 +1489,18 @@ async function openFile(path) {
   let readDoneAt = startedAt;
   let renderDeferred = false;
   let loadingShown = true;
+  const diagnostics = createDocumentOpenDiagnostics(node, startedAt);
+  const markOpenStep = (step) => {
+    diagnostics.mark(step);
+    showDocumentOpenStep(node.name, step, startedAt);
+  };
   const showOpenStep = (step) => showDocumentOpenStep(node.name, step, startedAt);
-  showOpenStep("준비 중");
+  markOpenStep("준비 중");
   try {
-    showOpenStep("파일 읽는 중");
+    markOpenStep("파일 읽는 중");
     const content = await readFileNode(node);
     readDoneAt = performance.now();
-    showOpenStep("탭과 기록 갱신 중");
+    markOpenStep("탭과 기록 갱신 중");
     state.currentPath = path;
     state.currentContent = content;
     state.currentNode = node;
@@ -1513,19 +1520,21 @@ async function openFile(path) {
     updateEditButtons();
     els.markdownView.classList.remove("empty-state", "plain-text-mode", "code-document");
     els.markdownView.replaceChildren();
-    showOpenStep("화면 전환 중");
+    markOpenStep("화면 전환 중");
     showNoteView();
     scrollViewerTop();
     renderDeferred = true;
-    scheduleCurrentDocumentRender(++state.documentRenderToken, startedAt, readDoneAt, loadingShown, node, showOpenStep);
+    scheduleCurrentDocumentRender(++state.documentRenderToken, startedAt, readDoneAt, loadingShown, node, markOpenStep, showOpenStep, diagnostics);
   } finally {
     if (!renderDeferred) {
       hideLoading();
+      diagnostics.finish();
       logOpenFileTiming(node, {
         loadingShown,
         readMs: readDoneAt - startedAt,
         renderMs: 0,
         totalMs: performance.now() - startedAt,
+        steps: diagnostics.summary(),
       });
     }
   }
@@ -1536,30 +1545,71 @@ function showDocumentOpenStep(fileName, step, startedAt) {
   showLoadingOverlay(`문서 열기: ${step}\n${fileName}\n${elapsed}ms`);
 }
 
-function scheduleCurrentDocumentRender(token, startedAt, readDoneAt, loadingShown, node, showOpenStep) {
+function scheduleCurrentDocumentRender(token, startedAt, readDoneAt, loadingShown, node, markOpenStep, showOpenStep, diagnostics) {
   requestAnimationFrame(() => {
     if (token !== state.documentRenderToken || state.currentPath !== node.path) return;
     const renderStartedAt = performance.now();
     try {
-      showOpenStep?.("본문 렌더링 중");
-      renderCurrentDocument(showOpenStep);
-      showOpenStep?.("완료 중");
+      markOpenStep?.("본문 렌더링 중");
+      renderCurrentDocument(showOpenStep, diagnostics);
+      markOpenStep?.("완료 중");
     } finally {
       hideLoading();
+      diagnostics?.finish();
       logOpenFileTiming(node, {
         loadingShown,
         readMs: readDoneAt - startedAt,
         renderMs: performance.now() - renderStartedAt,
         totalMs: performance.now() - startedAt,
+        steps: diagnostics?.summary(),
       });
     }
+  });
+}
+
+function createDocumentOpenDiagnostics(node, startedAt) {
+  const steps = [];
+  let current = null;
+  return {
+    mark(step) {
+      const now = performance.now();
+      if (current) {
+        current.ms = now - current.at;
+        warnSlowDocumentOpenStep(node, current);
+      }
+      current = { step, at: now, ms: 0 };
+      steps.push(current);
+    },
+    finish() {
+      if (!current) return;
+      const now = performance.now();
+      current.ms = now - current.at;
+      warnSlowDocumentOpenStep(node, current);
+      current = null;
+    },
+    summary() {
+      return steps.map((item) => ({ step: item.step, ms: Math.round(item.ms) }));
+    },
+    startedAt,
+  };
+}
+
+function warnSlowDocumentOpenStep(node, item) {
+  const ms = Math.round(item.ms || 0);
+  if (ms < DOCUMENT_OPEN_SLOW_STEP_MS) return;
+  console.warn("[obsidian-web-viewer] slow document open step", {
+    cause: item.step,
+    ms,
+    path: node.path,
+    size: node.size || 0,
+    serverCache: node.lastServerCache || "",
   });
 }
 
 function logOpenFileTiming(node, timing) {
   const totalMs = Math.round(timing.totalMs);
   if (!timing.loadingShown && totalMs < 250) return;
-  console.info("[obsidian-web-viewer] openFile", {
+  const payload = {
     path: node.path,
     size: node.size || 0,
     loadingShown: timing.loadingShown,
@@ -1567,7 +1617,17 @@ function logOpenFileTiming(node, timing) {
     renderMs: Math.round(timing.renderMs),
     totalMs,
     serverCache: node.lastServerCache || "",
-  });
+    steps: timing.steps || [],
+  };
+  console.info("[obsidian-web-viewer] openFile", payload);
+  if (totalMs >= DOCUMENT_OPEN_SLOW_TOTAL_MS) {
+    const slowest = payload.steps.reduce((max, item) => (item.ms > (max?.ms || 0) ? item : max), null);
+    console.warn("[obsidian-web-viewer] slow document open", {
+      cause: slowest?.step || "unknown",
+      causeMs: slowest?.ms || 0,
+      ...payload,
+    });
+  }
 }
 
 function activeNavigationHistory() {
@@ -2339,25 +2399,29 @@ function updateMarkdownToggleButton() {
   els.markdownToggleButton.title = label;
 }
 
-function renderCurrentDocument(showOpenStep = null) {
-  showOpenStep?.("렌더 영역 초기화 중");
+function renderCurrentDocument(showOpenStep = null, diagnostics = null) {
+  const markRenderStep = (step) => {
+    diagnostics?.mark(step);
+    showOpenStep?.(step);
+  };
+  markRenderStep("렌더 영역 초기화 중");
   els.markdownView.classList.remove("empty-state", "plain-text-mode", "code-document");
   els.editorShell.hidden = true;
   els.markdownView.hidden = false;
 
   if (isExcalidrawDocument(state.currentPath || "")) {
     if (!EXCALIDRAW_PREVIEW_ENABLED) {
-      showOpenStep?.("원문 표시 중");
+      markRenderStep("원문 표시 중");
       renderPlainTextDocument(state.currentContent);
       return;
     }
-    showOpenStep?.("Excalidraw 렌더링 중");
+    markRenderStep("Excalidraw 렌더링 중");
     els.markdownView.innerHTML = renderExcalidrawPreview(state.currentContent, state.currentPath);
-    showOpenStep?.("링크 연결 중");
+    markRenderStep("링크 연결 중");
     bindWikiLinks(els.markdownView);
-    showOpenStep?.("이미지 준비 중");
+    markRenderStep("이미지 준비 중");
     hydrateVaultImages(els.markdownView);
-    showOpenStep?.("임베드 준비 중");
+    markRenderStep("임베드 준비 중");
     hydrateEmbeddedDocuments(els.markdownView);
     if (EXCALIDRAW_PREVIEW_ENABLED) hydrateExcalidrawPackagePreviews(els.markdownView);
     return;
@@ -2365,28 +2429,28 @@ function renderCurrentDocument(showOpenStep = null) {
 
   if (state.markdownEnabled) {
     if (!isMarkdownDocument(state.currentPath || "")) {
-      showOpenStep?.("코드 렌더링 중");
+      markRenderStep("코드 렌더링 중");
       renderCodeDocument(state.currentContent, state.currentPath || "");
       return;
     }
-    showOpenStep?.("Markdown 변환 중");
+    markRenderStep("Markdown 변환 중");
     els.markdownView.innerHTML = renderMarkdown(state.currentContent, { path: state.currentPath || "" });
-    showOpenStep?.("체크박스 연결 중");
+    markRenderStep("체크박스 연결 중");
     bindRenderedTaskCheckboxes(els.markdownView);
-    showOpenStep?.("링크 연결 중");
+    markRenderStep("링크 연결 중");
     bindWikiLinks(els.markdownView);
-    showOpenStep?.("이미지 그룹 정리 중");
+    markRenderStep("이미지 그룹 정리 중");
     arrangeImageGroups(els.markdownView);
     bindImageLightbox(els.markdownView);
-    showOpenStep?.("이미지 준비 중");
+    markRenderStep("이미지 준비 중");
     hydrateVaultImages(els.markdownView);
-    showOpenStep?.("임베드 준비 중");
+    markRenderStep("임베드 준비 중");
     hydrateEmbeddedDocuments(els.markdownView);
     if (EXCALIDRAW_PREVIEW_ENABLED) hydrateExcalidrawPackagePreviews(els.markdownView);
     return;
   }
 
-  showOpenStep?.("원문 표시 중");
+  markRenderStep("원문 표시 중");
   renderPlainTextDocument(state.currentContent);
 }
 
