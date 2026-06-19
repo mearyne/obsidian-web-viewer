@@ -3170,19 +3170,21 @@ function arrangeChromeControls() {
     if (els.markdownToggleButton) els.markdownToggleButton.classList.add("status-markdown-toggle");
     statusBar.append(historyWrap);
     if (els.markdownToggleButton) statusBar.append(els.markdownToggleButton);
-    statusBar.append(els.notePath, saveStatusEl, els.syncStatus);
-
-    // Mobile-only: tab count
-    const mobileNav = document.createElement("div");
-    mobileNav.className = "mobile-status-nav";
-    const mobileTabsBtn = document.createElement("button");
-    mobileTabsBtn.type = "button";
-    mobileTabsBtn.className = "mobile-tabs-btn icon-button";
-    mobileTabsBtn.title = "전체 탭";
-    mobileTabsBtn.textContent = "1";
-    mobileTabsBtn.addEventListener("click", showAllTabsOverlay);
-    mobileNav.append(mobileTabsBtn);
-    statusBar.append(mobileNav);
+    const isMobile = window.matchMedia("(max-width: 780px)").matches;
+    if (isMobile) {
+      const mobileRight = document.createElement("div");
+      mobileRight.className = "mobile-status-right";
+      const mobileTabsBtn = document.createElement("button");
+      mobileTabsBtn.type = "button";
+      mobileTabsBtn.className = "mobile-tabs-btn icon-button";
+      mobileTabsBtn.title = "전체 탭";
+      mobileTabsBtn.textContent = "1";
+      mobileTabsBtn.addEventListener("click", showAllTabsOverlay);
+      mobileRight.append(mobileTabsBtn, els.syncStatus);
+      statusBar.append(els.notePath, saveStatusEl, mobileRight);
+    } else {
+      statusBar.append(els.notePath, saveStatusEl, els.syncStatus);
+    }
 
     document.body.append(statusBar);
     return;
@@ -3205,7 +3207,25 @@ function arrangeChromeControls() {
     el.hidden = true;
     statusBar.insertBefore(el, els.syncStatus);
   }
-  if (els.syncStatus && els.syncStatus.parentElement !== statusBar) statusBar.append(els.syncStatus);
+  const isMobile = window.matchMedia("(max-width: 780px)").matches;
+  if (isMobile) {
+    let mobileRight = statusBar.querySelector(".mobile-status-right");
+    if (!mobileRight) {
+      mobileRight = document.createElement("div");
+      mobileRight.className = "mobile-status-right";
+      const mobileTabsBtn = document.createElement("button");
+      mobileTabsBtn.type = "button";
+      mobileTabsBtn.className = "mobile-tabs-btn icon-button";
+      mobileTabsBtn.title = "전체 탭";
+      mobileTabsBtn.textContent = "1";
+      mobileTabsBtn.addEventListener("click", showAllTabsOverlay);
+      mobileRight.append(mobileTabsBtn);
+      statusBar.append(mobileRight);
+    }
+    if (els.syncStatus && els.syncStatus.parentElement !== mobileRight) mobileRight.append(els.syncStatus);
+  } else if (els.syncStatus && els.syncStatus.parentElement !== statusBar) {
+    statusBar.append(els.syncStatus);
+  }
 }
 
 function openCurrentFileInObsidian() {
@@ -7291,10 +7311,15 @@ function activeTab() {
 }
 
 function initTabs() {
-  if (!loadOpenTabs()) {
+  const hasOpenTabs = loadOpenTabs();
+  if (!hasOpenTabs) {
     loadPinnedTabs();
   }
   orderTabsByPinnedList(state.tabs.filter((tab) => tab.pinned && tab.path).map((tab) => ({ path: tab.path, title: tab.title || "" })));
+  if (!hasOpenTabs) {
+    const firstPinned = state.tabs.find((tab) => tab.pinned && tab.path);
+    if (firstPinned) state.activeTabId = firstPinned.id;
+  }
   loadRecentlyOpened();
   renderTabStrip();
   void loadPinnedTabsFromVault();
@@ -7874,12 +7899,26 @@ function renderNewTabPage() {
   els.newTabPage.innerHTML = `
     <div class="new-tab-content">
       <h2 class="new-tab-title">새 탭</h2>
+      <section class="new-tab-section" id="localTabsSection">
+        <h3 class="new-tab-section-title">이 브라우저의 탭</h3>
+        <div class="new-tab-device-list">
+          ${state.tabs.map((tab) => `
+            <button type="button" class="new-tab-file-btn${tab.id === state.activeTabId ? " active" : ""}" data-tab-id="${escapeAttribute(tab.id)}">
+              <span class="new-tab-file-name">${escapeHtml(tab.title || "새 탭")}</span>
+              <span class="new-tab-file-path">${escapeHtml(tab.path || "비어 있음")}</span>
+            </button>
+          `).join("")}
+        </div>
+      </section>
       <section class="new-tab-section" id="deviceTabsSection">
         <h3 class="new-tab-section-title">다른 기기에서 열려있는 탭</h3>
         <p class="new-tab-empty">불러오는 중...</p>
       </section>
     </div>
   `;
+  els.newTabPage.querySelectorAll("[data-tab-id]").forEach((btn) => {
+    btn.addEventListener("click", () => void switchTab(btn.dataset.tabId));
+  });
   void loadAndRenderDeviceTabs();
 }
 
@@ -7897,6 +7936,7 @@ async function loadAndRenderDeviceTabs() {
     const allDeviceTabs = await res.json();
     const deviceId = getDeviceId();
     const now = Date.now();
+    const localTabPaths = new Set(state.tabs.map((tab) => tab.path).filter(Boolean));
     const otherDevices = Object.entries(allDeviceTabs)
       .filter(([id, e]) => id !== deviceId && now - e.updatedAt <= DEVICE_TABS_STALE_MS && e.tabs?.length)
       .sort(([, a], [, b]) => b.updatedAt - a.updatedAt);
@@ -7911,7 +7951,7 @@ async function loadAndRenderDeviceTabs() {
           <section class="new-tab-device-group">
             <h4 class="new-tab-device-title">${escapeHtml(entry.deviceName || `기기 ${index + 1}`)} <span>${escapeHtml(shortDeviceId(id))}</span></h4>
             <ul class="new-tab-list">
-              ${(entry.tabs || []).map((tab) => `
+              ${(entry.tabs || []).filter((tab) => tab?.path && !localTabPaths.has(tab.path)).map((tab) => `
                 <li class="new-tab-item">
                   <button type="button" class="new-tab-file-btn" data-path="${escapeAttribute(tab.path)}">
                     <span class="new-tab-file-name">${escapeHtml(tab.title || tab.path.split("/").pop())}</span>

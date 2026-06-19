@@ -670,6 +670,12 @@ button:disabled {
   text-align: center;
 }
 
+.mobile-status-right {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+}
+
 .sync-status {
   cursor: pointer;
 }
@@ -4163,6 +4169,11 @@ button.calendar-more {
   border-color: var(--line-strong);
 }
 
+.new-tab-file-btn.active {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
 .new-tab-file-name {
   font-size: 14px;
   font-weight: 650;
@@ -4192,6 +4203,12 @@ button.calendar-more {
 @media (max-width: 780px) {
   .new-tab-page { padding: 24px 16px; }
   .new-tab-list { grid-template-columns: 1fr; }
+  .mobile-tabs-btn {
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--surface-2);
+    min-width: 30px;
+  }
 }
 
 /* ─── Split view ─────────────────────────────────────────────────────────────── */
