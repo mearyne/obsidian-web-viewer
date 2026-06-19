@@ -38,6 +38,7 @@ const state = {
   calendarRefreshTimer: null,
   calendarFilterTimer: null,
   settingsSaveTimer: null,
+  suppressPinnedReload: 0,
   calendarRefreshing: false,
   calendarCacheState: "empty",
   calendarSyncedAt: 0,
@@ -392,9 +393,23 @@ els.themeButton.addEventListener("click", toggleTheme);
 els.sidebarResizeHandle.addEventListener("pointerdown", startSidebarResize);
 els.noteTitle?.addEventListener("click", showFullCurrentTitle);
 els.noteTitle?.addEventListener("pointerdown", startNoteTitleLongPress);
-els.notePath?.addEventListener("click", () => {
+els.notePath?.addEventListener("click", (e) => {
   if (!state.currentPath) return;
-  navigator.clipboard?.writeText(state.currentPath).catch(() => {});
+  document.querySelector(".path-popup")?.remove();
+  const popup = document.createElement("div");
+  popup.className = "path-popup";
+  popup.textContent = state.currentPath;
+  popup.title = "클릭하면 클립보드에 복사됩니다";
+  const rect = els.notePath.getBoundingClientRect();
+  popup.style.cssText = `bottom:${window.innerHeight - rect.top + 4}px;left:${rect.left}px;`;
+  popup.addEventListener("click", () => {
+    navigator.clipboard?.writeText(state.currentPath).catch(() => {});
+    popup.textContent = "복사됨!";
+    setTimeout(() => popup.remove(), 800);
+  });
+  document.body.append(popup);
+  const dismiss = (ev) => { if (!popup.contains(ev.target) && ev.target !== els.notePath) { popup.remove(); document.removeEventListener("pointerdown", dismiss, true); } };
+  setTimeout(() => document.addEventListener("pointerdown", dismiss, true), 0);
 });
 els.noteTitle?.addEventListener("pointerup", clearNoteTitleLongPress);
 els.noteTitle?.addEventListener("pointerleave", clearNoteTitleLongPress);
@@ -546,10 +561,16 @@ function handleGlobalKeydown(event) {
         if (tab) { event.preventDefault(); event.stopPropagation(); void switchTab(tab.id); return; }
       }
     }
-    if (event.key.toLowerCase() === "e" || event.key.toLowerCase() === "w") {
+    if (event.key.toLowerCase() === "e") {
       event.preventDefault();
       event.stopPropagation();
       enterEditMode();
+      return;
+    }
+    if (event.key.toLowerCase() === "w") {
+      event.preventDefault();
+      event.stopPropagation();
+      void closeTab(state.activeTabId);
       return;
     }
     if (event.key.toLowerCase() === "n") {
@@ -2304,7 +2325,7 @@ function applyDeviceDisplayOptions() {
   state.fontDeviceKey = deviceKey;
   const contentSize = readNumberOption(deviceOptionStorageKey("content-font-size", deviceKey), 16, 10, 28);
   const rowSize = readNumberOption(deviceOptionStorageKey("calendar-row-font-size", deviceKey), deviceKey === "mobile" ? 10.8 : 14.4, 6, 22);
-  const rowHeight = readNumberOption(deviceOptionStorageKey("calendar-row-height", deviceKey), deviceKey === "mobile" ? 18 : 24, 10, 48);
+  const rowHeight = readNumberOption(deviceOptionStorageKey("calendar-row-height", deviceKey), deviceKey === "mobile" ? 16 : 22, 10, 48);
   const align = readChoiceOption(deviceOptionStorageKey("content-align", deviceKey), "soft-center", ["left", "soft-center", "center"]);
   const maxWidth = readNumberOption("obsidian-web-viewer-content-max-width", 760, 400, 1600);
   setContentFontSize(contentSize, { persist: false });
@@ -2597,17 +2618,17 @@ async function enterEditMode() {
   holdViewerHeightDuringTransition();
   state.editMode = true;
   state.editorDirty = false;
-  if (els.noteTitle && state.currentNode) {
-    els.noteTitle.contentEditable = "true";
-    els.noteTitle.classList.add("editable-title");
-    els.noteTitle.dataset.originalTitle = els.noteTitle.textContent;
-  }
   setEditorValue(state.currentContent);
   els.markdownView.hidden = true;
   els.calendarView.hidden = true;
   els.editorShell.hidden = false;
-  requestAnimationFrame(resizeEditorToContent);
-  focusEditor();
+  requestAnimationFrame(() => {
+    resizeEditorToContent();
+    const len = els.markdownEditor.value.length;
+    els.markdownEditor.setSelectionRange(len, len);
+    els.markdownEditor.scrollTop = els.markdownEditor.scrollHeight;
+    els.markdownEditor.focus();
+  });
   startAutoSave();
   updateEditorStatus();
   updateEditButtons();
@@ -2662,10 +2683,6 @@ async function persistCurrentEdit({ closeEditor }) {
     refreshRecentFilesCache();
     renderTree();
     if (closeEditor) {
-      const newTitle = els.noteTitle?.contentEditable === "true" ? els.noteTitle.textContent.trim() : null;
-      const originalTitle = els.noteTitle?.dataset.originalTitle;
-      if (els.noteTitle) { els.noteTitle.contentEditable = "false"; els.noteTitle.classList.remove("editable-title"); }
-      if (newTitle && originalTitle && newTitle !== originalTitle) await renameCurrentFile(newTitle);
       state.editMode = false;
       updateEditorStatus();
       stopAutoSave();
@@ -3147,8 +3164,8 @@ function updateEditButtons() {
   els.markdownToggleButton.disabled = state.editMode;
   els.markdownToggleButton.hidden = state.activeView !== "note";
   if (els.saveEditButton) {
-    els.saveEditButton.hidden = !state.editMode;
-    els.saveEditButton.disabled = !state.editMode || !canEdit || state.autoSaveInFlight;
+    els.saveEditButton.hidden = true;
+    els.saveEditButton.disabled = true;
   }
   if (els.editorImageButton) els.editorImageButton.hidden = !(state.editMode && state.serverVaultWritable);
 }
@@ -3772,7 +3789,6 @@ function showNoteView() {
   els.markdownView.hidden = false;
   els.editorShell.hidden = true;
   els.calendarView.hidden = true;
-  if (els.noteTitleArea) els.noteTitleArea.hidden = false;
   if (els.headingControlsOverlay) els.headingControlsOverlay.hidden = false;
   if (els.viewControlsOverlay) els.viewControlsOverlay.hidden = false;
   els.calendarButton.classList.remove("active");
@@ -4146,12 +4162,12 @@ function renderCalendar() {
           <strong>${calendarTitle()}</strong>
           <button type="button" data-calendar-action="next">&gt;</button>
         </div>
-        <button class="calendar-today-button" type="button" data-calendar-action="today">Today</button>
-        <input class="calendar-date-jump" type="date" value="${formatDate(state.calendarDate)}" aria-label="날짜로 이동" title="날짜로 이동">
-        <div class="calendar-mode-switch" aria-label="Calendar view">
-          <button type="button" data-calendar-mode="month" class="${state.calendarMode === "month" ? "active" : ""}">30d</button>
-          <button type="button" data-calendar-mode="week" class="${state.calendarMode === "week" ? "active" : ""}">7d</button>
-          <button type="button" data-calendar-mode="day" class="${state.calendarMode === "day" ? "active" : ""}">1d</button>
+        <div class="calendar-nav-group">
+          <button class="calendar-today-button" type="button" data-calendar-action="today">Today</button>
+          <input class="calendar-date-jump" type="date" value="${formatDate(state.calendarDate)}" aria-label="날짜로 이동" title="날짜로 이동">
+          <button type="button" data-calendar-mode="month" class="calendar-mode-btn${state.calendarMode === "month" ? " active" : ""}">30d</button>
+          <button type="button" data-calendar-mode="week" class="calendar-mode-btn${state.calendarMode === "week" ? " active" : ""}">7d</button>
+          <button type="button" data-calendar-mode="day" class="calendar-mode-btn${state.calendarMode === "day" ? " active" : ""}">1d</button>
         </div>
       </div>
       ${showingTasks ? renderCalendarFilterBar() : ""}
@@ -7363,7 +7379,6 @@ async function switchTab(id) {
     if (state.editorDirty && !state.autoSaveInFlight) {
       await persistCurrentEdit({ closeEditor: false });
     }
-    if (els.noteTitle) { els.noteTitle.contentEditable = "false"; els.noteTitle.classList.remove("editable-title"); }
     state.editMode = false;
     els.editorShell.hidden = true;
     els.markdownView.hidden = false;
@@ -7432,9 +7447,14 @@ function pinTab(id) {
     moveTabToPinnedTail(tab);
     tab.pinned = true;
     savePinnedTabsLocal();
+    state.suppressPinnedReload = Date.now() + 3000;
     void updatePinnedTabInVault("pin", tab);
   }
   renderTabStrip();
+  requestAnimationFrame(() => {
+    const el = document.querySelector(`.tab-item[data-tab-id="${CSS.escape(id)}"]`);
+    el?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  });
 }
 
 function showTabContextMenu(x, y, tabId) {
@@ -7687,6 +7707,7 @@ function loadPinnedTabs() {
 
 async function loadPinnedTabsFromVault() {
   if (!state.serverVaultWritable) return;
+  if (state.suppressPinnedReload && Date.now() < state.suppressPinnedReload) return;
   try {
     const res = await fetch("/api/pinned-tabs", { cache: "no-store" });
     if (!res.ok) return;
