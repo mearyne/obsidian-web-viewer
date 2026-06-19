@@ -2995,6 +2995,11 @@ button:disabled {
   z-index: 1;
 }
 
+.calendar-shell.calendar-mode-month .calendar-tasks {
+  align-content: start;
+  grid-template-rows: repeat(var(--calendar-row-count, 5), minmax(0, var(--calendar-row-height, 20px)));
+}
+
 .matrix-shell {
   display: flex;
   flex-direction: column;
