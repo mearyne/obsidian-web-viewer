@@ -580,6 +580,7 @@ updateMarkdownToggleButton();
 updateTreeSortDirectionButton();
 initSidebarWidth();
 initSidebarPin();
+let _saveDeviceTabsTimer = null;
 loadSavedVaults();
 loadSampleVault();
 arrangeChromeControls();
@@ -7382,7 +7383,6 @@ function getDeviceId() {
   return id;
 }
 
-let _saveDeviceTabsTimer = null;
 function debouncedSaveOpenTabsToVault() {
   clearTimeout(_saveDeviceTabsTimer);
   _saveDeviceTabsTimer = setTimeout(() => void saveOpenTabsToVault(), 3000);
