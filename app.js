@@ -210,6 +210,8 @@ const els = {
   editorRedoButton: document.querySelector("#editorRedoButton"),
   editorIndentButton: document.querySelector("#editorIndentButton"),
   editorOutdentButton: document.querySelector("#editorOutdentButton"),
+  editorHeadingButton: document.querySelector("#editorHeadingButton"),
+  editorBulletButton: document.querySelector("#editorBulletButton"),
   editorTableButton: document.querySelector("#editorTableButton"),
   editorImageButton: document.querySelector("#editorImageButton"),
   editorImageInput: document.querySelector("#editorImageInput"),
@@ -368,6 +370,8 @@ els.editorUndoButton?.addEventListener("click", () => runEditorCommand("undo"));
 els.editorRedoButton?.addEventListener("click", () => runEditorCommand("redo"));
 els.editorIndentButton?.addEventListener("click", () => handleEditorToolbarIndent(false));
 els.editorOutdentButton?.addEventListener("click", () => handleEditorToolbarIndent(true));
+els.editorHeadingButton?.addEventListener("click", () => prefixSelectedEditorLines("# "));
+els.editorBulletButton?.addEventListener("click", () => prefixSelectedEditorLines("- "));
 els.editorTableButton?.addEventListener("click", insertEditorTable);
 els.editorImageButton?.addEventListener("click", () => els.editorImageInput?.click());
 els.editorTaskButton?.addEventListener("click", insertTodayTaskTemplate);
@@ -2067,6 +2071,7 @@ function showNewNoteDialog(defaultTitle) {
       settled = true;
       if (els.newNoteDialog.open) els.newNoteDialog.close();
       els.newNoteDialog.removeEventListener("close", onClose);
+      els.newNoteDialog.querySelector("form")?.removeEventListener("submit", onSubmit);
       els.newNoteCancelButton.removeEventListener("click", onCancel);
       if (vv) vv.removeEventListener("resize", positionNewNoteDialog);
       els.newNoteDialog.style.marginTop = "";
@@ -2078,8 +2083,12 @@ function showNewNoteDialog(defaultTitle) {
       finish(null);
     };
     els.newNoteDialog.returnValue = "";
+    els.newNoteDialog.querySelector("form")?.addEventListener("submit", onSubmit, { once: true });
     els.newNoteDialog.addEventListener("close", onClose, { once: true });
     els.newNoteCancelButton.addEventListener("click", onCancel, { once: true });
+    function onSubmit() {
+      els.newNoteDialog.returnValue = "confirm";
+    }
   });
 }
 
@@ -2108,6 +2117,7 @@ async function createAndOpenNote(title, dirPathOverride) {
     refreshRecentFilesCache();
     invalidateRandomMarkdownCache();
     await openFile(path);
+    await enterEditMode();
     return;
   }
 
@@ -2125,6 +2135,7 @@ async function createAndOpenNote(title, dirPathOverride) {
   refreshRecentFilesCache();
   invalidateRandomMarkdownCache();
   await openFile(path);
+  await enterEditMode();
 }
 
 function handleSyncStatusClick() {
@@ -2328,7 +2339,7 @@ function applyDeviceDisplayOptions() {
   state.fontDeviceKey = deviceKey;
   const contentSize = readNumberOption(deviceOptionStorageKey("content-font-size", deviceKey), 16, 10, 28);
   const rowSize = readNumberOption(deviceOptionStorageKey("calendar-row-font-size", deviceKey), deviceKey === "mobile" ? 10.8 : 14.4, 6, 22);
-  const rowHeight = readNumberOption(deviceOptionStorageKey("calendar-row-height", deviceKey), deviceKey === "mobile" ? 21 : 29, 10, 60);
+  const rowHeight = readNumberOption(deviceOptionStorageKey("calendar-row-height", deviceKey), defaultCalendarRowHeight(deviceKey), 10, 60);
   const align = readChoiceOption(deviceOptionStorageKey("content-align", deviceKey), "soft-center", ["left", "soft-center", "center"]);
   const maxWidth = readNumberOption("obsidian-web-viewer-content-max-width", 760, 400, 1600);
   setContentFontSize(contentSize, { persist: false });
@@ -2373,16 +2384,26 @@ function setCalendarRowFontSize(size, { persist }) {
 }
 
 function updateCalendarRowHeight() {
-  const value = Number(els.calendarRowHeightInput?.value || 29);
-  const height = Math.max(10, Math.min(60, Number.isFinite(value) ? value : 29));
+  const fallback = defaultCalendarRowHeight();
+  const value = Number(els.calendarRowHeightInput?.value || fallback);
+  const height = clampCalendarRowHeight(Number.isFinite(value) ? value : fallback);
   setCalendarRowHeight(height, { persist: true });
   if (state.activeView === "calendar" && state.calendarMode === "month") renderCalendar();
 }
 
 function setCalendarRowHeight(height, { persist }) {
-  document.documentElement.style.setProperty("--calendar-row-height", `${height}px`);
-  if (els.calendarRowHeightInput) els.calendarRowHeightInput.value = String(height);
-  if (persist) localStorage.setItem(deviceOptionStorageKey("calendar-row-height"), String(height));
+  const normalizedHeight = clampCalendarRowHeight(height);
+  document.documentElement.style.setProperty("--calendar-row-height", `${normalizedHeight}px`);
+  if (els.calendarRowHeightInput) els.calendarRowHeightInput.value = String(normalizedHeight);
+  if (persist) localStorage.setItem(deviceOptionStorageKey("calendar-row-height"), String(normalizedHeight));
+}
+
+function defaultCalendarRowHeight(deviceKey = currentFontDeviceKey()) {
+  return deviceKey === "mobile" ? 27 : 38;
+}
+
+function clampCalendarRowHeight(height) {
+  return Math.max(10, Math.min(60, Number.isFinite(height) ? Math.round(height) : defaultCalendarRowHeight()));
 }
 
 function updateContentMaxWidth() {
@@ -2893,6 +2914,25 @@ function runEditorCommand(command) {
 function handleEditorToolbarIndent(outdent) {
   focusEditor();
   indentSelectedEditorLines(els.markdownEditor, outdent);
+  markEditorDirty();
+}
+
+function prefixSelectedEditorLines(prefix) {
+  focusEditor();
+  const textarea = els.markdownEditor;
+  const { value, selectionStart, selectionEnd } = textarea;
+  const lineStart = value.lastIndexOf("\n", selectionStart - 1) + 1;
+  const lineEndIndex = value.indexOf("\n", selectionEnd);
+  const lineEnd = lineEndIndex === -1 ? value.length : lineEndIndex;
+  const block = value.slice(lineStart, lineEnd);
+  const nextBlock = block.split("\n").map((line) => {
+    if (!line.trim()) return prefix;
+    const indent = line.match(/^(\s*)/)?.[1] || "";
+    const body = line.slice(indent.length);
+    return body.startsWith(prefix) ? line : `${indent}${prefix}${body}`;
+  }).join("\n");
+  textarea.value = value.slice(0, lineStart) + nextBlock + value.slice(lineEnd);
+  textarea.setSelectionRange(lineStart + nextBlock.length, lineStart + nextBlock.length);
   markEditorDirty();
 }
 
@@ -4064,16 +4104,13 @@ function renderCalendarFilterBar() {
     { label: "중요도", chips: [["상", "🔴 상"], ["중", "🟡 중"], ["하", "🔵 하"]].map(([v, l]) => chip(v, priorities, "priorities", l)).join("") },
     ...(allTags.length ? [{ label: "태그", chips: allTags.map((v) => chip(v, tags, "tags", `#${v}`)).join("") }] : []),
   ];
-  const activeCount = types.length + categories.length + tags.length + priorities.length;
-  const hasActive = activeCount > 0;
+  const hasActive = types.length + categories.length + tags.length + priorities.length > 0;
   const isOpen = state.calendarFilterOpen;
   const groupsHtml = groups.map((g, i) =>
     `${i > 0 ? '<span class="filter-group-sep" aria-hidden="true"></span>' : ""}<div class="filter-group"><span class="filter-label">${g.label}</span><div class="filter-chips">${g.chips}</div></div>`
   ).join("");
   return `<div class="calendar-filter-bar${isOpen ? " open" : ""}">
-    <button class="filter-bar-toggle" type="button" data-filter-toggle>
-      <span>필터</span>${hasActive ? `<span class="filter-active-badge">${activeCount}</span>` : ""}<span class="filter-toggle-arrow">${isOpen ? "▲" : "▼"}</span>
-    </button>
+    ${renderCalendarFilterToggleButton()}
     <div class="filter-bar-body">
       ${groupsHtml}
       ${hasActive ? '<button class="filter-reset-btn" type="button" data-filter-reset>초기화</button>' : ""}
@@ -4166,6 +4203,7 @@ function renderCalendar() {
           <strong>${calendarTitle()}</strong>
           <button type="button" data-calendar-action="next">&gt;</button>
         </div>
+        ${showingTasks ? renderCalendarFilterToggleButton("calendar-toolbar-filter-btn") : ""}
         <div class="calendar-nav-group">
           <button class="calendar-today-button" type="button" data-calendar-action="today">Today</button>
           <input class="calendar-date-jump" type="date" value="${formatDate(state.calendarDate)}" aria-label="날짜로 이동" title="날짜로 이동">
@@ -4233,6 +4271,17 @@ function renderEisenhowerMatrix() {
 
   bindMatrixEvents();
   updateSyncStatus();
+}
+
+function renderCalendarFilterToggleButton(extraClass = "") {
+  const activeCount = Object.values(state.calendarTaskFilters).reduce((sum, arr) => sum + arr.length, 0);
+  return `
+    <button type="button" class="filter-bar-toggle ${extraClass}" data-filter-toggle>
+      <span>필터</span>
+      ${activeCount ? `<span class="filter-active-badge">${activeCount}</span>` : ""}
+      <span class="filter-toggle-arrow">${state.calendarFilterOpen ? "▲" : "▼"}</span>
+    </button>
+  `;
 }
 
 function renderMatrixQuadrant(quadrant) {
@@ -4531,12 +4580,15 @@ function bindCalendarFilterEvents() {
     renderCalendar();
   });
 
-  els.calendarView.querySelector("[data-filter-toggle]")?.addEventListener("click", () => {
-    state.calendarFilterOpen = !state.calendarFilterOpen;
-    const bar = els.calendarView.querySelector(".calendar-filter-bar");
-    const arrow = els.calendarView.querySelector(".filter-toggle-arrow");
-    if (bar) bar.classList.toggle("open", state.calendarFilterOpen);
-    if (arrow) arrow.textContent = state.calendarFilterOpen ? "▲" : "▼";
+  els.calendarView.querySelectorAll("[data-filter-toggle]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.calendarFilterOpen = !state.calendarFilterOpen;
+      const bar = els.calendarView.querySelector(".calendar-filter-bar");
+      if (bar) bar.classList.toggle("open", state.calendarFilterOpen);
+      els.calendarView.querySelectorAll(".filter-toggle-arrow").forEach((arrow) => {
+        arrow.textContent = state.calendarFilterOpen ? "▲" : "▼";
+      });
+    });
   });
 }
 

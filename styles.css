@@ -20,6 +20,7 @@
   --app-font: "Inter", "Segoe UI", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   --content-font-size: 16px;
   --calendar-row-font-size: 14.4px;
+  --calendar-row-height: 38px;
   --range-bg-0: #efeaff;
   --range-border-0: #7057d6;
   --range-bg-1: #e5f7ed;
@@ -2748,6 +2749,10 @@ button:disabled {
   display: none;
 }
 
+.calendar-toolbar-filter-btn {
+  display: none;
+}
+
 .filter-bar-body {
   align-items: center;
   display: flex;
@@ -2839,6 +2844,17 @@ button:disabled {
     gap: 6px;
     padding: 7px 2px;
     width: 100%;
+  }
+
+  .calendar-toolbar-filter-btn {
+    flex: 0 0 auto;
+    min-height: 30px;
+    padding: 0 7px;
+    width: auto;
+  }
+
+  .calendar-filter-bar > .filter-bar-toggle {
+    display: none;
   }
 
   .filter-active-badge {
@@ -4096,30 +4112,52 @@ button.calendar-more {
   .mobile-tabs-btn { font-size: 13px; font-weight: 600; min-width: 28px; }
 
   .editing-mode .editor-toolbar-bottom {
-    bottom: 88px;
+    bottom: 0;
     padding: 4px 8px;
   }
   .editing-mode .viewer-wrap {
-    padding-bottom: 140px;
+    padding-bottom: 72px;
+  }
+  .editing-mode .app-status-bar,
+  .editing-mode .tab-strip {
+    display: none;
   }
 }
 
 @media (max-width: 780px) {
   .calendar-toolbar {
-    align-items: flex-start;
+    align-items: center;
     flex-wrap: wrap;
-    gap: 8px 10px;
+    gap: 6px;
+    overflow-x: visible;
   }
 
   .calendar-month-nav {
-    flex: 1 1 auto;
+    flex: 1 0 100%;
     min-width: 0;
   }
 
-  .calendar-date-jump {
-    flex: 0 0 auto;
-    min-width: 128px;
-    width: auto;
+  .calendar-toolbar-filter-btn {
+    order: 2;
+  }
+
+  .calendar-nav-group {
+    flex: 1 1 auto;
+    margin-left: 0;
+    min-width: 0;
+    order: 3;
+  }
+
+  .calendar-nav-group .calendar-today-button,
+  .calendar-mode-btn {
+    font-size: 11px;
+    padding: 0 6px;
+  }
+
+  .calendar-nav-group .calendar-date-jump {
+    flex: 1 1 92px;
+    min-width: 92px;
+    width: 92px;
   }
 
   .calendar-mode-switch {
