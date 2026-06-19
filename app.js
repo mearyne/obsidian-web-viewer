@@ -104,6 +104,8 @@ const state = {
   fullscreenFallback: false,
   fontDeviceKey: "",
   sseSource: null,
+  documentRenderToken: 0,
+  recentlyOpenedSaveTimer: null,
   randomMarkdownCacheKey: "",
   randomMarkdownPaths: [],
   customConfirmResolve: null,
@@ -1440,7 +1442,7 @@ async function openFile(path) {
 
   const startedAt = performance.now();
   let readDoneAt = startedAt;
-  let renderDoneAt = startedAt;
+  let renderDeferred = false;
   let loadingShown = false;
   const loadingTimer = window.setTimeout(() => {
     loadingShown = true;
@@ -1457,28 +1459,51 @@ async function openFile(path) {
     els.notePath.textContent = path;
     els.noteTitle.textContent = displayDocumentTitle(node.name);
     const curTab = activeTab();
+    const pinnedTabChanged = curTab?.pinned && (curTab.path !== path || curTab.title !== displayDocumentTitle(node.name));
     if (curTab) { curTab.path = path; curTab.title = displayDocumentTitle(node.name); curTab.view = null; }
-    if (curTab?.pinned) {
+    if (pinnedTabChanged) {
       savePinnedTabsLocal();
       void savePinnedTabsOrderToVault();
     }
     renderTabStrip();
     pushRecentlyOpened(path, displayDocumentTitle(node.name));
     updateEditButtons();
-    renderCurrentDocument();
-    renderDoneAt = performance.now();
+    els.markdownView.classList.remove("empty-state", "plain-text-mode", "code-document");
+    els.markdownView.replaceChildren();
     showNoteView();
     scrollViewerTop();
+    renderDeferred = true;
+    scheduleCurrentDocumentRender(++state.documentRenderToken, startedAt, readDoneAt, loadingShown, node);
   } finally {
     window.clearTimeout(loadingTimer);
-    hideLoading();
-    logOpenFileTiming(node, {
-      loadingShown,
-      readMs: readDoneAt - startedAt,
-      renderMs: renderDoneAt - readDoneAt,
-      totalMs: performance.now() - startedAt,
-    });
+    if (!renderDeferred) {
+      hideLoading();
+      logOpenFileTiming(node, {
+        loadingShown,
+        readMs: readDoneAt - startedAt,
+        renderMs: 0,
+        totalMs: performance.now() - startedAt,
+      });
+    }
   }
+}
+
+function scheduleCurrentDocumentRender(token, startedAt, readDoneAt, loadingShown, node) {
+  requestAnimationFrame(() => {
+    if (token !== state.documentRenderToken || state.currentPath !== node.path) return;
+    const renderStartedAt = performance.now();
+    try {
+      renderCurrentDocument();
+    } finally {
+      hideLoading();
+      logOpenFileTiming(node, {
+        loadingShown,
+        readMs: readDoneAt - startedAt,
+        renderMs: performance.now() - renderStartedAt,
+        totalMs: performance.now() - startedAt,
+      });
+    }
+  });
 }
 
 function logOpenFileTiming(node, timing) {
@@ -7587,7 +7612,12 @@ function pushRecentlyOpened(path, title) {
     ...state.recentlyOpenedPaths.filter((e) => e.path !== path),
   ].slice(0, RECENTLY_OPENED_MAX);
   try { localStorage.setItem(RECENTLY_OPENED_KEY, JSON.stringify(state.recentlyOpenedPaths)); } catch {}
-  void saveRecentlyOpenedToVault();
+  debouncedSaveRecentlyOpenedToVault();
+}
+
+function debouncedSaveRecentlyOpenedToVault() {
+  clearTimeout(state.recentlyOpenedSaveTimer);
+  state.recentlyOpenedSaveTimer = setTimeout(() => void saveRecentlyOpenedToVault(), 1200);
 }
 
 function loadRecentlyOpened() {
