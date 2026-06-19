@@ -39,6 +39,7 @@ const TEXT_FILE_CACHE_MAX_BYTES = 1024 * 1024;
 const textFileCache = new Map();
 const DEVICE_TABS_VAULT_PATH = ".viewer-open-tabs.json";
 const DEVICE_TABS_STALE_MS = 2 * 60 * 60 * 1000;
+const PINNED_TABS_VAULT_PATH = ".viewer-pinned-tabs.json";
 
 function broadcastVaultEvent(event, data) {
   const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
@@ -84,6 +85,22 @@ const server = http.createServer((req, res) => {
     }
 
     sendDeviceTabs(res);
+    return;
+  }
+
+  if (requestPath === "/api/pinned-tabs") {
+    if (req.method === "PUT") {
+      receiveBody(req, (error, body) => {
+        if (error) {
+          sendJson(res, 400, { error: "Invalid request body" });
+          return;
+        }
+        updatePinnedTabs(body, res);
+      });
+      return;
+    }
+
+    sendPinnedTabs(res);
     return;
   }
 
@@ -435,6 +452,80 @@ function pruneDeviceTabs(allDeviceTabs) {
     };
   }
   return pruned;
+}
+
+function sendPinnedTabs(res) {
+  sendJsonNoStore(res, 200, readPinnedTabs());
+}
+
+function updatePinnedTabs(body, res) {
+  if (readOnly) {
+    sendJson(res, 403, { error: "Vault is read-only" });
+    return;
+  }
+
+  let payload;
+  try {
+    payload = JSON.parse(body || "{}");
+  } catch {
+    sendJson(res, 400, { error: "Invalid JSON" });
+    return;
+  }
+
+  let pinned = readPinnedTabs();
+  if (Array.isArray(payload.pinned)) {
+    pinned = normalizePinnedTabs(payload.pinned);
+  } else {
+    const pathValue = normalizeVaultPath(String(payload.path || ""));
+    if (!pathValue) {
+      sendJson(res, 400, { error: "path required" });
+      return;
+    }
+    const title = typeof payload.title === "string" ? payload.title.slice(0, 300) : "";
+    pinned = pinned.filter((tab) => tab.path !== pathValue);
+    if (payload.action !== "unpin") {
+      pinned.push({ path: pathValue, title });
+    }
+  }
+
+  try {
+    const filePath = resolveVaultFilePath(PINNED_TABS_VAULT_PATH);
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, JSON.stringify(pinned, null, 2), "utf8");
+    forgetTextFileCache(PINNED_TABS_VAULT_PATH);
+    sendJsonNoStore(res, 200, pinned);
+    const updatedAt = Date.now();
+    broadcastVaultEvent("pinned-tabs-changed", { updatedAt });
+    broadcastVaultEvent("file-changed", { path: PINNED_TABS_VAULT_PATH, updatedAt });
+  } catch (error) {
+    sendJson(res, 500, { error: error.message || "Pinned tabs write failed" });
+  }
+}
+
+function readPinnedTabs() {
+  try {
+    const filePath = resolveVaultFilePath(PINNED_TABS_VAULT_PATH);
+    return normalizePinnedTabs(JSON.parse(fs.readFileSync(filePath, "utf8")));
+  } catch {
+    return [];
+  }
+}
+
+function normalizePinnedTabs(value) {
+  const seen = new Set();
+  const items = Array.isArray(value) ? value : [];
+  return items
+    .filter((tab) => tab && typeof tab.path === "string")
+    .map((tab) => ({
+      path: normalizeVaultPath(tab.path).slice(0, 1024),
+      title: typeof tab.title === "string" ? tab.title.slice(0, 300) : "",
+    }))
+    .filter((tab) => {
+      if (!tab.path || seen.has(tab.path)) return false;
+      seen.add(tab.path);
+      return true;
+    })
+    .slice(0, 100);
 }
 
 function writeVaultFile(requestedPath, body, res) {

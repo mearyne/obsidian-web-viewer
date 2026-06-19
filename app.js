@@ -72,6 +72,8 @@ const state = {
   connectionRetryTimer: null,
   sidebarResize: null,
   sidebarPinned: false,
+  tabDrag: null,
+  tabDragSuppressUntil: 0,
   activeTabId: "main",
   tabs: [{ id: "main", path: null, title: "새 탭", pinned: false, scrollTop: 0 }],
   navigationHistories: new Map(),
@@ -1456,6 +1458,10 @@ async function openFile(path) {
     els.noteTitle.textContent = displayDocumentTitle(node.name);
     const curTab = activeTab();
     if (curTab) { curTab.path = path; curTab.title = displayDocumentTitle(node.name); curTab.view = null; }
+    if (curTab?.pinned) {
+      savePinnedTabsLocal();
+      void savePinnedTabsOrderToVault();
+    }
     renderTabStrip();
     pushRecentlyOpened(path, displayDocumentTitle(node.name));
     updateEditButtons();
@@ -1989,6 +1995,10 @@ function connectSSE() {
       void loadAndRenderDeviceTabs();
       return;
     }
+    if (path === PINNED_TABS_VAULT_PATH) {
+      void loadPinnedTabsFromVault();
+      return;
+    }
     const node = state.files.get(path);
     if (node) {
       node.content = undefined;
@@ -2013,6 +2023,10 @@ function connectSSE() {
 
   es.addEventListener("device-tabs-changed", () => {
     void loadAndRenderDeviceTabs();
+  });
+
+  es.addEventListener("pinned-tabs-changed", () => {
+    void loadPinnedTabsFromVault();
   });
 
   es.addEventListener("file-deleted", (e) => {
@@ -2935,6 +2949,16 @@ function arrangeChromeControls() {
   if (sidebarOptions && els.fullscreenButton && els.fullscreenButton.parentElement !== sidebarOptions) {
     sidebarOptions.insertBefore(els.fullscreenButton, sidebarOptions.querySelector("#themeButton") || sidebarOptions.firstChild);
   }
+  if (sidebarOptions && !document.getElementById("reloadButton")) {
+    const reloadBtn = document.createElement("button");
+    reloadBtn.id = "reloadButton";
+    reloadBtn.type = "button";
+    reloadBtn.setAttribute("aria-label", "새로고침");
+    reloadBtn.title = "새로고침";
+    reloadBtn.textContent = "↻";
+    reloadBtn.addEventListener("click", () => window.location.reload());
+    sidebarOptions.insertBefore(reloadBtn, els.optionsButton || null);
+  }
   if (editorToolbar && els.editorStatus && els.editorStatus.parentElement !== editorToolbar) {
     editorToolbar.insertBefore(els.editorStatus, editorToolbar.firstChild);
   }
@@ -2968,7 +2992,7 @@ function arrangeChromeControls() {
     if (els.markdownToggleButton) statusBar.append(els.markdownToggleButton);
     statusBar.append(els.notePath, saveStatusEl, els.editorImageButton, els.syncStatus);
 
-    // Mobile-only: tab count + refresh buttons
+    // Mobile-only: tab count
     const mobileNav = document.createElement("div");
     mobileNav.className = "mobile-status-nav";
     const mobileTabsBtn = document.createElement("button");
@@ -2977,13 +3001,7 @@ function arrangeChromeControls() {
     mobileTabsBtn.title = "전체 탭";
     mobileTabsBtn.textContent = "1";
     mobileTabsBtn.addEventListener("click", showAllTabsOverlay);
-    const mobileRefreshBtn = document.createElement("button");
-    mobileRefreshBtn.type = "button";
-    mobileRefreshBtn.className = "icon-button";
-    mobileRefreshBtn.title = "새로고침";
-    mobileRefreshBtn.textContent = "↺";
-    mobileRefreshBtn.addEventListener("click", () => window.location.reload());
-    mobileNav.append(mobileTabsBtn, mobileRefreshBtn);
+    mobileNav.append(mobileTabsBtn);
     statusBar.append(mobileNav);
 
     document.body.append(statusBar);
@@ -3034,8 +3052,14 @@ function toggleSidebar(event) {
   if (tabToggle) { tabToggle.setAttribute("aria-expanded", String(open)); tabToggle.setAttribute("aria-label", open ? "문서 목록 닫기" : "문서 목록 열기"); }
 }
 
-function closeSidebar() {
-  if (state.sidebarPinned) return;
+function closeSidebar({ force = false } = {}) {
+  if (state.sidebarPinned && !force) return;
+  if (force && state.sidebarPinned) {
+    state.sidebarPinned = false;
+    localStorage.setItem("obsidian-web-viewer-sidebar-pinned", "false");
+    document.body.classList.remove("sidebar-pinned");
+    updateSidebarPinButton();
+  }
   document.body.classList.remove("sidebar-open");
   els.sidebarToggle.setAttribute("aria-expanded", "false");
   els.sidebarToggle.setAttribute("aria-label", "문서 목록 열기");
@@ -3046,14 +3070,17 @@ function closeSidebar() {
 function toggleOptionsMenu(event) {
   event.stopPropagation();
   const open = els.optionsMenu.hidden;
+  if (open) closeSidebar({ force: true });
   els.optionsMenu.hidden = !open;
   els.optionsBackdrop.hidden = !open;
+  document.body.classList.toggle("options-open", open);
   els.optionsButton.setAttribute("aria-expanded", String(open));
 }
 
 function closeOptionsMenu() {
   els.optionsMenu.hidden = true;
   els.optionsBackdrop.hidden = true;
+  document.body.classList.remove("options-open");
   els.optionsButton.setAttribute("aria-expanded", "false");
 }
 
@@ -7063,6 +7090,7 @@ function initTabs() {
   if (!loadOpenTabs()) {
     loadPinnedTabs();
   }
+  orderTabsByPinnedList(state.tabs.filter((tab) => tab.pinned && tab.path).map((tab) => ({ path: tab.path, title: tab.title || "" })));
   loadRecentlyOpened();
   renderTabStrip();
   void loadPinnedTabsFromVault();
@@ -7119,7 +7147,9 @@ async function closeTab(id) {
   if (!tab) return;
   if (tab.pinned) {
     tab.pinned = false;
-    savePinnedTabs();
+    orderTabsByPinnedList(state.tabs.filter((item) => item.pinned && item.path).map((item) => ({ path: item.path, title: item.title || "" })));
+    savePinnedTabsLocal();
+    void updatePinnedTabInVault("unpin", tab);
     renderTabStrip();
     return;
   }
@@ -7140,8 +7170,18 @@ async function closeTab(id) {
 function pinTab(id) {
   const tab = state.tabs.find((t) => t.id === id);
   if (!tab) return;
-  tab.pinned = !tab.pinned;
-  savePinnedTabs();
+  if (!tab.path) return;
+  if (tab.pinned) {
+    tab.pinned = false;
+    orderTabsByPinnedList(state.tabs.filter((item) => item.pinned && item.path).map((item) => ({ path: item.path, title: item.title || "" })));
+    savePinnedTabsLocal();
+    void updatePinnedTabInVault("unpin", tab);
+  } else {
+    moveTabToPinnedTail(tab);
+    tab.pinned = true;
+    savePinnedTabsLocal();
+    void updatePinnedTabInVault("pin", tab);
+  }
   renderTabStrip();
 }
 
@@ -7234,8 +7274,10 @@ function renderTabStrip() {
   strip.querySelectorAll(".tab-item").forEach((el) => {
     el.addEventListener("click", (e) => {
       if (e.target.closest(".tab-close")) return;
+      if (Date.now() < state.tabDragSuppressUntil) return;
       void switchTab(el.dataset.tabId);
     });
+    el.addEventListener("pointerdown", (e) => startTabPointerDrag(e, el));
     el.addEventListener("contextmenu", (e) => {
       e.preventDefault();
       showTabContextMenu(e.clientX, e.clientY, el.dataset.tabId);
@@ -7283,19 +7325,101 @@ function renderTabStrip() {
   saveOpenTabs();
 }
 
-function savePinnedTabs() {
-  const pinned = state.tabs.filter((t) => t.pinned).map((t) => ({ path: t.path, title: t.title }));
-  try { localStorage.setItem("obsidian-web-viewer-pinned-tabs", JSON.stringify(pinned)); } catch {}
-  void savePinnedTabsToVault(pinned);
+function startTabPointerDrag(event, element) {
+  if (event.pointerType === "mouse" || event.target.closest(".tab-close")) return;
+  const tab = state.tabs.find((item) => item.id === element.dataset.tabId);
+  if (!tab) return;
+  state.tabDrag = {
+    pointerId: event.pointerId,
+    tabId: tab.id,
+    startX: event.clientX,
+    startY: event.clientY,
+    dragging: false,
+  };
+  window.addEventListener("pointermove", handleTabPointerMove, { passive: false });
+  window.addEventListener("pointerup", stopTabPointerDrag, { passive: false });
+  window.addEventListener("pointercancel", stopTabPointerDrag, { passive: false });
 }
 
-async function savePinnedTabsToVault(pinned) {
+function handleTabPointerMove(event) {
+  const drag = state.tabDrag;
+  if (!drag || event.pointerId !== drag.pointerId) return;
+  const distance = Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY);
+  if (!drag.dragging && distance < 10) return;
+  drag.dragging = true;
+  event.preventDefault();
+  reorderDraggedTab(event.clientX, event.clientY);
+}
+
+function stopTabPointerDrag(event) {
+  const drag = state.tabDrag;
+  if (!drag || event.pointerId !== drag.pointerId) return;
+  if (drag.dragging) state.tabDragSuppressUntil = Date.now() + 350;
+  state.tabDrag = null;
+  window.removeEventListener("pointermove", handleTabPointerMove);
+  window.removeEventListener("pointerup", stopTabPointerDrag);
+  window.removeEventListener("pointercancel", stopTabPointerDrag);
+}
+
+function reorderDraggedTab(x, y) {
+  const drag = state.tabDrag;
+  if (!drag) return;
+  const targetEl = document.elementFromPoint(x, y)?.closest?.(".tab-item");
+  if (!targetEl || targetEl.dataset.tabId === drag.tabId) return;
+  const targetRect = targetEl.getBoundingClientRect();
+  reorderTab(drag.tabId, targetEl.dataset.tabId, x < targetRect.left + targetRect.width / 2);
+}
+
+function reorderTab(tabId, targetId, beforeTarget) {
+  const from = state.tabs.findIndex((tab) => tab.id === tabId);
+  const targetIndex = state.tabs.findIndex((tab) => tab.id === targetId);
+  if (from === -1 || targetIndex === -1 || from === targetIndex) return;
+  const tab = state.tabs[from];
+  const target = state.tabs[targetIndex];
+  if (tab.pinned !== target.pinned) return;
+
+  state.tabs.splice(from, 1);
+  const adjustedTargetIndex = state.tabs.findIndex((item) => item.id === targetId);
+  let insertAt = beforeTarget ? adjustedTargetIndex : adjustedTargetIndex + 1;
+  if (!tab.pinned) {
+    const pinnedCount = state.tabs.filter((item) => item.pinned).length;
+    insertAt = Math.max(insertAt, pinnedCount);
+  }
+  state.tabs.splice(insertAt, 0, tab);
+  if (tab.pinned) {
+    savePinnedTabsLocal();
+    void savePinnedTabsOrderToVault();
+  }
+  renderTabStrip();
+}
+
+function savePinnedTabsLocal() {
+  const pinned = state.tabs.filter((t) => t.pinned).map((t) => ({ path: t.path, title: t.title }));
+  try { localStorage.setItem("obsidian-web-viewer-pinned-tabs", JSON.stringify(pinned)); } catch {}
+}
+
+async function updatePinnedTabInVault(action, tab) {
   if (!state.serverVaultWritable) return;
+  if (!tab?.path) return;
   try {
-    await fetch("/api/vault-file?path=" + encodeURIComponent(".viewer-pinned-tabs.json"), {
+    await fetch("/api/pinned-tabs", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: JSON.stringify(pinned, null, 2), backup: false }),
+      body: JSON.stringify({ action, path: tab.path, title: tab.title || "" }),
+      cache: "no-store",
+    });
+  } catch {}
+}
+
+async function savePinnedTabsOrderToVault() {
+  if (!state.serverVaultWritable) return;
+  const pinned = state.tabs.filter((t) => t.pinned && t.path).map((t) => ({ path: t.path, title: t.title || "" }));
+  try {
+    await fetch("/api/pinned-tabs", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pinned }),
+      cache: "no-store",
     });
   } catch {}
 }
@@ -7306,40 +7430,89 @@ function loadPinnedTabs() {
     const stored = localStorage.getItem("obsidian-web-viewer-pinned-tabs");
     if (stored) pinned = JSON.parse(stored);
   } catch {}
-  if (!pinned?.length) return;
-  for (const p of pinned) {
-    if (!p.path) continue;
-    if (!state.tabs.find((t) => t.path === p.path)) {
-      state.tabs.push({ id: generateTabId(), path: p.path, title: p.title || "새 탭", pinned: true, scrollTop: 0 });
-    } else {
-      const existing = state.tabs.find((t) => t.path === p.path);
-      if (existing) existing.pinned = true;
-    }
-  }
+  applyPinnedTabs(pinned || [], { replace: false, render: false });
 }
 
 async function loadPinnedTabsFromVault() {
   if (!state.serverVaultWritable) return;
   try {
-    const res = await fetch("/api/vault-file?path=" + encodeURIComponent(".viewer-pinned-tabs.json"));
+    const res = await fetch("/api/pinned-tabs", { cache: "no-store" });
     if (!res.ok) return;
-    const data = await res.json();
-    const pinned = JSON.parse(data.content || "[]");
-    if (!pinned?.length) return;
+    const pinned = await res.json();
     localStorage.setItem("obsidian-web-viewer-pinned-tabs", JSON.stringify(pinned));
-    let changed = false;
-    for (const p of pinned) {
-      if (!p.path) continue;
-      if (!state.tabs.find((t) => t.path === p.path)) {
-        state.tabs.push({ id: generateTabId(), path: p.path, title: p.title || "새 탭", pinned: true, scrollTop: 0 });
-        changed = true;
-      } else {
-        const existing = state.tabs.find((t) => t.path === p.path);
-        if (existing && !existing.pinned) { existing.pinned = true; changed = true; }
-      }
-    }
-    if (changed) renderTabStrip();
+    applyPinnedTabs(pinned, { replace: true, render: true });
   } catch {}
+}
+
+function applyPinnedTabs(pinned, { replace, render } = { replace: false, render: true }) {
+  const normalized = normalizePinnedTabs(pinned);
+  const pinnedPaths = new Set(normalized.map((tab) => tab.path));
+  const before = tabStateSignature();
+
+  if (replace) {
+    for (const tab of state.tabs) {
+      if (tab.pinned && (!tab.path || !pinnedPaths.has(tab.path))) tab.pinned = false;
+    }
+  }
+
+  normalized.forEach((pinnedTab) => {
+    let tab = state.tabs.find((item) => item.path === pinnedTab.path);
+    if (!tab) {
+      tab = { id: generateTabId(), path: pinnedTab.path, title: pinnedTab.title || displayDocumentTitle(pinnedTab.path.split("/").pop() || pinnedTab.path), pinned: true, scrollTop: 0 };
+      state.tabs.push(tab);
+    }
+    if (tab) {
+      tab.pinned = true;
+      if (pinnedTab.title) tab.title = pinnedTab.title;
+    }
+  });
+
+  orderTabsByPinnedList(normalized);
+  if (!state.tabs.find((tab) => tab.id === state.activeTabId)) state.activeTabId = state.tabs[0]?.id || null;
+  savePinnedTabsLocal();
+  if (render && tabStateSignature() !== before) renderTabStrip();
+}
+
+function normalizePinnedTabs(pinned) {
+  const seen = new Set();
+  return (Array.isArray(pinned) ? pinned : [])
+    .filter((tab) => tab && typeof tab.path === "string")
+    .map((tab) => ({ path: normalizeVaultPath(tab.path), title: tab.title || "" }))
+    .filter((tab) => {
+      if (!tab.path || seen.has(tab.path)) return false;
+      seen.add(tab.path);
+      return true;
+    });
+}
+
+function orderTabsByPinnedList(pinned) {
+  const order = new Map(pinned.map((tab, index) => [tab.path, index]));
+  const pinnedTabs = [];
+  const unpinnedTabs = [];
+  state.tabs.forEach((tab, index) => {
+    tab._tabOrder = index;
+    if (tab.pinned) pinnedTabs.push(tab);
+    else unpinnedTabs.push(tab);
+  });
+  pinnedTabs.sort((a, b) => {
+    const aOrder = order.has(a.path) ? order.get(a.path) : Number.MAX_SAFE_INTEGER;
+    const bOrder = order.has(b.path) ? order.get(b.path) : Number.MAX_SAFE_INTEGER;
+    return aOrder - bOrder || a._tabOrder - b._tabOrder;
+  });
+  state.tabs = [...pinnedTabs, ...unpinnedTabs];
+  state.tabs.forEach((tab) => { delete tab._tabOrder; });
+}
+
+function moveTabToPinnedTail(tab) {
+  const from = state.tabs.indexOf(tab);
+  if (from === -1) return;
+  state.tabs.splice(from, 1);
+  const insertAt = state.tabs.findLastIndex((item) => item.pinned) + 1;
+  state.tabs.splice(insertAt, 0, tab);
+}
+
+function tabStateSignature() {
+  return state.tabs.map((tab) => `${tab.id}:${tab.path || ""}:${tab.title || ""}:${tab.pinned ? 1 : 0}`).join("|");
 }
 
 async function openFileInNewTab(path) {
@@ -7380,6 +7553,7 @@ const RECENTLY_OPENED_MAX = 30;
 const DEVICE_TABS_VAULT_PATH = ".viewer-open-tabs.json";
 const DEVICE_ID_KEY = "obsidian-web-viewer-device-id";
 const DEVICE_TABS_STALE_MS = 2 * 60 * 60 * 1000;
+const PINNED_TABS_VAULT_PATH = ".viewer-pinned-tabs.json";
 
 function getDeviceId() {
   let id = localStorage.getItem(DEVICE_ID_KEY);
@@ -7558,6 +7732,10 @@ async function renameCurrentFile(newTitle) {
     if (typeof node.content === "string") node.content = state.currentContent;
     const tab = activeTab();
     if (tab) { tab.path = node.path; tab.title = displayDocumentTitle(newName); }
+    if (tab?.pinned) {
+      savePinnedTabsLocal();
+      void savePinnedTabsOrderToVault();
+    }
     els.noteTitle.textContent = displayDocumentTitle(newName);
     if (els.notePath) els.notePath.textContent = node.path;
     renderTabStrip();

@@ -956,7 +956,7 @@ button:disabled {
   background: rgba(0, 0, 0, 0.32);
   inset: 0;
   position: fixed;
-  z-index: 35;
+  z-index: 90;
 }
 
 .options-modal {
@@ -975,12 +975,17 @@ button:disabled {
   top: 50%;
   transform: translate(-50%, -50%);
   width: min(560px, calc(100vw - 32px));
-  z-index: 40;
+  z-index: 91;
 }
 
 .options-backdrop[hidden],
 .options-modal[hidden] {
   display: none;
+}
+
+.options-open .tab-strip,
+.options-open .view-controls-overlay {
+  z-index: 20;
 }
 
 .options-header {
@@ -3830,6 +3835,7 @@ button.calendar-more {
   min-width: 80px;
   padding: 6px 8px 6px 10px;
   position: relative;
+  touch-action: pan-y;
   transition: background 0.1s;
   white-space: nowrap;
 }
@@ -4001,7 +4007,7 @@ button.calendar-more {
 
 .new-tab-content {
   margin: 0 auto;
-  max-width: 640px;
+  max-width: 760px;
 }
 
 .new-tab-title {
@@ -4021,9 +4027,9 @@ button.calendar-more {
 }
 
 .new-tab-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   list-style: none;
   margin: 0;
   padding: 0;
@@ -4031,23 +4037,27 @@ button.calendar-more {
 
 .new-tab-file-btn {
   align-items: center;
-  background: none;
-  border: none;
-  border-radius: 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
   color: var(--fg);
   cursor: pointer;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 8px 10px;
+  gap: 6px;
+  min-height: 92px;
+  padding: 12px;
   text-align: left;
   width: 100%;
 }
-.new-tab-file-btn:hover { background: var(--surface-2); }
+.new-tab-file-btn:hover {
+  background: var(--surface-3);
+  border-color: var(--line-strong);
+}
 
 .new-tab-file-name {
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 650;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -4057,9 +4067,11 @@ button.calendar-more {
 .new-tab-file-path {
   color: var(--fg-muted);
   font-size: 11px;
+  line-height: 1.35;
   overflow: hidden;
+  overflow-wrap: anywhere;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
   width: 100%;
 }
 
@@ -4071,6 +4083,7 @@ button.calendar-more {
 
 @media (max-width: 780px) {
   .new-tab-page { padding: 24px 16px; }
+  .new-tab-list { grid-template-columns: 1fr; }
 }
 
 /* ─── Split view ─────────────────────────────────────────────────────────────── */
