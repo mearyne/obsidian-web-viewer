@@ -333,7 +333,10 @@ els.calendarRowFontSizeInput?.addEventListener("input", () => {
 els.calendarRowFontSizeInput?.addEventListener("change", updateCalendarRowFontSize);
 els.calendarRowHeightInput?.addEventListener("input", () => {
   const v = Number(els.calendarRowHeightInput.value);
-  if (Number.isFinite(v) && v >= 1) document.documentElement.style.setProperty("--calendar-row-height", `${Math.max(10, Math.min(48, v))}px`);
+  if (Number.isFinite(v) && v >= 10 && v <= 60) {
+    setCalendarRowHeight(v, { persist: false });
+    if (state.activeView === "calendar" && state.calendarMode === "month") renderCalendar();
+  }
 });
 els.calendarRowHeightInput?.addEventListener("change", updateCalendarRowHeight);
 els.contentAlignSelect?.addEventListener("change", updateContentAlign);
@@ -579,10 +582,10 @@ function handleGlobalKeydown(event) {
       openNewNote();
       return;
     }
-    if (event.key.toLowerCase() === "t" && state.activeView !== "calendar") {
+    if (event.key.toLowerCase() === "t") {
       event.preventDefault();
       event.stopPropagation();
-      void showTaskCreateDialog(formatDate(new Date()));
+      void createTab();
       return;
     }
     if (event.key.toLowerCase() === "r") {
@@ -2325,7 +2328,7 @@ function applyDeviceDisplayOptions() {
   state.fontDeviceKey = deviceKey;
   const contentSize = readNumberOption(deviceOptionStorageKey("content-font-size", deviceKey), 16, 10, 28);
   const rowSize = readNumberOption(deviceOptionStorageKey("calendar-row-font-size", deviceKey), deviceKey === "mobile" ? 10.8 : 14.4, 6, 22);
-  const rowHeight = readNumberOption(deviceOptionStorageKey("calendar-row-height", deviceKey), deviceKey === "mobile" ? 16 : 22, 10, 48);
+  const rowHeight = readNumberOption(deviceOptionStorageKey("calendar-row-height", deviceKey), deviceKey === "mobile" ? 21 : 29, 10, 60);
   const align = readChoiceOption(deviceOptionStorageKey("content-align", deviceKey), "soft-center", ["left", "soft-center", "center"]);
   const maxWidth = readNumberOption("obsidian-web-viewer-content-max-width", 760, 400, 1600);
   setContentFontSize(contentSize, { persist: false });
@@ -2370,9 +2373,10 @@ function setCalendarRowFontSize(size, { persist }) {
 }
 
 function updateCalendarRowHeight() {
-  const value = Number(els.calendarRowHeightInput?.value || 20);
-  const height = Math.max(10, Math.min(48, Number.isFinite(value) ? value : 20));
+  const value = Number(els.calendarRowHeightInput?.value || 29);
+  const height = Math.max(10, Math.min(60, Number.isFinite(value) ? value : 29));
   setCalendarRowHeight(height, { persist: true });
+  if (state.activeView === "calendar" && state.calendarMode === "month") renderCalendar();
 }
 
 function setCalendarRowHeight(height, { persist }) {
@@ -7541,7 +7545,11 @@ function renderTabStrip() {
       ${pinMark}<span class="tab-title">${title}</span>
       <button class="tab-close" data-tab-id="${escapeAttribute(tab.id)}" title="${tab.pinned ? "핀 해제" : "탭 닫기"}" type="button">×</button>
     </div>`;
-  }).join("") + `<button class="tab-new" type="button" title="새 탭 (Alt+T)">+</button>`;
+  }).join("") + `<button class="tab-new" type="button" title="새 탭 (T)">+</button>`;
+
+  if (!isMobile && els.viewControlsOverlay && els.viewControlsOverlay.parentElement !== strip) {
+    strip.appendChild(els.viewControlsOverlay);
+  }
 
   strip.querySelectorAll(".tab-item").forEach((el) => {
     el.addEventListener("click", (e) => {
@@ -7938,11 +7946,31 @@ function showEmptyTab() {
   updateSyncStatus?.();
 }
 
+function renderTodayFilesSection() {
+  const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+  const todayTs = todayStart.getTime();
+  const files = [...state.files.values()].filter((n) => n.kind === "file" && isOpenableDocument(n.name));
+  const todayCreated = files.filter((n) => n.createdAt >= todayTs).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 30);
+  const todayUpdated = files.filter((n) => n.updatedAt >= todayTs && n.createdAt < todayTs).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 30);
+  const renderList = (items, kind) => items.length ? `<ul class="new-tab-list">${items.map((n) => `
+    <li class="new-tab-item"><button type="button" class="new-tab-file-btn" data-path="${escapeAttribute(n.path)}">
+      <span class="new-tab-file-name">${escapeHtml(displayDocumentTitle(n.name))}</span>
+      <span class="new-tab-file-path">${escapeHtml(n.path)}</span>
+    </button></li>`).join("")}</ul>` : `<p class="new-tab-empty">오늘 ${kind} 파일 없음</p>`;
+  if (!todayCreated.length && !todayUpdated.length) return "";
+  return `<section class="new-tab-section">
+    <h3 class="new-tab-section-title">오늘 활동</h3>
+    ${todayCreated.length ? `<h4 class="new-tab-sub-title">새로 만든 파일</h4>${renderList(todayCreated, "생성한")}` : ""}
+    ${todayUpdated.length ? `<h4 class="new-tab-sub-title">수정한 파일</h4>${renderList(todayUpdated, "수정한")}` : ""}
+  </section>`;
+}
+
 function renderNewTabPage() {
   if (!els.newTabPage) return;
   els.newTabPage.innerHTML = `
     <div class="new-tab-content">
       <h2 class="new-tab-title">새 탭</h2>
+      ${renderTodayFilesSection()}
       <section class="new-tab-section" id="localTabsSection">
         <h3 class="new-tab-section-title">이 브라우저의 탭</h3>
         <ul class="new-tab-list">
@@ -7964,6 +7992,9 @@ function renderNewTabPage() {
   `;
   els.newTabPage.querySelectorAll("[data-tab-id]").forEach((btn) => {
     btn.addEventListener("click", () => void switchTab(btn.dataset.tabId));
+  });
+  els.newTabPage.querySelectorAll("[data-path]").forEach((btn) => {
+    btn.addEventListener("click", () => void openFile(btn.dataset.path));
   });
   void loadAndRenderDeviceTabs();
 }

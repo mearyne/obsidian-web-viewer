@@ -1213,6 +1213,22 @@ button:disabled {
   border-radius: 4px;
 }
 
+@media (min-width: 781px) {
+  .tab-strip > .view-controls-overlay {
+    background: none;
+    border-left: 1px solid var(--line);
+    flex-shrink: 0;
+    margin-left: auto;
+    padding: 0 6px;
+    position: static;
+  }
+  .tab-strip > .view-controls-overlay > .icon-button {
+    background: none;
+    height: 28px;
+    width: 28px;
+  }
+}
+
 :root[data-content-align="left"] .note-title-area {
   margin-left: 0;
   margin-right: auto;
@@ -1450,7 +1466,7 @@ button:disabled {
 .editing-mode .editor-toolbar-bottom {
   background: var(--surface);
   border-top: 1px solid var(--line);
-  bottom: 32px;
+  bottom: 45px;
   left: 0;
   position: fixed;
   right: 0;
@@ -3061,7 +3077,7 @@ button:disabled {
 
 .calendar-shell.calendar-mode-month .calendar-tasks {
   align-content: start;
-  grid-template-rows: repeat(var(--calendar-row-count, 5), minmax(0, var(--calendar-row-height, 22px)));
+  grid-template-rows: repeat(var(--calendar-row-count, 5), minmax(0, var(--calendar-row-height, 29px)));
 }
 
 .matrix-shell {
@@ -4009,6 +4025,7 @@ button.calendar-more {
   flex: 1;
   min-width: 0;
   overflow: hidden;
+  text-align: center;
   text-overflow: ellipsis;
 }
 
@@ -4075,8 +4092,16 @@ button.calendar-more {
     z-index: 56;
   }
   .content-pane { padding-bottom: 88px; }
-  .tab-item { font-size: 11px; max-width: 120px; min-width: 60px; padding: 5px 6px 5px 8px; }
+  .tab-item { font-size: 11px; max-width: 150px; min-width: 90px; padding: 5px 6px 5px 8px; }
   .mobile-tabs-btn { font-size: 13px; font-weight: 600; min-width: 28px; }
+
+  .editing-mode .editor-toolbar-bottom {
+    bottom: 88px;
+    padding: 4px 8px;
+  }
+  .editing-mode .viewer-wrap {
+    padding-bottom: 140px;
+  }
 }
 
 @media (max-width: 780px) {
@@ -4214,6 +4239,14 @@ button.calendar-more {
   letter-spacing: 0.08em;
   margin: 0 0 10px;
   text-transform: uppercase;
+}
+
+.new-tab-sub-title {
+  color: var(--fg-muted);
+  font-size: 11px;
+  font-weight: 500;
+  margin: 8px 0 6px;
+  opacity: 0.7;
 }
 
 .new-tab-device-list {
