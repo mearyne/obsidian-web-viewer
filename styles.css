@@ -1168,6 +1168,10 @@ button:disabled {
   z-index: 50;
 }
 
+.editing-mode .heading-controls-overlay {
+  display: none !important;
+}
+
 .view-controls-overlay {
   display: flex;
   gap: 4px;
@@ -1399,6 +1403,20 @@ button:disabled {
   padding: 6px 8px 6px 12px;
 }
 
+.editor-toolbar-top:empty {
+  min-height: 0;
+  padding: 0;
+}
+
+.editing-mode .editor-toolbar-top {
+  display: none;
+}
+
+.editor-toolbar-bottom {
+  flex-wrap: wrap;
+  gap: 8px 10px;
+}
+
 .editor-toolbar span {
   color: var(--muted);
   font-size: 12px;
@@ -1412,6 +1430,21 @@ button:disabled {
   display: flex;
   flex: 0 0 auto;
   gap: 6px;
+}
+
+.editor-toolbar-actions-left {
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+}
+
+.editor-toolbar-bottom #editorStatus {
+  flex: 1 1 auto;
+  min-width: 0;
+  order: 2;
+}
+
+.editor-toolbar-bottom #saveEditButton {
+  order: 3;
 }
 
 .editor-toolbar button {
@@ -3942,6 +3975,11 @@ button.calendar-more {
     position: fixed;
     right: 0;
     z-index: 44;
+  }
+  .heading-controls-overlay {
+    bottom: 92px;
+    right: 14px;
+    z-index: 56;
   }
   .content-pane { padding-bottom: 88px; }
   .tab-item { font-size: 11px; max-width: 120px; min-width: 60px; padding: 5px 6px 5px 8px; }

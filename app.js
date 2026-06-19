@@ -202,8 +202,14 @@ const els = {
   markdownEditor: document.querySelector("#markdownEditor"),
   editorPreview: document.querySelector("#editorPreview"),
   editorStatus: document.querySelector("#editorStatus"),
+  editorUndoButton: document.querySelector("#editorUndoButton"),
+  editorRedoButton: document.querySelector("#editorRedoButton"),
+  editorIndentButton: document.querySelector("#editorIndentButton"),
+  editorOutdentButton: document.querySelector("#editorOutdentButton"),
+  editorTableButton: document.querySelector("#editorTableButton"),
   editorImageButton: document.querySelector("#editorImageButton"),
   editorImageInput: document.querySelector("#editorImageInput"),
+  editorTaskButton: document.querySelector("#editorTaskButton"),
   calendarView: document.querySelector("#calendarView"),
   noteTitleArea: document.querySelector("#noteTitleArea"),
   headingControlsOverlay: document.querySelector("#headingControlsOverlay"),
@@ -346,7 +352,13 @@ els.saveEditButton.addEventListener("click", saveCurrentEdit);
 els.markdownEditor.addEventListener("keydown", handleEditorKeydown);
 els.markdownEditor.addEventListener("input", handleEditorInput);
 els.markdownEditor.addEventListener("paste", handleEditorPaste);
+els.editorUndoButton?.addEventListener("click", () => runEditorCommand("undo"));
+els.editorRedoButton?.addEventListener("click", () => runEditorCommand("redo"));
+els.editorIndentButton?.addEventListener("click", () => handleEditorToolbarIndent(false));
+els.editorOutdentButton?.addEventListener("click", () => handleEditorToolbarIndent(true));
+els.editorTableButton?.addEventListener("click", insertEditorTable);
 els.editorImageButton?.addEventListener("click", () => els.editorImageInput?.click());
+els.editorTaskButton?.addEventListener("click", insertTodayTaskTemplate);
 els.editorImageInput?.addEventListener("change", async (e) => {
   const file = e.target.files?.[0];
   if (!file || !file.type.startsWith("image/")) return;
@@ -2809,6 +2821,34 @@ function handleEditorShortcut(event) {
   return false;
 }
 
+function runEditorCommand(command) {
+  focusEditor();
+  document.execCommand(command);
+  markEditorDirty();
+}
+
+function handleEditorToolbarIndent(outdent) {
+  focusEditor();
+  indentSelectedEditorLines(els.markdownEditor, outdent);
+  markEditorDirty();
+}
+
+function insertEditorTable() {
+  focusEditor();
+  const table = "|  |  |\n| --- | --- |\n|  |  |";
+  const textarea = els.markdownEditor;
+  const { selectionStart, selectionEnd, value } = textarea;
+  textarea.value = value.slice(0, selectionStart) + table + value.slice(selectionEnd);
+  const next = selectionStart + 2;
+  textarea.setSelectionRange(next, next);
+  markEditorDirty();
+}
+
+function insertTodayTaskTemplate() {
+  focusEditor();
+  appendTaskTemplate(formatDate(new Date()));
+}
+
 function isShortcut(event, code, key) {
   return (event.ctrlKey || event.metaKey) && !event.altKey && (event.code === code || event.key.toLowerCase() === key);
 }
@@ -2839,9 +2879,7 @@ function markdownLineContinuation(line) {
   const unorderedTask = line.match(/^(\s*)([-*+])\s+\[([ xX-])\]\s+(.*)$/);
   if (unorderedTask) {
     if (!unorderedTask[4].trim()) return { exitList: true, removePattern: /^(\s*)([-*+])\s+\[[ xX-]\]\s*$/ };
-    const date = taskDateTokenFromText(unorderedTask[4]) || `\u{1F4C5} ${formatDate(new Date())}`;
-    const prefix = `${unorderedTask[1]}${unorderedTask[2]} [ ] `;
-    return { text: `${prefix}${date}`, cursorOffset: prefix.length };
+    return { text: `${unorderedTask[1]}- ` };
   }
 
   const unordered = line.match(/^(\s*)([-*+])\s+(.*)$/);
@@ -3072,7 +3110,10 @@ function updateEditButtons() {
   if (els.matrixButton) els.matrixButton.hidden = false;
   els.markdownToggleButton.disabled = state.editMode;
   els.markdownToggleButton.hidden = state.activeView !== "note";
-  if (els.saveEditButton) els.saveEditButton.hidden = true;
+  if (els.saveEditButton) {
+    els.saveEditButton.hidden = !state.editMode;
+    els.saveEditButton.disabled = !state.editMode || !canEdit || state.autoSaveInFlight;
+  }
   if (els.editorImageButton) els.editorImageButton.hidden = !(state.editMode && state.serverVaultWritable);
 }
 
@@ -3098,7 +3139,6 @@ function renderEditSaveButton() {
 
 function arrangeChromeControls() {
   const sidebarOptions = document.querySelector(".sidebar-options");
-  const editorToolbar = document.querySelector(".editor-toolbar");
   if (sidebarOptions && els.fullscreenButton && els.fullscreenButton.parentElement !== sidebarOptions) {
     sidebarOptions.insertBefore(els.fullscreenButton, sidebarOptions.querySelector("#themeButton") || sidebarOptions.firstChild);
   }
@@ -3111,21 +3151,6 @@ function arrangeChromeControls() {
     reloadBtn.textContent = "↻";
     reloadBtn.addEventListener("click", () => window.location.reload());
     sidebarOptions.insertBefore(reloadBtn, els.optionsButton || null);
-  }
-  if (editorToolbar && els.editorStatus && els.editorStatus.parentElement !== editorToolbar) {
-    editorToolbar.insertBefore(els.editorStatus, editorToolbar.firstChild);
-  }
-  // Build image button if not yet in DOM
-  if (!document.getElementById("editorImageButton")) {
-    const imgBtn = document.createElement("button");
-    imgBtn.id = "editorImageButton";
-    imgBtn.type = "button";
-    imgBtn.className = "editor-image-btn status-image-btn";
-    imgBtn.setAttribute("aria-label", "이미지 첨부");
-    imgBtn.title = "이미지 첨부";
-    imgBtn.innerHTML = `<svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>`;
-    imgBtn.addEventListener("click", () => els.editorImageInput?.click());
-    els.editorImageButton = imgBtn;
   }
 
   let statusBar = document.querySelector(".app-status-bar");
@@ -3143,7 +3168,7 @@ function arrangeChromeControls() {
     if (els.markdownToggleButton) els.markdownToggleButton.classList.add("status-markdown-toggle");
     statusBar.append(historyWrap);
     if (els.markdownToggleButton) statusBar.append(els.markdownToggleButton);
-    statusBar.append(els.notePath, saveStatusEl, els.editorImageButton, els.syncStatus);
+    statusBar.append(els.notePath, saveStatusEl, els.syncStatus);
 
     // Mobile-only: tab count
     const mobileNav = document.createElement("div");
@@ -3176,10 +3201,7 @@ function arrangeChromeControls() {
     el.id = "bottomSaveStatus";
     el.className = "bottom-save-status";
     el.hidden = true;
-    statusBar.insertBefore(el, els.editorImageButton || els.syncStatus);
-  }
-  if (els.editorImageButton && els.editorImageButton.parentElement !== statusBar) {
-    statusBar.insertBefore(els.editorImageButton, els.syncStatus);
+    statusBar.insertBefore(el, els.syncStatus);
   }
   if (els.syncStatus && els.syncStatus.parentElement !== statusBar) statusBar.append(els.syncStatus);
 }
