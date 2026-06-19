@@ -188,7 +188,6 @@ const els = {
   fontResetButton: document.querySelector("#fontResetButton"),
   contentFontSizeInput: document.querySelector("#contentFontSizeInput"),
   calendarRowFontSizeInput: document.querySelector("#calendarRowFontSizeInput"),
-  calendarRowHeightInput: document.querySelector("#calendarRowHeightInput"),
   contentAlignSelect: document.querySelector("#contentAlignSelect"),
   contentMaxWidthInput: document.querySelector("#contentMaxWidthInput"),
   splitPane: document.querySelector("#splitPane"),
@@ -333,14 +332,6 @@ els.calendarRowFontSizeInput?.addEventListener("input", () => {
   if (Number.isFinite(v) && v >= 1) document.documentElement.style.setProperty("--calendar-row-font-size", `${Math.max(6, Math.min(22, v))}px`);
 });
 els.calendarRowFontSizeInput?.addEventListener("change", updateCalendarRowFontSize);
-els.calendarRowHeightInput?.addEventListener("input", () => {
-  const v = Number(els.calendarRowHeightInput.value);
-  if (Number.isFinite(v) && v >= 10 && v <= 60) {
-    setCalendarRowHeight(v, { persist: false });
-    if (state.activeView === "calendar" && state.calendarMode === "month") renderCalendar();
-  }
-});
-els.calendarRowHeightInput?.addEventListener("change", updateCalendarRowHeight);
 els.contentAlignSelect?.addEventListener("change", updateContentAlign);
 els.contentMaxWidthInput?.addEventListener("input", () => {
   const v = Number(els.contentMaxWidthInput.value);
@@ -2339,12 +2330,12 @@ function applyDeviceDisplayOptions() {
   state.fontDeviceKey = deviceKey;
   const contentSize = readNumberOption(deviceOptionStorageKey("content-font-size", deviceKey), 16, 10, 28);
   const rowSize = readNumberOption(deviceOptionStorageKey("calendar-row-font-size", deviceKey), deviceKey === "mobile" ? 10.8 : 14.4, 6, 22);
-  const rowHeight = readNumberOption(deviceOptionStorageKey("calendar-row-height", deviceKey), defaultCalendarRowHeight(deviceKey), 10, 60);
   const align = readChoiceOption(deviceOptionStorageKey("content-align", deviceKey), "soft-center", ["left", "soft-center", "center"]);
   const maxWidth = readNumberOption("obsidian-web-viewer-content-max-width", 760, 400, 1600);
+  localStorage.removeItem(deviceOptionStorageKey("calendar-row-height", deviceKey));
   setContentFontSize(contentSize, { persist: false });
   setCalendarRowFontSize(rowSize, { persist: false });
-  setCalendarRowHeight(rowHeight, { persist: false });
+  setCalendarRowHeight(defaultCalendarRowHeight(deviceKey));
   setContentAlign(align, { persist: false });
   setContentMaxWidth(maxWidth, { persist: false });
 }
@@ -2383,27 +2374,12 @@ function setCalendarRowFontSize(size, { persist }) {
   if (persist) localStorage.setItem(deviceOptionStorageKey("calendar-row-font-size"), String(size));
 }
 
-function updateCalendarRowHeight() {
-  const fallback = defaultCalendarRowHeight();
-  const value = Number(els.calendarRowHeightInput?.value || fallback);
-  const height = clampCalendarRowHeight(Number.isFinite(value) ? value : fallback);
-  setCalendarRowHeight(height, { persist: true });
-  if (state.activeView === "calendar" && state.calendarMode === "month") renderCalendar();
-}
-
-function setCalendarRowHeight(height, { persist }) {
-  const normalizedHeight = clampCalendarRowHeight(height);
-  document.documentElement.style.setProperty("--calendar-row-height", `${normalizedHeight}px`);
-  if (els.calendarRowHeightInput) els.calendarRowHeightInput.value = String(normalizedHeight);
-  if (persist) localStorage.setItem(deviceOptionStorageKey("calendar-row-height"), String(normalizedHeight));
+function setCalendarRowHeight(height) {
+  document.documentElement.style.setProperty("--calendar-row-height", `${height}px`);
 }
 
 function defaultCalendarRowHeight(deviceKey = currentFontDeviceKey()) {
   return deviceKey === "mobile" ? 27 : 38;
-}
-
-function clampCalendarRowHeight(height) {
-  return Math.max(10, Math.min(60, Number.isFinite(height) ? Math.round(height) : defaultCalendarRowHeight()));
 }
 
 function updateContentMaxWidth() {
