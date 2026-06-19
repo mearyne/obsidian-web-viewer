@@ -964,7 +964,7 @@ button:disabled {
   border-top: 1px solid var(--line);
   display: grid;
   gap: 8px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(42px, 1fr));
   margin-top: auto;
   padding: 10px;
   position: relative;

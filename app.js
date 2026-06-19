@@ -114,6 +114,8 @@ const state = {
   recentlyOpenedSaveTimer: null,
   randomMarkdownCacheKey: "",
   randomMarkdownPaths: [],
+  randomSeenByTab: new Map(),
+  randomOldFirst: false,
   customConfirmResolve: null,
 };
 
@@ -231,6 +233,7 @@ const els = {
   webEditButton: document.querySelector("#webEditButton"),
   saveEditButton: document.querySelector("#saveEditButton"),
   randomFileButton: document.querySelector("#randomFileButton"),
+  randomPriorityToggleButton: document.querySelector("#randomPriorityToggleButton"),
   calendarButton: document.querySelector("#calendarButton"),
   matrixButton: document.querySelector("#matrixButton"),
   optionsButton: document.querySelector("#optionsButton"),
@@ -376,6 +379,7 @@ els.imagePathInput?.addEventListener("input", handleImagePathInput);
 els.searchExcludeInput?.addEventListener("input", handleSearchExcludeInput);
 els.newNoteButton?.addEventListener("click", openNewNote);
 els.randomFileButton.addEventListener("click", openRandomMarkdown);
+els.randomPriorityToggleButton?.addEventListener("click", toggleRandomPriorityMode);
 els.calendarButton.addEventListener("click", openNextCalendarKind);
 els.matrixButton?.addEventListener("click", buildMatrixView);
 els.syncStatus?.addEventListener("click", handleSyncStatusClick);
@@ -755,25 +759,63 @@ function setSidebarWidth(width) {
 
 async function openRandomMarkdown() {
   const files = getRandomMarkdownPaths();
-  if (!files.length) return;
+  if (!files.length) {
+    alert("조건에 맞는 랜덤 파일이 없습니다.");
+    return;
+  }
 
-  const candidates = files.length > 1 && state.currentPath ? files.filter((path) => path !== state.currentPath) : files;
-  const path = candidates[Math.floor(Math.random() * candidates.length)];
+  const seen = getRandomSeenForActiveTab();
+  let candidates = files.filter((path) => !seen.has(path));
+  const nonCurrentCandidates = candidates.filter((path) => path !== state.currentPath);
+  if (nonCurrentCandidates.length) candidates = nonCurrentCandidates;
+  if (!candidates.length) {
+    alert("조건에 맞는 새 랜덤 파일이 없습니다.");
+    return;
+  }
+
+  const path = pickRandomMarkdownPath(candidates);
   if (state.activeView === "calendar") showNoteView();
   await openFile(path);
+  seen.add(path);
   scrollViewerTop();
 }
 
 function getRandomMarkdownPaths() {
-  const randomPrefixes = parsePathList(els.randomPathInput?.value || "");
-  const key = randomPrefixes.join("\n");
-  if (state.randomMarkdownCacheKey === key && state.randomMarkdownPaths.length) return state.randomMarkdownPaths;
-  state.randomMarkdownCacheKey = key;
-  state.randomMarkdownPaths = [...state.files.keys()].filter((path) => {
+  const searchQuery = els.searchInput?.value || "";
+  const trimmedSearch = searchQuery.trim();
+  const searchMatcher = trimmedSearch.length >= 2 ? createSearchMatcher(searchQuery, {
+    regexMode: els.regexSearchToggle.checked,
+    caseSensitive: els.caseSearchToggle.checked,
+  }) : null;
+  const searchFolders = searchMatcher ? parsePathList(els.folderPathInput?.value || "") : [];
+  const searchExcludes = searchMatcher ? state.searchExcludePaths : [];
+  const randomExcludes = !searchMatcher ? parsePathList(els.randomPathInput?.value || "") : [];
+
+  return [...state.files.keys()].filter((path) => {
     if (!path.toLowerCase().endsWith(".md")) return false;
-    return !randomPrefixes.length || randomPrefixes.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
+    if (searchMatcher) {
+      const node = state.files.get(path);
+      if (searchFolders.length && node && !nodeInAnyPath(node, searchFolders)) return false;
+      if (searchExcludes.length && nodeIsExcluded({ path }, searchExcludes)) return false;
+      return searchMatcher(path) || state.contentSearchMatches?.has(path);
+    }
+    return !randomExcludes.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
   });
-  return state.randomMarkdownPaths;
+}
+
+function getRandomSeenForActiveTab() {
+  const tabId = state.activeTabId || "main";
+  if (!state.randomSeenByTab.has(tabId)) state.randomSeenByTab.set(tabId, new Set());
+  return state.randomSeenByTab.get(tabId);
+}
+
+function pickRandomMarkdownPath(candidates) {
+  if (!state.randomOldFirst) return candidates[Math.floor(Math.random() * candidates.length)];
+  const lastOpenedByPath = new Map(state.recentlyOpenedPaths.map((entry) => [entry.path, Number(entry.openedAt) || 0]));
+  const sorted = [...candidates].sort((a, b) => (lastOpenedByPath.get(a) || 0) - (lastOpenedByPath.get(b) || 0));
+  const poolSize = Math.max(1, Math.ceil(sorted.length * 0.25));
+  const pool = sorted.slice(0, poolSize);
+  return pool[Math.floor(Math.random() * pool.length)];
 }
 
 function invalidateRandomMarkdownCache() {
@@ -1912,6 +1954,8 @@ function initOptions() {
   if (els.calendarPathInput) els.calendarPathInput.value = savedCalendarPath;
   const savedRandomPath = localStorage.getItem("obsidian-web-viewer-random-paths") || "";
   if (els.randomPathInput) els.randomPathInput.value = savedRandomPath;
+  state.randomOldFirst = localStorage.getItem("obsidian-web-viewer-random-old-first") === "1";
+  updateRandomPriorityToggleButton();
   const savedDailyPath = normalizeDailyNotePath(localStorage.getItem("obsidian-web-viewer-daily-note-path") || state.dailyNotePath);
   state.dailyNotePath = savedDailyPath;
   if (els.dailyNotePathInput) els.dailyNotePathInput.value = savedDailyPath;
@@ -1953,6 +1997,7 @@ async function loadServerSettings() {
     if (typeof settings.randomPaths === "string" && els.randomPathInput && settings.randomPaths !== els.randomPathInput.value) {
       els.randomPathInput.value = settings.randomPaths;
       localStorage.setItem("obsidian-web-viewer-random-paths", settings.randomPaths);
+      invalidateRandomMarkdownCache();
     }
     if (typeof settings.dailyNotePath === "string" && settings.dailyNotePath) {
       const normalized = normalizeDailyNotePath(settings.dailyNotePath);
@@ -2447,6 +2492,21 @@ function handleRandomPathInput() {
   localStorage.setItem("obsidian-web-viewer-random-paths", value);
   invalidateRandomMarkdownCache();
   scheduleSettingsSave();
+}
+
+function toggleRandomPriorityMode() {
+  state.randomOldFirst = !state.randomOldFirst;
+  localStorage.setItem("obsidian-web-viewer-random-old-first", state.randomOldFirst ? "1" : "0");
+  updateRandomPriorityToggleButton();
+}
+
+function updateRandomPriorityToggleButton() {
+  if (!els.randomPriorityToggleButton) return;
+  const label = state.randomOldFirst ? "랜덤: 본 지 오래된 파일 우선 켜짐" : "랜덤: 본 지 오래된 파일 우선 꺼짐";
+  els.randomPriorityToggleButton.classList.toggle("active", state.randomOldFirst);
+  els.randomPriorityToggleButton.setAttribute("aria-pressed", String(state.randomOldFirst));
+  els.randomPriorityToggleButton.setAttribute("aria-label", label);
+  els.randomPriorityToggleButton.title = label;
 }
 
 function refreshCalendarForFilterChange() {
@@ -7509,6 +7569,7 @@ async function closeTab(id) {
   }
   const idx = state.tabs.indexOf(tab);
   state.tabs.splice(idx, 1);
+  state.randomSeenByTab.delete(id);
   if (state.tabs.length === 0) {
     state.tabs.push({ id: generateTabId(), path: null, title: "새 탭", pinned: false, scrollTop: 0 });
   }
@@ -7956,7 +8017,7 @@ function showAllTabsOverlay() {
 
 const RECENTLY_OPENED_KEY = "obsidian-web-viewer-recently-opened";
 const RECENTLY_OPENED_VAULT_PATH = ".viewer-recently-opened.json";
-const RECENTLY_OPENED_MAX = 30;
+const RECENTLY_OPENED_MAX = 5000;
 const DEVICE_TABS_VAULT_PATH = ".viewer-open-tabs.json";
 const DEVICE_ID_KEY = "obsidian-web-viewer-device-id";
 const DEVICE_TABS_STALE_MS = 2 * 60 * 60 * 1000;
@@ -7997,7 +8058,11 @@ async function saveOpenTabsToVault() {
 }
 
 function pushRecentlyOpened(path, title) {
-  const entry = { path, title: title || displayDocumentTitle(path.split("/").pop() || path) };
+  const entry = {
+    path,
+    title: title || displayDocumentTitle(path.split("/").pop() || path),
+    openedAt: Date.now(),
+  };
   state.recentlyOpenedPaths = [
     entry,
     ...state.recentlyOpenedPaths.filter((e) => e.path !== path),
@@ -8014,7 +8079,7 @@ function debouncedSaveRecentlyOpenedToVault() {
 function loadRecentlyOpened() {
   try {
     const stored = localStorage.getItem(RECENTLY_OPENED_KEY);
-    if (stored) state.recentlyOpenedPaths = JSON.parse(stored);
+    if (stored) state.recentlyOpenedPaths = normalizeRecentlyOpenedList(JSON.parse(stored));
   } catch {}
 }
 
@@ -8024,20 +8089,38 @@ async function loadRecentlyOpenedFromVault() {
     const res = await fetch("/api/vault-file?path=" + encodeURIComponent(RECENTLY_OPENED_VAULT_PATH));
     if (!res.ok) return;
     const data = await res.json();
-    const vaultList = JSON.parse(data.content || "[]");
+    const vaultList = normalizeRecentlyOpenedList(JSON.parse(data.content || "[]"));
     if (!vaultList?.length) return;
-    // Merge: vault list wins for entries not in local (vault is cross-device source of truth)
-    const localPaths = new Set(state.recentlyOpenedPaths.map((e) => e.path));
-    const merged = [...state.recentlyOpenedPaths];
-    for (const e of vaultList) {
-      if (!localPaths.has(e.path)) merged.push(e);
+    const mergedByPath = new Map();
+    for (const entry of [...state.recentlyOpenedPaths, ...vaultList]) {
+      const existing = mergedByPath.get(entry.path);
+      if (!existing || (entry.openedAt || 0) > (existing.openedAt || 0)) {
+        mergedByPath.set(entry.path, entry);
+      }
     }
-    // Sort by vault order for entries only in vault, keeping local-first order
-    state.recentlyOpenedPaths = merged.slice(0, RECENTLY_OPENED_MAX);
+    state.recentlyOpenedPaths = [...mergedByPath.values()]
+      .sort((a, b) => (b.openedAt || 0) - (a.openedAt || 0))
+      .slice(0, RECENTLY_OPENED_MAX);
     try { localStorage.setItem(RECENTLY_OPENED_KEY, JSON.stringify(state.recentlyOpenedPaths)); } catch {}
+    debouncedSaveRecentlyOpenedToVault();
     // Re-render new tab page if currently showing one
     if (!state.currentPath && els.newTabPage && !els.newTabPage.hidden) renderNewTabPage();
   } catch {}
+}
+
+function normalizeRecentlyOpenedList(list) {
+  if (!Array.isArray(list)) return [];
+  return list
+    .map((entry) => {
+      const path = typeof entry === "string" ? entry : entry?.path;
+      if (!path) return null;
+      const title = typeof entry === "object" && entry?.title ? entry.title : displayDocumentTitle(path.split("/").pop() || path);
+      const openedAt = typeof entry === "object" ? Number(entry.openedAt) || 0 : 0;
+      return { path, title, openedAt };
+    })
+    .filter(Boolean)
+    .sort((a, b) => (b.openedAt || 0) - (a.openedAt || 0))
+    .slice(0, RECENTLY_OPENED_MAX);
 }
 
 async function saveRecentlyOpenedToVault() {
