@@ -3847,7 +3847,16 @@ function showCalendarView() {
   document.documentElement.classList.toggle("matrix-mode", state.calendarKind === "matrix");
   updateCalendarTitle();
   const tab = activeTab();
-  if (tab) { tab.view = "calendar"; tab.title = "캘린더"; renderTabStrip(); }
+  if (tab) {
+    tab.view = "calendar";
+    tab.calendarKind = state.calendarKind;
+    tab.title = "캘린더";
+    if (tab.pinned) {
+      savePinnedTabsLocal();
+      void savePinnedTabsOrderToVault();
+    }
+    renderTabStrip();
+  }
   if (els.newTabPage) els.newTabPage.hidden = true;
   els.markdownView.hidden = true;
   els.editorShell.hidden = true;
@@ -7430,9 +7439,9 @@ function initTabs() {
   if (!hasOpenTabs) {
     loadPinnedTabs();
   }
-  orderTabsByPinnedList(state.tabs.filter((tab) => tab.pinned && tab.path).map((tab) => ({ path: tab.path, title: tab.title || "" })));
+  orderTabsByPinnedList(pinnedTabsPayload());
   if (!hasOpenTabs) {
-    const firstPinned = state.tabs.find((tab) => tab.pinned && tab.path);
+    const firstPinned = state.tabs.find((tab) => tab.pinned && (tab.path || tab.view));
     if (firstPinned) state.activeTabId = firstPinned.id;
   }
   loadRecentlyOpened();
@@ -7469,10 +7478,12 @@ async function switchTab(id) {
   const tab = state.tabs.find((t) => t.id === id);
   if (!tab) return;
   if (tab.view === "calendar") {
+    state.calendarKind = tab.calendarKind || "tasks";
     if (els.calendarView.children.length > 0) {
       showCalendarView();
     } else {
-      await buildCalendarView();
+      showInitialCalendarView();
+      if (isTaskCalendarKind(tab.calendarKind || state.calendarKind)) scheduleCalendarRefresh();
     }
   } else if (tab.path && state.files.has(tab.path)) {
     const wasNavigating = state.navigatingHistory;
@@ -7490,7 +7501,7 @@ async function closeTab(id) {
   if (!tab) return;
   if (tab.pinned) {
     tab.pinned = false;
-    orderTabsByPinnedList(state.tabs.filter((item) => item.pinned && item.path).map((item) => ({ path: item.path, title: item.title || "" })));
+    orderTabsByPinnedList(pinnedTabsPayload());
     savePinnedTabsLocal();
     void updatePinnedTabInVault("unpin", tab);
     renderTabStrip();
@@ -7513,10 +7524,10 @@ async function closeTab(id) {
 function pinTab(id) {
   const tab = state.tabs.find((t) => t.id === id);
   if (!tab) return;
-  if (!tab.path) return;
+  if (!tab.path && !tab.view) return;
   if (tab.pinned) {
     tab.pinned = false;
-    orderTabsByPinnedList(state.tabs.filter((item) => item.pinned && item.path).map((item) => ({ path: item.path, title: item.title || "" })));
+    orderTabsByPinnedList(pinnedTabsPayload());
     savePinnedTabsLocal();
     void updatePinnedTabInVault("unpin", tab);
   } else {
@@ -7556,7 +7567,7 @@ const OPEN_TABS_KEY = "obsidian-web-viewer-open-tabs";
 
 function saveOpenTabs() {
   const data = {
-    tabs: state.tabs.map((t) => ({ id: t.id, path: t.path, title: t.title, pinned: t.pinned, scrollTop: t.scrollTop, view: t.view || null })),
+    tabs: state.tabs.map((t) => ({ id: t.id, path: t.path, title: t.title, pinned: t.pinned, scrollTop: t.scrollTop, view: t.view || null, calendarKind: t.calendarKind || null })),
     activeTabId: state.activeTabId,
   };
   try { localStorage.setItem(OPEN_TABS_KEY, JSON.stringify(data)); } catch {}
@@ -7569,7 +7580,7 @@ function loadOpenTabs() {
     if (!stored) return false;
     const data = JSON.parse(stored);
     if (!data?.tabs?.length) return false;
-    state.tabs = data.tabs.map((t) => ({ id: t.id || generateTabId(), path: t.path || null, title: t.title || "새 탭", pinned: !!t.pinned, scrollTop: t.scrollTop || 0, view: t.view || null }));
+    state.tabs = data.tabs.map((t) => ({ id: t.id || generateTabId(), path: t.path || null, title: t.title || "새 탭", pinned: !!t.pinned, scrollTop: t.scrollTop || 0, view: t.view || null, calendarKind: t.calendarKind || null }));
     state.activeTabId = data.activeTabId || state.tabs[0].id;
     return true;
   } catch { return false; }
@@ -7578,6 +7589,7 @@ function loadOpenTabs() {
 async function restoreActiveTab() {
   const tab = state.tabs.find((t) => t.id === state.activeTabId);
   if (tab?.view === "calendar") {
+    state.calendarKind = tab.calendarKind || "tasks";
     showInitialCalendarView();
   } else if (tab?.path && state.files.has(tab.path)) {
     await openFile(tab.path);
@@ -7746,18 +7758,32 @@ function reorderTab(tabId, targetId, beforeTarget) {
 }
 
 function savePinnedTabsLocal() {
-  const pinned = state.tabs.filter((t) => t.pinned).map((t) => ({ path: t.path, title: t.title }));
+  const pinned = pinnedTabsPayload();
   try { localStorage.setItem("obsidian-web-viewer-pinned-tabs", JSON.stringify(pinned)); } catch {}
+}
+
+function pinnedTabsPayload() {
+  return state.tabs.filter((t) => t.pinned && (t.path || t.view)).map(serializePinnedTab);
+}
+
+function serializePinnedTab(tab) {
+  return {
+    path: tab.path || "",
+    title: tab.title || "",
+    view: tab.view || null,
+    calendarKind: tab.view === "calendar" ? (tab.calendarKind || state.calendarKind || "tasks") : null,
+  };
 }
 
 async function updatePinnedTabInVault(action, tab) {
   if (!state.serverVaultWritable) return;
-  if (!tab?.path) return;
+  if (!tab?.path && !tab?.view) return;
+  const pinnedTab = serializePinnedTab(tab);
   try {
     await fetch("/api/pinned-tabs", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action, path: tab.path, title: tab.title || "" }),
+      body: JSON.stringify({ action, ...pinnedTab }),
       cache: "no-store",
     });
   } catch {}
@@ -7765,7 +7791,7 @@ async function updatePinnedTabInVault(action, tab) {
 
 async function savePinnedTabsOrderToVault() {
   if (!state.serverVaultWritable) return;
-  const pinned = state.tabs.filter((t) => t.pinned && t.path).map((t) => ({ path: t.path, title: t.title || "" }));
+  const pinned = pinnedTabsPayload();
   try {
     await fetch("/api/pinned-tabs", {
       method: "PUT",
@@ -7799,24 +7825,34 @@ async function loadPinnedTabsFromVault() {
 
 function applyPinnedTabs(pinned, { replace, render } = { replace: false, render: true }) {
   const normalized = normalizePinnedTabs(pinned);
-  const pinnedPaths = new Set(normalized.map((tab) => tab.path));
+  const pinnedKeys = new Set(normalized.map(pinnedTabKey));
   const before = tabStateSignature();
 
   if (replace) {
     for (const tab of state.tabs) {
-      if (tab.pinned && (!tab.path || !pinnedPaths.has(tab.path))) tab.pinned = false;
+      if (tab.pinned && !pinnedKeys.has(pinnedTabKey(tab))) tab.pinned = false;
     }
   }
 
   normalized.forEach((pinnedTab) => {
-    let tab = state.tabs.find((item) => item.path === pinnedTab.path);
+    let tab = state.tabs.find((item) => pinnedTabKey(item) === pinnedTabKey(pinnedTab));
     if (!tab) {
-      tab = { id: generateTabId(), path: pinnedTab.path, title: pinnedTab.title || displayDocumentTitle(pinnedTab.path.split("/").pop() || pinnedTab.path), pinned: true, scrollTop: 0 };
+      tab = {
+        id: generateTabId(),
+        path: pinnedTab.path || null,
+        title: pinnedTab.title || pinnedTabDefaultTitle(pinnedTab),
+        pinned: true,
+        scrollTop: 0,
+        view: pinnedTab.view || null,
+        calendarKind: pinnedTab.calendarKind || null,
+      };
       state.tabs.push(tab);
     }
     if (tab) {
       tab.pinned = true;
       if (pinnedTab.title) tab.title = pinnedTab.title;
+      tab.view = pinnedTab.view || null;
+      tab.calendarKind = pinnedTab.calendarKind || null;
     }
   });
 
@@ -7829,17 +7865,33 @@ function applyPinnedTabs(pinned, { replace, render } = { replace: false, render:
 function normalizePinnedTabs(pinned) {
   const seen = new Set();
   return (Array.isArray(pinned) ? pinned : [])
-    .filter((tab) => tab && typeof tab.path === "string")
-    .map((tab) => ({ path: normalizeVaultPath(tab.path), title: tab.title || "" }))
+    .filter((tab) => tab && (typeof tab.path === "string" || tab.view === "calendar"))
+    .map((tab) => ({
+      path: normalizeVaultPath(tab.path || ""),
+      title: tab.title || "",
+      view: tab.view === "calendar" ? "calendar" : null,
+      calendarKind: ["tasks", "created", "updated", "matrix"].includes(tab.calendarKind) ? tab.calendarKind : null,
+    }))
     .filter((tab) => {
-      if (!tab.path || seen.has(tab.path)) return false;
-      seen.add(tab.path);
+      const key = pinnedTabKey(tab);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
       return true;
     });
 }
 
+function pinnedTabKey(tab) {
+  if (tab?.view === "calendar") return "view:calendar";
+  return tab?.path ? `path:${tab.path}` : "";
+}
+
+function pinnedTabDefaultTitle(tab) {
+  if (tab?.view === "calendar") return "캘린더";
+  return displayDocumentTitle(tab.path.split("/").pop() || tab.path);
+}
+
 function orderTabsByPinnedList(pinned) {
-  const order = new Map(pinned.map((tab, index) => [tab.path, index]));
+  const order = new Map(pinned.map((tab, index) => [pinnedTabKey(tab), index]));
   const pinnedTabs = [];
   const unpinnedTabs = [];
   state.tabs.forEach((tab, index) => {
@@ -7848,8 +7900,10 @@ function orderTabsByPinnedList(pinned) {
     else unpinnedTabs.push(tab);
   });
   pinnedTabs.sort((a, b) => {
-    const aOrder = order.has(a.path) ? order.get(a.path) : Number.MAX_SAFE_INTEGER;
-    const bOrder = order.has(b.path) ? order.get(b.path) : Number.MAX_SAFE_INTEGER;
+    const aKey = pinnedTabKey(a);
+    const bKey = pinnedTabKey(b);
+    const aOrder = order.has(aKey) ? order.get(aKey) : Number.MAX_SAFE_INTEGER;
+    const bOrder = order.has(bKey) ? order.get(bKey) : Number.MAX_SAFE_INTEGER;
     return aOrder - bOrder || a._tabOrder - b._tabOrder;
   });
   state.tabs = [...pinnedTabs, ...unpinnedTabs];
@@ -7865,7 +7919,7 @@ function moveTabToPinnedTail(tab) {
 }
 
 function tabStateSignature() {
-  return state.tabs.map((tab) => `${tab.id}:${tab.path || ""}:${tab.title || ""}:${tab.pinned ? 1 : 0}`).join("|");
+  return state.tabs.map((tab) => `${tab.id}:${tab.path || ""}:${tab.view || ""}:${tab.calendarKind || ""}:${tab.title || ""}:${tab.pinned ? 1 : 0}`).join("|");
 }
 
 async function openFileInNewTab(path) {

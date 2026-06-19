@@ -478,15 +478,15 @@ function updatePinnedTabs(body, res) {
   if (Array.isArray(payload.pinned)) {
     pinned = normalizePinnedTabs(payload.pinned);
   } else {
-    const pathValue = normalizeVaultPath(String(payload.path || ""));
-    if (!pathValue) {
-      sendJson(res, 400, { error: "path required" });
+    const pinnedTab = normalizePinnedTabs([payload])[0];
+    if (!pinnedTab) {
+      sendJson(res, 400, { error: "pinned tab required" });
       return;
     }
-    const title = typeof payload.title === "string" ? payload.title.slice(0, 300) : "";
-    pinned = pinned.filter((tab) => tab.path !== pathValue);
+    const key = pinnedTabKey(pinnedTab);
+    pinned = pinned.filter((tab) => pinnedTabKey(tab) !== key);
     if (payload.action !== "unpin") {
-      pinned.push({ path: pathValue, title });
+      pinned.push(pinnedTab);
     }
   }
 
@@ -517,17 +517,25 @@ function normalizePinnedTabs(value) {
   const seen = new Set();
   const items = Array.isArray(value) ? value : [];
   return items
-    .filter((tab) => tab && typeof tab.path === "string")
+    .filter((tab) => tab && (typeof tab.path === "string" || tab.view === "calendar"))
     .map((tab) => ({
-      path: normalizeVaultPath(tab.path).slice(0, 1024),
+      path: normalizeVaultPath(tab.path || "").slice(0, 1024),
       title: typeof tab.title === "string" ? tab.title.slice(0, 300) : "",
+      view: tab.view === "calendar" ? "calendar" : null,
+      calendarKind: ["tasks", "created", "updated", "matrix"].includes(tab.calendarKind) ? tab.calendarKind : null,
     }))
     .filter((tab) => {
-      if (!tab.path || seen.has(tab.path)) return false;
-      seen.add(tab.path);
+      const key = pinnedTabKey(tab);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
       return true;
     })
     .slice(0, 100);
+}
+
+function pinnedTabKey(tab) {
+  if (tab?.view === "calendar") return "view:calendar";
+  return tab?.path ? `path:${tab.path}` : "";
 }
 
 function writeVaultFile(requestedPath, body, res) {
