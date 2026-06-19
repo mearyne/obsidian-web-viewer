@@ -1486,14 +1486,14 @@ async function openFile(path) {
   const startedAt = performance.now();
   let readDoneAt = startedAt;
   let renderDeferred = false;
-  let loadingShown = false;
-  const loadingTimer = window.setTimeout(() => {
-    loadingShown = true;
-    showLoading(`문서 여는 중: ${node.name}`);
-  }, 450);
+  let loadingShown = true;
+  const showOpenStep = (step) => showDocumentOpenStep(node.name, step, startedAt);
+  showOpenStep("준비 중");
   try {
+    showOpenStep("파일 읽는 중");
     const content = await readFileNode(node);
     readDoneAt = performance.now();
+    showOpenStep("탭과 기록 갱신 중");
     state.currentPath = path;
     state.currentContent = content;
     state.currentNode = node;
@@ -1513,12 +1513,12 @@ async function openFile(path) {
     updateEditButtons();
     els.markdownView.classList.remove("empty-state", "plain-text-mode", "code-document");
     els.markdownView.replaceChildren();
+    showOpenStep("화면 전환 중");
     showNoteView();
     scrollViewerTop();
     renderDeferred = true;
-    scheduleCurrentDocumentRender(++state.documentRenderToken, startedAt, readDoneAt, loadingShown, node);
+    scheduleCurrentDocumentRender(++state.documentRenderToken, startedAt, readDoneAt, loadingShown, node, showOpenStep);
   } finally {
-    window.clearTimeout(loadingTimer);
     if (!renderDeferred) {
       hideLoading();
       logOpenFileTiming(node, {
@@ -1531,12 +1531,19 @@ async function openFile(path) {
   }
 }
 
-function scheduleCurrentDocumentRender(token, startedAt, readDoneAt, loadingShown, node) {
+function showDocumentOpenStep(fileName, step, startedAt) {
+  const elapsed = Math.max(0, Math.round(performance.now() - startedAt));
+  showLoadingOverlay(`문서 열기: ${step}\n${fileName}\n${elapsed}ms`);
+}
+
+function scheduleCurrentDocumentRender(token, startedAt, readDoneAt, loadingShown, node, showOpenStep) {
   requestAnimationFrame(() => {
     if (token !== state.documentRenderToken || state.currentPath !== node.path) return;
     const renderStartedAt = performance.now();
     try {
-      renderCurrentDocument();
+      showOpenStep?.("본문 렌더링 중");
+      renderCurrentDocument(showOpenStep);
+      showOpenStep?.("완료 중");
     } finally {
       hideLoading();
       logOpenFileTiming(node, {
@@ -2332,19 +2339,25 @@ function updateMarkdownToggleButton() {
   els.markdownToggleButton.title = label;
 }
 
-function renderCurrentDocument() {
+function renderCurrentDocument(showOpenStep = null) {
+  showOpenStep?.("렌더 영역 초기화 중");
   els.markdownView.classList.remove("empty-state", "plain-text-mode", "code-document");
   els.editorShell.hidden = true;
   els.markdownView.hidden = false;
 
   if (isExcalidrawDocument(state.currentPath || "")) {
     if (!EXCALIDRAW_PREVIEW_ENABLED) {
+      showOpenStep?.("원문 표시 중");
       renderPlainTextDocument(state.currentContent);
       return;
     }
+    showOpenStep?.("Excalidraw 렌더링 중");
     els.markdownView.innerHTML = renderExcalidrawPreview(state.currentContent, state.currentPath);
+    showOpenStep?.("링크 연결 중");
     bindWikiLinks(els.markdownView);
+    showOpenStep?.("이미지 준비 중");
     hydrateVaultImages(els.markdownView);
+    showOpenStep?.("임베드 준비 중");
     hydrateEmbeddedDocuments(els.markdownView);
     if (EXCALIDRAW_PREVIEW_ENABLED) hydrateExcalidrawPackagePreviews(els.markdownView);
     return;
@@ -2352,20 +2365,28 @@ function renderCurrentDocument() {
 
   if (state.markdownEnabled) {
     if (!isMarkdownDocument(state.currentPath || "")) {
+      showOpenStep?.("코드 렌더링 중");
       renderCodeDocument(state.currentContent, state.currentPath || "");
       return;
     }
+    showOpenStep?.("Markdown 변환 중");
     els.markdownView.innerHTML = renderMarkdown(state.currentContent, { path: state.currentPath || "" });
+    showOpenStep?.("체크박스 연결 중");
     bindRenderedTaskCheckboxes(els.markdownView);
+    showOpenStep?.("링크 연결 중");
     bindWikiLinks(els.markdownView);
+    showOpenStep?.("이미지 그룹 정리 중");
     arrangeImageGroups(els.markdownView);
     bindImageLightbox(els.markdownView);
+    showOpenStep?.("이미지 준비 중");
     hydrateVaultImages(els.markdownView);
+    showOpenStep?.("임베드 준비 중");
     hydrateEmbeddedDocuments(els.markdownView);
     if (EXCALIDRAW_PREVIEW_ENABLED) hydrateExcalidrawPackagePreviews(els.markdownView);
     return;
   }
 
+  showOpenStep?.("원문 표시 중");
   renderPlainTextDocument(state.currentContent);
 }
 

@@ -1239,7 +1239,9 @@ button:disabled {
 .loading-box p {
   color: var(--muted);
   font-size: 13px;
+  line-height: 1.45;
   margin: 0;
+  white-space: pre-line;
 }
 
 .loading-spinner {
