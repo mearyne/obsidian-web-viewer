@@ -175,6 +175,8 @@ const els = {
   taskEditTagChips: document.querySelector("#taskEditTagChips"),
   taskEditSubItems: document.querySelector("#taskEditSubItems"),
   taskEditSubItemsInput: document.querySelector("#taskEditSubItemsInput"),
+  taskEditIndentButton: document.querySelector("#taskEditIndentButton"),
+  taskEditOutdentButton: document.querySelector("#taskEditOutdentButton"),
   newNoteButton: document.querySelector("#newNoteButton"),
   newNoteDialog: document.querySelector("#newNoteDialog"),
   newNoteTitleInput: document.querySelector("#newNoteTitleInput"),
@@ -5978,6 +5980,8 @@ function bindTaskEditDialog() {
   });
 
   els.taskEditSubItemsInput?.addEventListener("keydown", handleTaskSubItemsEnter);
+  els.taskEditIndentButton?.addEventListener("click", () => adjustTaskEditSubItemDepth(false));
+  els.taskEditOutdentButton?.addEventListener("click", () => adjustTaskEditSubItemDepth(true));
 
   els.taskEditConfirmBtn?.addEventListener("click", async () => {
     const title = els.taskEditTitleInput?.value.trim() || "";
@@ -6023,6 +6027,13 @@ function handleTaskSubItemsEnter(event) {
   textarea.value = `${value.slice(0, selectionStart)}${insertion}${value.slice(selectionEnd)}`;
   const next = selectionStart + insertion.length;
   textarea.setSelectionRange(next, next);
+}
+
+function adjustTaskEditSubItemDepth(outdent) {
+  const textarea = els.taskEditSubItemsInput;
+  if (!textarea) return;
+  textarea.focus();
+  indentSelectedEditorLines(textarea, outdent);
 }
 
 function updateTaskEditMetaUI() {
