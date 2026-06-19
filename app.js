@@ -2011,6 +2011,10 @@ function connectSSE() {
     }
   });
 
+  es.addEventListener("device-tabs-changed", () => {
+    void loadAndRenderDeviceTabs();
+  });
+
   es.addEventListener("file-deleted", (e) => {
     const { path } = JSON.parse(e.data);
     if (state.currentPath === path) {
@@ -7391,24 +7395,13 @@ function debouncedSaveOpenTabsToVault() {
 async function saveOpenTabsToVault() {
   if (!state.serverVaultWritable) return;
   const deviceId = getDeviceId();
-  let allDeviceTabs = {};
+  const tabs = state.tabs.filter((t) => t.path).map((t) => ({ path: t.path, title: t.title }));
   try {
-    const res = await fetch("/api/vault-file?path=" + encodeURIComponent(DEVICE_TABS_VAULT_PATH), { cache: "no-store" });
-    if (res.ok) { const d = await res.json(); allDeviceTabs = JSON.parse(d.content || "{}"); }
-  } catch {}
-  const now = Date.now();
-  for (const id of Object.keys(allDeviceTabs)) {
-    if (now - allDeviceTabs[id].updatedAt > DEVICE_TABS_STALE_MS) delete allDeviceTabs[id];
-  }
-  allDeviceTabs[deviceId] = {
-    tabs: state.tabs.filter((t) => t.path).map((t) => ({ path: t.path, title: t.title })),
-    updatedAt: now,
-  };
-  try {
-    await fetch("/api/vault-file?path=" + encodeURIComponent(DEVICE_TABS_VAULT_PATH), {
+    await fetch("/api/device-tabs", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: JSON.stringify(allDeviceTabs, null, 2), backup: false }),
+      body: JSON.stringify({ deviceId, tabs }),
+      cache: "no-store",
     });
   } catch {}
 }
@@ -7507,10 +7500,9 @@ async function loadAndRenderDeviceTabs() {
     return;
   }
   try {
-    const res = await fetch("/api/vault-file?path=" + encodeURIComponent(DEVICE_TABS_VAULT_PATH), { cache: "no-store" });
+    const res = await fetch("/api/device-tabs", { cache: "no-store" });
     if (!res.ok) { if (emptyEl) emptyEl.textContent = "다른 기기에서 열려있는 탭이 없습니다."; return; }
-    const data = await res.json();
-    const allDeviceTabs = JSON.parse(data.content || "{}");
+    const allDeviceTabs = await res.json();
     const deviceId = getDeviceId();
     const now = Date.now();
     const otherDevices = Object.entries(allDeviceTabs)

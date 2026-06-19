@@ -37,6 +37,8 @@ const BUILD_ID = Date.now().toString(36);
 const TEXT_FILE_CACHE_LIMIT = 512;
 const TEXT_FILE_CACHE_MAX_BYTES = 1024 * 1024;
 const textFileCache = new Map();
+const DEVICE_TABS_VAULT_PATH = ".viewer-open-tabs.json";
+const DEVICE_TABS_STALE_MS = 2 * 60 * 60 * 1000;
 
 function broadcastVaultEvent(event, data) {
   const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
@@ -66,6 +68,22 @@ const server = http.createServer((req, res) => {
   if (requestPath === "/api/health") {
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ ok: true }));
+    return;
+  }
+
+  if (requestPath === "/api/device-tabs") {
+    if (req.method === "PUT") {
+      receiveBody(req, (error, body) => {
+        if (error) {
+          sendJson(res, 400, { error: "Invalid request body" });
+          return;
+        }
+        updateDeviceTabs(body, res);
+      });
+      return;
+    }
+
+    sendDeviceTabs(res);
     return;
   }
 
@@ -341,6 +359,82 @@ function forgetTextFileCache(safePath) {
   for (const key of textFileCache.keys()) {
     if (key.startsWith(prefix)) textFileCache.delete(key);
   }
+}
+
+function sendDeviceTabs(res) {
+  sendJsonNoStore(res, 200, pruneDeviceTabs(readDeviceTabs()));
+}
+
+function updateDeviceTabs(body, res) {
+  if (readOnly) {
+    sendJson(res, 403, { error: "Vault is read-only" });
+    return;
+  }
+
+  let payload;
+  try {
+    payload = JSON.parse(body || "{}");
+  } catch {
+    sendJson(res, 400, { error: "Invalid JSON" });
+    return;
+  }
+
+  const deviceId = typeof payload.deviceId === "string" ? payload.deviceId.slice(0, 120) : "";
+  if (!deviceId) {
+    sendJson(res, 400, { error: "deviceId required" });
+    return;
+  }
+
+  const tabs = Array.isArray(payload.tabs)
+    ? payload.tabs
+        .filter((tab) => tab && typeof tab.path === "string")
+        .slice(0, 100)
+        .map((tab) => ({
+          path: normalizeVaultPath(tab.path).slice(0, 1024),
+          title: typeof tab.title === "string" ? tab.title.slice(0, 300) : "",
+        }))
+        .filter((tab) => tab.path)
+    : [];
+
+  const allDeviceTabs = pruneDeviceTabs(readDeviceTabs());
+  const now = Date.now();
+  allDeviceTabs[deviceId] = { tabs, updatedAt: now };
+
+  try {
+    const filePath = resolveVaultFilePath(DEVICE_TABS_VAULT_PATH);
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, JSON.stringify(allDeviceTabs, null, 2), "utf8");
+    forgetTextFileCache(DEVICE_TABS_VAULT_PATH);
+    sendJsonNoStore(res, 200, allDeviceTabs);
+    broadcastVaultEvent("device-tabs-changed", { updatedAt: now });
+    broadcastVaultEvent("file-changed", { path: DEVICE_TABS_VAULT_PATH, updatedAt: now });
+  } catch (error) {
+    sendJson(res, 500, { error: error.message || "Device tabs write failed" });
+  }
+}
+
+function readDeviceTabs() {
+  try {
+    const filePath = resolveVaultFilePath(DEVICE_TABS_VAULT_PATH);
+    const value = JSON.parse(fs.readFileSync(filePath, "utf8"));
+    return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  } catch {
+    return {};
+  }
+}
+
+function pruneDeviceTabs(allDeviceTabs) {
+  const now = Date.now();
+  const pruned = {};
+  for (const [id, entry] of Object.entries(allDeviceTabs || {})) {
+    const updatedAt = Number(entry?.updatedAt || 0);
+    if (!id || !Number.isFinite(updatedAt) || now - updatedAt > DEVICE_TABS_STALE_MS) continue;
+    pruned[id] = {
+      tabs: Array.isArray(entry?.tabs) ? entry.tabs : [],
+      updatedAt,
+    };
+  }
+  return pruned;
 }
 
 function writeVaultFile(requestedPath, body, res) {
@@ -875,5 +969,13 @@ function isRasterThumbnailFile(name) {
 
 function sendJson(res, status, value) {
   res.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
+  res.end(JSON.stringify(value));
+}
+
+function sendJsonNoStore(res, status, value) {
+  res.writeHead(status, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+  });
   res.end(JSON.stringify(value));
 }
