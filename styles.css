@@ -3465,13 +3465,22 @@ button.calendar-more {
     grid-column: 2;
     grid-row: 1;
     justify-self: end;
-    max-width: 100%;
+    margin-right: min(196px, 52vw);
+    max-width: max(72px, calc(100vw - 264px));
     overflow-x: auto;
     width: auto;
   }
 
   .view-controls button {
     flex: 0 0 auto;
+  }
+
+  .view-controls-overlay {
+    max-width: calc(100vw - 58px);
+    overflow-x: auto;
+    right: 12px;
+    top: 10px;
+    z-index: 48;
   }
 
   .options-modal {

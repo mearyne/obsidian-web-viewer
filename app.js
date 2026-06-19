@@ -1986,7 +1986,7 @@ function connectSSE() {
   es.addEventListener("file-changed", async (e) => {
     const { path, updatedAt } = JSON.parse(e.data);
     if (path === DEVICE_TABS_VAULT_PATH) {
-      if (!state.currentPath && els.newTabPage && !els.newTabPage.hidden) void loadAndRenderDeviceTabs();
+      void loadAndRenderDeviceTabs();
       return;
     }
     const node = state.files.get(path);
@@ -7385,7 +7385,7 @@ function getDeviceId() {
 
 function debouncedSaveOpenTabsToVault() {
   clearTimeout(_saveDeviceTabsTimer);
-  _saveDeviceTabsTimer = setTimeout(() => void saveOpenTabsToVault(), 3000);
+  _saveDeviceTabsTimer = setTimeout(() => void saveOpenTabsToVault(), 250);
 }
 
 async function saveOpenTabsToVault() {
@@ -7393,7 +7393,7 @@ async function saveOpenTabsToVault() {
   const deviceId = getDeviceId();
   let allDeviceTabs = {};
   try {
-    const res = await fetch("/api/vault-file?path=" + encodeURIComponent(DEVICE_TABS_VAULT_PATH));
+    const res = await fetch("/api/vault-file?path=" + encodeURIComponent(DEVICE_TABS_VAULT_PATH), { cache: "no-store" });
     if (res.ok) { const d = await res.json(); allDeviceTabs = JSON.parse(d.content || "{}"); }
   } catch {}
   const now = Date.now();
@@ -7507,7 +7507,7 @@ async function loadAndRenderDeviceTabs() {
     return;
   }
   try {
-    const res = await fetch("/api/vault-file?path=" + encodeURIComponent(DEVICE_TABS_VAULT_PATH));
+    const res = await fetch("/api/vault-file?path=" + encodeURIComponent(DEVICE_TABS_VAULT_PATH), { cache: "no-store" });
     if (!res.ok) { if (emptyEl) emptyEl.textContent = "다른 기기에서 열려있는 탭이 없습니다."; return; }
     const data = await res.json();
     const allDeviceTabs = JSON.parse(data.content || "{}");
