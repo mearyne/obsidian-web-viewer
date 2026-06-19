@@ -3000,7 +3000,7 @@ button:disabled {
 
 .calendar-shell.calendar-mode-month .calendar-tasks {
   align-content: start;
-  grid-template-rows: repeat(var(--calendar-row-count, 5), minmax(0, var(--calendar-row-height, 20px)));
+  grid-template-rows: repeat(var(--calendar-row-count, 5), minmax(var(--calendar-row-height, 24px), auto));
 }
 
 .matrix-shell {
@@ -3942,7 +3942,7 @@ button.calendar-more {
   position: absolute;
   right: 0;
 }
-.tab-item.pinned .tab-pin { font-size: 10px; }
+.tab-item.pinned .tab-pin { font-size: 13px; line-height: 1; }
 
 .tab-title {
   flex: 1;

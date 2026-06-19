@@ -473,15 +473,6 @@ function handleGlobalKeydown(event) {
     return;
   }
 
-  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey) {
-    const digitMatch = event.code.match(/^Digit([1-9])$/);
-    if (digitMatch) {
-      const idx = parseInt(digitMatch[1], 10) - 1;
-      const tab = state.tabs[idx];
-      if (tab) { event.preventDefault(); event.stopPropagation(); void switchTab(tab.id); }
-      return;
-    }
-  }
 
   if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key === ",") {
     event.preventDefault();
@@ -546,6 +537,14 @@ function handleGlobalKeydown(event) {
       state.calendarDate = shiftCalendarDate(1);
       renderCalendar();
       return;
+    }
+    if (state.activeView !== "calendar") {
+      const digitMatch = event.code.match(/^Digit([1-5])$/);
+      if (digitMatch) {
+        const idx = parseInt(digitMatch[1], 10) - 1;
+        const tab = state.tabs[idx];
+        if (tab) { event.preventDefault(); event.stopPropagation(); void switchTab(tab.id); return; }
+      }
     }
     if (event.key.toLowerCase() === "e" || event.key.toLowerCase() === "w") {
       event.preventDefault();
@@ -1517,6 +1516,11 @@ function nodeInAnyPath(node, paths) {
 }
 
 async function openFile(path) {
+  const curTab = activeTab();
+  if (curTab?.pinned && path !== curTab.path && !state.navigatingHistory) {
+    await openFileInNewTab(path);
+    return;
+  }
   if (!(await confirmDiscardEdit())) return;
   const node = state.files.get(path);
   if (!node || !isOpenableDocument(node.name)) return;
@@ -2300,7 +2304,7 @@ function applyDeviceDisplayOptions() {
   state.fontDeviceKey = deviceKey;
   const contentSize = readNumberOption(deviceOptionStorageKey("content-font-size", deviceKey), 16, 10, 28);
   const rowSize = readNumberOption(deviceOptionStorageKey("calendar-row-font-size", deviceKey), deviceKey === "mobile" ? 10.8 : 14.4, 6, 22);
-  const rowHeight = readNumberOption(deviceOptionStorageKey("calendar-row-height", deviceKey), deviceKey === "mobile" ? 12 : 20, 10, 48);
+  const rowHeight = readNumberOption(deviceOptionStorageKey("calendar-row-height", deviceKey), deviceKey === "mobile" ? 18 : 24, 10, 48);
   const align = readChoiceOption(deviceOptionStorageKey("content-align", deviceKey), "soft-center", ["left", "soft-center", "center"]);
   const maxWidth = readNumberOption("obsidian-web-viewer-content-max-width", 760, 400, 1600);
   setContentFontSize(contentSize, { persist: false });
@@ -3516,7 +3520,7 @@ async function refreshCalendarTasks({ showLoading }) {
   state.calendarRefreshInFlight = true;
   const refreshView = state.activeView;
   const refreshKind = state.calendarKind;
-  state.calendarRefreshing = true;
+  state.calendarRefreshing = showLoading;
   state.calendarCacheState = state.tasks.length ? "stale" : "refreshing";
   updateSyncStatus();
 
@@ -3651,6 +3655,11 @@ function setCalendarMode(mode) {
 }
 
 async function openCalendarFromShortcut() {
+  const calTab = state.tabs.find((t) => t.view === "calendar");
+  if (calTab && calTab.id !== state.activeTabId) {
+    await switchTab(calTab.id);
+    return;
+  }
   if (state.activeView !== "calendar") {
     await buildCalendarView();
     return;
@@ -7896,7 +7905,7 @@ function showEmptyTab() {
   if (els.calendarView) els.calendarView.hidden = true;
   if (els.noteTitleArea) els.noteTitleArea.hidden = true;
   if (els.headingControlsOverlay) els.headingControlsOverlay.hidden = true;
-  if (els.viewControlsOverlay) els.viewControlsOverlay.hidden = true;
+  if (els.viewControlsOverlay) els.viewControlsOverlay.hidden = false;
   els.noteTitle.textContent = "새 탭";
   if (els.notePath) els.notePath.textContent = "";
   updateEditButtons();
@@ -7916,7 +7925,7 @@ function renderNewTabPage() {
       <section class="new-tab-section" id="localTabsSection">
         <h3 class="new-tab-section-title">이 브라우저의 탭</h3>
         <ul class="new-tab-list">
-          ${state.tabs.map((tab) => `
+          ${state.tabs.filter((tab) => !tab.pinned).map((tab) => `
             <li class="new-tab-item">
               <button type="button" class="new-tab-file-btn${tab.id === state.activeTabId ? " active" : ""}" data-tab-id="${escapeAttribute(tab.id)}">
                 <span class="new-tab-file-name">${escapeHtml(tab.title || "새 탭")}</span>
