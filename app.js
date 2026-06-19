@@ -2114,8 +2114,7 @@ async function createAndOpenNote(title, dirPathOverride) {
     renderTree();
     refreshRecentFilesCache();
     invalidateRandomMarkdownCache();
-    await openFile(path);
-    await enterEditMode();
+    await openCreatedNoteInEditMode(path, node, initialContent);
     return;
   }
 
@@ -2132,7 +2131,26 @@ async function createAndOpenNote(title, dirPathOverride) {
   renderTree();
   refreshRecentFilesCache();
   invalidateRandomMarkdownCache();
-  await openFile(path);
+  await openCreatedNoteInEditMode(path, node, initialContent);
+}
+
+async function openCreatedNoteInEditMode(path, node, content) {
+  state.currentPath = path;
+  state.currentContent = content;
+  state.currentNode = node;
+  state.editMode = false;
+  state.activeView = "note";
+  pushNavigationHistory({ type: "file", path });
+  els.notePath.textContent = displayDocumentTitle(node.name);
+  els.notePath.title = path;
+  els.noteTitle.textContent = displayDocumentTitle(node.name);
+  const curTab = activeTab();
+  if (curTab) { curTab.path = path; curTab.title = displayDocumentTitle(node.name); curTab.view = null; }
+  renderTabStrip();
+  pushRecentlyOpened(path, displayDocumentTitle(node.name));
+  if (els.newTabPage) els.newTabPage.hidden = true;
+  if (els.noteTitleArea) els.noteTitleArea.hidden = true;
+  if (els.headingControlsOverlay) els.headingControlsOverlay.hidden = true;
   await enterEditMode();
 }
 
@@ -2386,7 +2404,7 @@ function setCalendarRowHeight(height) {
 }
 
 function defaultCalendarRowHeight(deviceKey = currentFontDeviceKey()) {
-  return deviceKey === "mobile" ? 27 : 38;
+  return deviceKey === "mobile" ? 27 : 50;
 }
 
 function updateContentMaxWidth() {
@@ -6078,6 +6096,8 @@ function bindTaskEditDialog() {
   });
 
   els.taskEditSubItemsInput?.addEventListener("keydown", handleTaskSubItemsEnter);
+  els.taskEditSubItemsInput?.addEventListener("focus", ensureTaskEditSubItemBullet);
+  els.taskEditSubItemsInput?.addEventListener("input", normalizeTaskEditSubItemDraft);
   els.taskEditIndentButton?.addEventListener("click", () => adjustTaskEditSubItemDepth(false));
   els.taskEditOutdentButton?.addEventListener("click", () => adjustTaskEditSubItemDepth(true));
 
@@ -6125,6 +6145,23 @@ function handleTaskSubItemsEnter(event) {
   textarea.value = `${value.slice(0, selectionStart)}${insertion}${value.slice(selectionEnd)}`;
   const next = selectionStart + insertion.length;
   textarea.setSelectionRange(next, next);
+}
+
+function ensureTaskEditSubItemBullet(event) {
+  const textarea = event.currentTarget;
+  if (textarea.value.trim()) return;
+  textarea.value = "- ";
+  textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+}
+
+function normalizeTaskEditSubItemDraft(event) {
+  const textarea = event.currentTarget;
+  const { value, selectionStart, selectionEnd } = textarea;
+  const nextValue = value.replace(/(^|\n)([ \t]*)(?![-*+]\s)(\S)/g, "$1$2- $3");
+  if (nextValue === value) return;
+  const delta = nextValue.length - value.length;
+  textarea.value = nextValue;
+  textarea.setSelectionRange(selectionStart + delta, selectionEnd + delta);
 }
 
 function adjustTaskEditSubItemDepth(outdent) {
