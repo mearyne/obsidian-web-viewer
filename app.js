@@ -4729,8 +4729,40 @@ function shiftCalendarDate(direction) {
 }
 
 function moveCalendarByScroll(direction) {
+  navigateCalendarAnimated(direction);
+}
+
+function navigateCalendarAnimated(direction) {
+  const oldShell = els.calendarView.querySelector(".calendar-shell");
+  if (!oldShell) {
+    state.calendarDate = shiftCalendarDate(direction);
+    renderCalendar();
+    return;
+  }
+  const clone = oldShell.cloneNode(true);
   state.calendarDate = shiftCalendarDate(direction);
   renderCalendar();
+  const newShell = els.calendarView.querySelector(".calendar-shell");
+  if (!newShell) return;
+
+  clone.style.cssText += ";position:absolute;inset:0;z-index:5;margin:0;transform:translateX(0)";
+  newShell.style.transform = `translateX(${direction * 100}%)`;
+  els.calendarView.appendChild(clone);
+
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      const t = "transform 0.28s ease";
+      newShell.style.transition = t;
+      clone.style.transition = t;
+      newShell.style.transform = "translateX(0)";
+      clone.style.transform = `translateX(${-direction * 100}%)`;
+      clone.addEventListener("transitionend", () => {
+        clone.remove();
+        newShell.style.transition = "";
+        newShell.style.transform = "";
+      }, { once: true });
+    });
+  });
 }
 
 function handleCalendarWheel(event) {
@@ -5344,38 +5376,25 @@ function bindDateClick(target) {
   target.addEventListener("pointermove", (event) => {
     if (timer && Math.hypot(event.clientX - startX, event.clientY - startY) > CALENDAR_DRAG_DISTANCE) clearLongPress();
     if (!state.calendarDragStartDate) return;
-    if (state.calendarDragPointer?.agenda) {
-      const dx = event.clientX - state.calendarDragPointer.x;
-      const dy = event.clientY - state.calendarDragPointer.y;
-      if (Math.abs(dy) > CALENDAR_DRAG_DISTANCE && Math.abs(dy) > Math.abs(dx)) {
-        clearCalendarDragState();
-        return;
-      }
-    }
-    event.preventDefault();
-    const cell = document.elementFromPoint(event.clientX, event.clientY)?.closest?.("[data-calendar-date]");
-    const date = cell?.getAttribute("data-calendar-date") || "";
-    if (!date || date === state.calendarDragCurrentDate) return;
-    state.calendarDragCurrentDate = date;
-    updateCalendarDragHighlight();
+    const dx = event.clientX - startX;
+    const dy = event.clientY - startY;
+    if (Math.abs(dx) > 10 || Math.abs(dy) > 10) event.preventDefault();
   });
 
   target.addEventListener("pointerup", async (event) => {
     if (event.target.closest(".calendar-task, .calendar-more, .agenda-delete-btn")) return;
     target.releasePointerCapture?.(event.pointerId);
     clearLongPress();
-    const startDate = state.calendarDragStartDate;
-    const endDate = state.calendarDragCurrentDate || target.getAttribute("data-calendar-date") || "";
+    const dx = event.clientX - startX;
+    const dy = event.clientY - startY;
     state.calendarDragPointer = null;
     state.calendarDragStartDate = "";
     state.calendarDragCurrentDate = "";
     clearCalendarDragHighlight();
-    if (startDate && endDate && startDate !== endDate) {
+    if (Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy) * 1.3) {
       state.calendarDragHandled = true;
-      await openDateEditor(startDate, endDate);
-      window.setTimeout(() => {
-        state.calendarDragHandled = false;
-      }, 0);
+      navigateCalendarAnimated(dx < 0 ? 1 : -1);
+      window.setTimeout(() => { state.calendarDragHandled = false; }, 0);
       suppressDateOpen();
     }
   });

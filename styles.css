@@ -2472,6 +2472,7 @@ button:disabled {
   max-width: 1180px;
   overflow: hidden;
   padding: 12px 0;
+  position: relative;
 }
 
 .calendar-shell {
