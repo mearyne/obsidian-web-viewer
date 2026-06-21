@@ -6565,9 +6565,12 @@ function setTaskDialogMode(mode) {
     els.taskEditSubItemsInput.readOnly = isView;
     els.taskEditSubItemsInput.hidden = isView;
   }
+
+  // Prepare preview HTML but keep it hidden until layout is measured (prevents
+  // images from expanding the dialog before max-height is applied)
   if (els.taskSubItemsPreview) {
-    els.taskSubItemsPreview.hidden = !isView;
     if (isView) els.taskSubItemsPreview.innerHTML = renderSubItemsHtml(state.taskEditTask?.subItems || []);
+    els.taskSubItemsPreview.hidden = true;
   }
 
   [
@@ -6585,10 +6588,12 @@ function setTaskDialogMode(mode) {
   if (els.taskEditCancelBtn) els.taskEditCancelBtn.hidden = isView;
   if (els.taskEditConfirmBtn) els.taskEditConfirmBtn.hidden = isView;
 
-  // PC view mode: clamp right column height to left column, enable scroll
   if (!isView) {
+    // Edit mode: restore right column to natural height
     if (els.taskEditSubItems) els.taskEditSubItems.style.maxHeight = "";
   } else {
+    // View mode: after showModal() renders the dialog, measure left column height
+    // then clamp right column and reveal the preview
     requestAnimationFrame(() => {
       if (window.innerWidth > 768) {
         const leftH = els.taskEditBodyEl?.querySelector(".task-edit-main")?.offsetHeight || 0;
@@ -6596,6 +6601,7 @@ function setTaskDialogMode(mode) {
           els.taskEditSubItems.style.maxHeight = leftH + "px";
         }
       }
+      if (els.taskSubItemsPreview) els.taskSubItemsPreview.hidden = false;
     });
   }
 }
