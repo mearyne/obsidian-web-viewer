@@ -5099,7 +5099,6 @@ function renderSubItemsHtml(subItems) {
     const listItem = body.match(/^[-*+]\s+(.*)$/);
     const rendered = renderSubItemContent((listItem ? listItem[1] : body).trim());
     const indentStyle = indent ? ` style="margin-left: ${Math.min(48, indent.length * 4)}px"` : "";
-    if (rendered.startsWith("<img")) return rendered;
     return `<div class="task-sub-bullet"${indentStyle}><span>•</span>${rendered}</div>`;
   }).join("");
 }
