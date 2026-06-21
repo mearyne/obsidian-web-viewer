@@ -1699,7 +1699,7 @@ function nodeInAnyPath(node, paths) {
 
 async function openFile(path) {
   const curTab = activeTab();
-  if (curTab?.pinned && path !== curTab.path && !state.navigatingHistory) {
+  if (curTab?.pinned && path !== curTab.path) {
     await openFileInNewTab(path);
     return;
   }
