@@ -6411,6 +6411,17 @@ function bindTaskEditDialog() {
   els.taskEditDialog.addEventListener("keydown", (e) => {
     if (e.key === "Escape") { e.preventDefault(); els.taskEditDialog.close("cancel"); }
     if (e.key === "Enter" && e.target === els.taskEditTitleInput) { e.preventDefault(); els.taskEditConfirmBtn?.click(); }
+    const isView = els.taskEditDialog.querySelector(".task-create-form")?.classList.contains("task-mode-view");
+    if (isView && e.key === "e" && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+      e.preventDefault();
+      setTaskDialogMode("edit");
+      els.taskEditTitleInput?.focus();
+      els.taskEditTitleInput?.select();
+    }
+    if (!isView && (e.ctrlKey || e.metaKey) && e.key === "s") {
+      e.preventDefault();
+      els.taskEditConfirmBtn?.click();
+    }
   });
 }
 

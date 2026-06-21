@@ -2199,14 +2199,14 @@ button:disabled {
 }
 
 .task-meta-chip:hover {
-  background: color-mix(in srgb, var(--accent, #5b8dd9) 18%, var(--surface-2));
+  background: rgba(91, 141, 217, 0.18);
   border-color: var(--accent, #5b8dd9);
   color: var(--accent, #5b8dd9);
 }
 
-.task-pri-chip-high:hover { background: rgba(231,76,60,0.2); border-color: #e74c3c; color: #e74c3c; }
-.task-pri-chip-mid:hover  { background: rgba(230,162,15,0.2); border-color: #c98c0a; color: #c98c0a; }
-.task-pri-chip-low:hover  { background: rgba(52,152,219,0.2); border-color: #3498db; color: #3498db; }
+.task-pri-chip-high:hover { background: rgba(231, 76, 60, 0.2);  border-color: #e74c3c; color: #e74c3c; }
+.task-pri-chip-mid:hover  { background: rgba(230, 162, 15, 0.2); border-color: #c98c0a; color: #c98c0a; }
+.task-pri-chip-low:hover  { background: rgba(52, 152, 219, 0.2); border-color: #3498db; color: #3498db; }
 
 .task-meta-chip.active {
   background: var(--accent);
@@ -2308,19 +2308,10 @@ button:disabled {
   white-space: nowrap;
 }
 
-/* Title input: borderless, larger in view mode */
-.task-mode-view #taskEditTitleInput {
-  background: transparent;
-  border-color: transparent;
-  cursor: default;
-  font-size: 17px;
-  font-weight: 700;
-  padding-left: 0;
-}
-.task-mode-view #taskEditTitleInput:focus {
-  border-color: transparent;
-  box-shadow: none;
-  outline: none;
+/* Title field hidden in view mode (h3 header shows title instead) — visibility
+   keeps layout space so dialog height stays identical between modes */
+.task-mode-view .task-create-field:has(#taskEditTitleInput) {
+  visibility: hidden;
 }
 
 /* Meta chips: no hover in view mode */
@@ -2339,9 +2330,9 @@ button:disabled {
   opacity: 1;
 }
 
-/* Depth controls hidden in view mode */
+/* Depth controls invisible in view mode — visibility keeps row height */
 .task-mode-view .task-edit-depth-controls {
-  display: none;
+  visibility: hidden;
 }
 
 /* Sub-items textarea: borderless read-only area */
