@@ -1144,7 +1144,13 @@ async function fetchAndParseUrl(targetUrl, res) {
 
   let article;
   try {
-    const { document: parseDoc } = parseHTML(html);
+    let parseDoc = parseHTML(html).document;
+    // linkedom occasionally returns a document with null documentElement on unusual HTML;
+    // fall back to injecting into a clean skeleton
+    if (!parseDoc.documentElement) {
+      parseDoc = parseHTML("<!DOCTYPE html><html><head></head><body></body></html>").document;
+      try { parseDoc.body.innerHTML = html; } catch {}
+    }
     article = new Readability(parseDoc).parse();
   } catch (e) {
     console.error("[clip] Readability failed:", e);
