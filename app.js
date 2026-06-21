@@ -6526,7 +6526,11 @@ function setTaskDialogMode(mode) {
   const isView = mode === "view";
   if (els.taskEditBodyEl) els.taskEditBodyEl.hidden = isView;
   if (els.taskViewBody) els.taskViewBody.hidden = !isView;
-  if (els.taskEditDialogTitle) els.taskEditDialogTitle.textContent = isView ? "태스크" : "태스크 수정";
+  if (els.taskEditDialogTitle) {
+    els.taskEditDialogTitle.textContent = isView
+      ? (els.taskEditTitleInput?.value || "태스크")
+      : "태스크 수정";
+  }
   if (els.taskViewEditBtn) els.taskViewEditBtn.hidden = !isView;
   if (els.taskViewCloseBtn) els.taskViewCloseBtn.hidden = !isView;
   if (els.taskEditCancelBtn) els.taskEditCancelBtn.hidden = isView;
@@ -6565,12 +6569,11 @@ function renderTaskViewContent(task) {
     : "";
 
   return `
-    <div class="task-view-hero">
+    <div class="task-view-main">
       <span class="task-view-status ${statusClass}">${statusLabel}</span>
-      <p class="task-view-title">${escapeHtml(task.text || "")}</p>
+      ${datesHtml}
+      ${metaHtml}
     </div>
-    ${datesHtml}
-    ${metaHtml}
     ${subItemsHtml}
   `.trim();
 }

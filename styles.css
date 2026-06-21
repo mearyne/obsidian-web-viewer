@@ -2313,21 +2313,37 @@ button:disabled {
 }
 
 /* ── Task read mode ──────────────────────────────────────────────────────── */
+.task-edit-header h3 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .task-view-body {
   padding: 2px 0 6px;
 }
 
+/* PC: two-column (info | sub-bullets) when sub-items present */
 .task-view-content {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-/* Hero: status badge + title */
-.task-view-hero {
+@media (min-width: 601px) {
+  .task-view-content:has(.task-view-sub-items) {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 24px;
+    align-items: start;
+  }
+}
+
+/* Left column: status + dates + meta */
+.task-view-main {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 14px;
 }
 
 .task-view-status {
@@ -2343,15 +2359,6 @@ button:disabled {
 .task-view-status.deferred { background: rgba(255,152,0,0.15);   color: #e09000; }
 .task-view-status.pending  { background: rgba(91,141,217,0.15);  color: #5b8dd9; }
 
-.task-view-title {
-  color: var(--text);
-  font-size: 19px;
-  font-weight: 700;
-  line-height: 1.45;
-  margin: 0;
-  word-break: break-word;
-}
-
 /* Dates row */
 .task-view-dates {
   display: flex;
@@ -2363,11 +2370,11 @@ button:disabled {
   align-items: center;
   background: var(--surface-2, rgba(128,128,128,0.1));
   border-radius: 8px;
+  color: var(--text);
   display: inline-flex;
   font-size: 13px;
   gap: 4px;
   padding: 6px 12px;
-  color: var(--text);
 }
 
 .task-view-date-badge em {
@@ -2397,29 +2404,30 @@ button:disabled {
 .task-view-chip.pri-low  { background: rgba(76,175,80,0.12);   color: #4caf50; }
 .task-view-chip.tag      { color: var(--muted); }
 
-/* Sub-items block */
+/* Right column (PC) / bottom (mobile): sub-bullets */
 .task-view-sub-items {
   background: var(--surface-2, rgba(128,128,128,0.06));
   border-radius: 10px;
   padding: 10px 14px;
 }
 
+/* Mobile: add top gap when stacked */
+@media (max-width: 600px) {
+  .task-view-sub-items { margin-top: 6px; }
+  .task-view-date-badge { font-size: 12px; padding: 5px 10px; }
+  .task-view-chip { font-size: 12px; padding: 3px 10px; }
+}
+
 /* Override calendar-sized bullet styles inside read mode */
 .task-view-sub-body .task-sub-bullet {
-  font-size: 13.5px;
-  line-height: 1.6;
   color: var(--text);
+  font-size: 13.5px;
   gap: 7px;
+  line-height: 1.6;
 }
 .task-view-sub-body .task-sub-bullet span:first-child {
   font-size: 12px;
   opacity: 0.4;
-}
-
-@media (max-width: 600px) {
-  .task-view-title { font-size: 16px; }
-  .task-view-date-badge { font-size: 12px; padding: 5px 10px; }
-  .task-view-chip { font-size: 12px; padding: 3px 10px; }
 }
 
 /* task sub-bullet links */
