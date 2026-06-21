@@ -2067,14 +2067,19 @@ function handleImagePathInput() {
   scheduleSettingsSave();
 }
 
-function updateClipperBookmarklet() {
+async function updateClipperBookmarklet() {
   if (!els.clipperBookmarkletLink) return;
   const folder = normalizeVaultPath(els.clipperFolderInput?.value || "") || "Clippings";
   localStorage.setItem("obsidian-web-viewer-clipper-folder", folder);
-  const origin = window.location.origin;
-  const src = `${origin}/clipper.js?folder=${encodeURIComponent(folder)}&_=`;
-  const js = `javascript:(function(){var s=document.createElement('script');s.src='${src}'+Date.now();document.body.appendChild(s);})();`;
-  els.clipperBookmarkletLink.href = js;
+  els.clipperBookmarkletLink.textContent = "📎 Clip to Vault (로딩 중…)";
+  try {
+    const res = await fetch(`/api/clip-bookmarklet?folder=${encodeURIComponent(folder)}`);
+    const bookmarklet = await res.text();
+    els.clipperBookmarkletLink.href = bookmarklet;
+    els.clipperBookmarkletLink.textContent = "📎 Clip to Vault";
+  } catch {
+    els.clipperBookmarkletLink.textContent = "📎 Clip to Vault (로드 실패)";
+  }
 }
 
 function handleSearchExcludeInput() {

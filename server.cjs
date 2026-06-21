@@ -210,6 +210,11 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (requestPath === "/api/clip-bookmarklet") {
+    sendClipBookmarklet(url.searchParams.get("folder") || "Clippings", req, res);
+    return;
+  }
+
   if (requestPath === "/api/clip") {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -1092,6 +1097,30 @@ function sendJsonNoStore(res, status, value) {
     "Cache-Control": "no-store",
   });
   res.end(JSON.stringify(value));
+}
+
+function sendClipBookmarklet(folder, req, res) {
+  const readabilityPath = path.join(root, "node_modules/@mozilla/readability/Readability.js");
+  const clipperPath = path.join(root, "clipper-inline.js");
+  const origin = `${req.headers["x-forwarded-proto"] || "http"}://${req.headers.host}`;
+
+  try {
+    const readabilityCode = fs.readFileSync(readabilityPath, "utf8");
+    const clipperTemplate = fs.readFileSync(clipperPath, "utf8");
+    const clipperCode = clipperTemplate
+      .replace("'__SERVER__'", JSON.stringify(origin))
+      .replace("'__FOLDER__'", JSON.stringify(folder));
+    const combined = readabilityCode + "\n;\n" + clipperCode;
+    const bookmarklet = "javascript:" + encodeURIComponent("(function(){" + combined + "})();");
+    res.writeHead(200, {
+      "Content-Type": "text/plain; charset=utf-8",
+      "Access-Control-Allow-Origin": "*",
+      "Cache-Control": "no-store",
+    });
+    res.end(bookmarklet);
+  } catch (error) {
+    sendJson(res, 500, { error: error.message || "Bookmarklet build failed" });
+  }
 }
 
 function sendJsonCors(res, status, value) {
