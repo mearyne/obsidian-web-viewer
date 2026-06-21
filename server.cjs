@@ -50,7 +50,20 @@ const DEVICE_TABS_VAULT_PATH = ".viewer-open-tabs.json";
 const DEVICE_TABS_STALE_MS = 2 * 60 * 60 * 1000;
 const PINNED_TABS_VAULT_PATH = ".viewer-pinned-tabs.json";
 
+// Vault file list cache — avoids statSync on every browser load.
+// Invalidated on any write/rename/delete via the API.
+let vaultFilesCache = null;
+let vaultFilesCachedAt = 0;
+const VAULT_FILES_CACHE_TTL = 60_000; // re-stat after 60 s as a safety net
+
+function invalidateVaultFilesCache() {
+  vaultFilesCache = null;
+}
+
 function broadcastVaultEvent(event, data) {
+  if (event === "file-changed" || event === "file-renamed" || event === "file-deleted") {
+    invalidateVaultFilesCache();
+  }
   const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
   for (const res of sseClients) {
     try { res.write(payload); } catch {}
@@ -280,6 +293,12 @@ function getLanAddresses() {
 }
 
 function sendVault(res, sourceRoot, name) {
+  const now = Date.now();
+  if (vaultFilesCache && now - vaultFilesCachedAt < VAULT_FILES_CACHE_TTL) {
+    sendJson(res, 200, { name, writable: !readOnly, files: vaultFilesCache });
+    return;
+  }
+
   fs.readdir(sourceRoot, { withFileTypes: true }, (error) => {
     if (error) {
       res.writeHead(404, { "Content-Type": "application/json; charset=utf-8" });
@@ -288,9 +307,10 @@ function sendVault(res, sourceRoot, name) {
     }
 
     const createdTimes = readCreatedTimes();
-    const files = readVaultFiles(sourceRoot, "", createdTimes);
+    vaultFilesCache = readVaultFiles(sourceRoot, "", createdTimes);
+    vaultFilesCachedAt = Date.now();
     writeCreatedTimes(createdTimes);
-    sendJson(res, 200, { name, writable: !readOnly, files });
+    sendJson(res, 200, { name, writable: !readOnly, files: vaultFilesCache });
   });
 }
 

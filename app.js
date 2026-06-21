@@ -1209,6 +1209,9 @@ function hydrateServerVault(vaultName, files, writable = false) {
   state.root = makeDirNode(vaultName, "");
   state.directories.set("", state.root);
 
+  // Start calendar cache fetch immediately while file list is processed below.
+  const calendarCachePromise = loadCalendarCache();
+
   files.forEach((file) => {
     const normalizedPath = normalizeVaultPath(file.path);
     if (!normalizedPath || !isIndexedFile(normalizedPath)) return;
@@ -1252,9 +1255,11 @@ function hydrateServerVault(vaultName, files, writable = false) {
   if (firstLoad) {
     state.calendarDate = new Date();
     connectSSE();
-    void restoreActiveTab();
+    // Wait for calendar cache before restoring the active tab so the calendar
+    // renders with cached tasks on first paint instead of showing empty first.
+    calendarCachePromise.then(restoreActiveTab, restoreActiveTab);
   }
-  loadCalendarCache().finally(scheduleCalendarRefresh);
+  calendarCachePromise.finally(scheduleCalendarRefresh);
   loadRecentFilesCache().finally(refreshRecentFilesCache);
   invalidateRandomMarkdownCache();
   window.dispatchEvent(new CustomEvent("vaultReady"));
