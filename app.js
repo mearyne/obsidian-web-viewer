@@ -6345,8 +6345,8 @@ function bindTaskEditDialog() {
 
   els.taskViewEditBtn?.addEventListener("click", () => {
     setTaskDialogMode("edit");
-    els.taskEditTitleInput?.focus();
-    els.taskEditTitleInput?.select();
+    els.taskEditDialogTitle?.focus();
+    els.taskEditDialogTitle?.select();
   });
 
   els.taskViewCloseBtn?.addEventListener("click", async () => {
@@ -6381,7 +6381,7 @@ function bindTaskEditDialog() {
     if (task?.path) await openFile(task.path);
   });
 
-  els.taskEditTitleInput?.addEventListener("keydown", (e) => {
+  els.taskEditDialogTitle?.addEventListener("keydown", (e) => {
     handleTaskTitleEnter(e, els.taskEditConfirmBtn);
   });
 
@@ -6394,7 +6394,7 @@ function bindTaskEditDialog() {
   els.taskEditOutdentButton?.addEventListener("click", () => adjustTaskEditSubItemDepth(true));
 
   els.taskEditConfirmBtn?.addEventListener("click", async () => {
-    const title = els.taskEditTitleInput?.value.trim() || "";
+    const title = els.taskEditDialogTitle?.value.trim() || "";
     const dueDate = els.taskEditDueDateBtn?.dataset.date || "";
     const startDate = els.taskEditStartDateBtn?.dataset.date || "";
     const dueTime = normalizeTaskTimeInput(els.taskEditDueTimeInput);
@@ -6411,13 +6411,13 @@ function bindTaskEditDialog() {
 
   els.taskEditDialog.addEventListener("keydown", (e) => {
     if (e.key === "Escape") { e.preventDefault(); els.taskEditDialog.close("cancel"); }
-    if (e.key === "Enter" && e.target === els.taskEditTitleInput) { e.preventDefault(); els.taskEditConfirmBtn?.click(); }
+    if (e.key === "Enter" && e.target === els.taskEditDialogTitle) { e.preventDefault(); els.taskEditConfirmBtn?.click(); }
     const isView = els.taskEditDialog.querySelector(".task-create-form")?.classList.contains("task-mode-view");
     if (isView && e.key === "e" && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
       e.preventDefault();
       setTaskDialogMode("edit");
-      els.taskEditTitleInput?.focus();
-      els.taskEditTitleInput?.select();
+      els.taskEditDialogTitle?.focus();
+      els.taskEditDialogTitle?.select();
     }
     if (!isView && (e.ctrlKey || e.metaKey) && e.key === "s") {
       e.preventDefault();
@@ -6561,7 +6561,6 @@ function setTaskDialogMode(mode) {
   const form = els.taskEditDialog?.querySelector(".task-create-form");
   if (form) form.classList.toggle("task-mode-view", isView);
 
-  if (els.taskEditTitleInput) els.taskEditTitleInput.readOnly = isView;
   if (els.taskEditSubItemsInput) {
     els.taskEditSubItemsInput.readOnly = isView;
     els.taskEditSubItemsInput.hidden = isView;
@@ -6580,11 +6579,7 @@ function setTaskDialogMode(mode) {
     els.taskEditOutdentButton,
   ].forEach((el) => { if (el) el.disabled = isView; });
 
-  if (els.taskEditDialogTitle) {
-    els.taskEditDialogTitle.textContent = isView
-      ? (els.taskEditTitleInput?.value || "태스크")
-      : "태스크 수정";
-  }
+  if (els.taskEditDialogTitle) els.taskEditDialogTitle.readOnly = isView;
   if (els.taskViewEditBtn) els.taskViewEditBtn.hidden = !isView;
   if (els.taskViewCloseBtn) els.taskViewCloseBtn.hidden = !isView;
   if (els.taskEditCancelBtn) els.taskEditCancelBtn.hidden = isView;
@@ -6603,6 +6598,7 @@ async function showTaskEditDialog(task) {
   state.taskEditActiveField = null;
   state.taskEditPickerMonth = null;
   if (els.taskEditTitleInput) els.taskEditTitleInput.value = task.text || "";
+  if (els.taskEditDialogTitle) els.taskEditDialogTitle.value = task.text || "";
   if (els.taskEditChecked) els.taskEditChecked.checked = task.checked || false;
   if (els.taskEditDeferred) els.taskEditDeferred.checked = task.deferred || false;
   if (els.taskEditStartTimeInput) els.taskEditStartTimeInput.value = task.startTime || "";

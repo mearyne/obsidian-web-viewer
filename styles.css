@@ -2301,18 +2301,42 @@ button:disabled {
   background: rgba(231, 76, 60, 0.1);
 }
 
-/* ── Task read mode (task-mode-view) ─────────────────────────────────────── */
-.task-edit-header h3 {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+/* ── Task title input in dialog header ───────────────────────────────────── */
+
+/* Body title field is always hidden — header input is the title field */
+.task-create-field:has(#taskEditTitleInput) {
+  display: none;
 }
 
-/* Title field hidden in view mode (h3 header shows title instead) — visibility
-   keeps layout space so dialog height stays identical between modes */
-.task-mode-view .task-create-field:has(#taskEditTitleInput) {
-  visibility: hidden;
+.task-dialog-title-input {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text);
+  flex: 1;
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.3;
+  min-width: 0;
+  outline: none;
+  overflow: hidden;
+  padding: 0;
+  text-overflow: ellipsis;
+  transition: border-color 0.15s;
+  white-space: nowrap;
+  width: 100%;
 }
+
+.task-dialog-title-input:not(:read-only):focus {
+  border-bottom-color: var(--accent, #5b8dd9);
+}
+
+.task-dialog-title-input:read-only {
+  cursor: default;
+  pointer-events: none;
+}
+
+/* ── Task read mode (task-mode-view) ─────────────────────────────────────── */
 
 /* Meta chips: no hover in view mode */
 .task-mode-view .task-meta-chip {
