@@ -210,6 +210,19 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (requestPath === "/api/clip") {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return; }
+    if (req.method !== "POST") { sendJsonCors(res, 405, { error: "Method not allowed" }); return; }
+    receiveBody(req, (error, body) => {
+      if (error) { sendJsonCors(res, 400, { error: "Invalid request body" }); return; }
+      clipWebPage(body, res);
+    });
+    return;
+  }
+
   const filePath = path.normalize(path.join(root, requestPath === "/" ? "index.html" : requestPath));
 
   if (!filePath.startsWith(root)) {
@@ -1079,4 +1092,56 @@ function sendJsonNoStore(res, status, value) {
     "Cache-Control": "no-store",
   });
   res.end(JSON.stringify(value));
+}
+
+function sendJsonCors(res, status, value) {
+  res.writeHead(status, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Access-Control-Allow-Origin": "*",
+  });
+  res.end(JSON.stringify(value));
+}
+
+function clipWebPage(body, res) {
+  if (readOnly) { sendJsonCors(res, 403, { error: "Vault is read-only" }); return; }
+
+  let payload;
+  try { payload = JSON.parse(body || "{}"); } catch { sendJsonCors(res, 400, { error: "Invalid JSON" }); return; }
+
+  const requestedPath = typeof payload.path === "string" ? payload.path : "";
+  const safePath = normalizeVaultPath(requestedPath);
+  if (!safePath || !safePath.endsWith(".md")) {
+    sendJsonCors(res, 400, { error: "Invalid path: must be a .md file" });
+    return;
+  }
+
+  const content = typeof payload.content === "string" ? payload.content : "";
+  if (!content) { sendJsonCors(res, 400, { error: "Missing content" }); return; }
+
+  let finalSafePath = safePath;
+  let finalFilePath = resolveVaultFilePath(safePath);
+  if (!finalFilePath) { sendJsonCors(res, 403, { error: "Forbidden path" }); return; }
+
+  // Avoid overwriting: append suffix if file exists
+  let suffix = 0;
+  while (fs.existsSync(finalFilePath) && suffix < 99) {
+    suffix++;
+    finalSafePath = safePath.replace(/\.md$/, "") + " " + suffix + ".md";
+    finalFilePath = resolveVaultFilePath(finalSafePath) || "";
+  }
+  if (!finalFilePath) { sendJsonCors(res, 403, { error: "Forbidden path" }); return; }
+
+  try {
+    fs.mkdirSync(path.dirname(finalFilePath), { recursive: true });
+    fs.writeFileSync(finalFilePath, content, "utf8");
+    forgetTextFileCache(finalSafePath);
+    const stat = fs.statSync(finalFilePath);
+    const createdTimes = readCreatedTimes();
+    createdTimes[finalSafePath] = createdAtFromStat(stat);
+    writeCreatedTimes(createdTimes);
+    sendJsonCors(res, 200, { path: finalSafePath, size: stat.size });
+    broadcastVaultEvent("file-changed", { path: finalSafePath, updatedAt: stat.mtimeMs });
+  } catch (error) {
+    sendJsonCors(res, 500, { error: error.message || "Write failed" });
+  }
 }
