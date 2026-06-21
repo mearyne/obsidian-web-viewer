@@ -675,35 +675,19 @@ function handleUrlAction() {
     window.addEventListener("vaultReady", () => openNewNote(), { once: true });
   }
   const sharedUrl = params.get("url") || params.get("text") || "";
+  const sharedTitle = params.get("title") || "";
   if (sharedUrl && sharedUrl.startsWith("http")) {
     window.history.replaceState(null, "", window.location.pathname);
-    handleSharedUrl(sharedUrl);
+    handleSharedUrl(sharedUrl, sharedTitle);
   }
 }
 
-async function handleSharedUrl(sharedUrl) {
+function handleSharedUrl(sharedUrl, sharedTitle = "") {
   const folder = localStorage.getItem("obsidian-web-viewer-clipper-folder") || "Clippings";
-  showClipperPopup({ title: "불러오는 중…", content: "", url: sharedUrl, loading: true, folder });
-  try {
-    const res = await fetch(`/api/fetch-clip?url=${encodeURIComponent(sharedUrl)}`);
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "서버 오류");
-    document.getElementById("owv-clip-overlay")?.remove();
-    showClipperPopup({ title: data.title, markdown: data.markdown, url: sharedUrl, folder });
-  } catch (e) {
-    const status = document.getElementById("owv-clip-status");
-    if (status) {
-      status.textContent = "불러오기 실패: " + e.message;
-      status.style.color = "#e05a5a";
-    }
-    const preview = document.getElementById("owv-clip-preview");
-    if (preview) preview.textContent = "";
-    const saveBtn = document.getElementById("owv-clip-save");
-    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = "Vault에 저장"; }
-  }
+  showClipperPopup({ title: sharedTitle, url: sharedUrl, folder });
 }
 
-function showClipperPopup({ title, markdown = "", url, loading = false, folder }) {
+function showClipperPopup({ title, url, folder }) {
   document.getElementById("owv-clip-overlay")?.remove();
 
   const today = new Date().toISOString().slice(0, 10);
@@ -711,7 +695,7 @@ function showClipperPopup({ title, markdown = "", url, loading = false, folder }
   const defaultPath = `${folder || "Clippings"}/${today} ${safeTitle}.md`;
 
   const buildContent = (t) =>
-    `---\ntitle: "${t.replace(/"/g, '\\"')}"\nurl: ${url}\ndate: ${today}\n---\n\n${markdown}`;
+    `---\ntitle: "${t.replace(/"/g, '\\"')}"\nurl: ${url}\ndate: ${today}\n---\n\n[${t}](${url})`;
 
   const overlay = document.createElement("div");
   overlay.id = "owv-clip-overlay";
@@ -721,7 +705,7 @@ function showClipperPopup({ title, markdown = "", url, loading = false, folder }
 
   const sheet = document.createElement("div");
   sheet.id = "owv-clip-sheet";
-  sheet.innerHTML = `<div id="owv-clip-header"><span id="owv-clip-badge">📎 Web Clipper</span><button id="owv-clip-close" aria-label="닫기">×</button></div><div id="owv-clip-fields"><div class="owv-field"><label>제목</label><input id="owv-clip-title" type="text" autocomplete="off" /></div><div class="owv-field"><label>저장 경로</label><input id="owv-clip-path" type="text" autocomplete="off" /></div></div><div id="owv-clip-preview"></div><div id="owv-clip-status">${loading ? "페이지 내용을 불러오는 중…" : ""}</div><div id="owv-clip-footer"><button id="owv-clip-cancel">취소</button><button id="owv-clip-save"${loading ? " disabled" : ""}>Vault에 저장</button></div>`;
+  sheet.innerHTML = `<div id="owv-clip-header"><span id="owv-clip-badge">📎 Web Clipper</span><button id="owv-clip-close" aria-label="닫기">×</button></div><div id="owv-clip-fields"><div class="owv-field"><label>제목</label><input id="owv-clip-title" type="text" autocomplete="off" /></div><div class="owv-field"><label>저장 경로</label><input id="owv-clip-path" type="text" autocomplete="off" /></div></div><div id="owv-clip-preview"></div><div id="owv-clip-status"></div><div id="owv-clip-footer"><button id="owv-clip-cancel">취소</button><button id="owv-clip-save">Vault에 저장</button></div>`;
 
   overlay.appendChild(styleEl);
   overlay.appendChild(sheet);
@@ -735,7 +719,7 @@ function showClipperPopup({ title, markdown = "", url, loading = false, folder }
 
   titleInput.value = title || "";
   pathInput.value = defaultPath;
-  preview.textContent = loading ? "" : markdown.slice(0, 4000) + (markdown.length > 4000 ? "\n\n…(미리보기 생략)" : "");
+  preview.textContent = url || "";
 
   titleInput.addEventListener("input", () => {
     const t = titleInput.value.trim() || safeTitle;
