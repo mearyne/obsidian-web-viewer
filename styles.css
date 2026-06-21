@@ -2312,6 +2312,85 @@ button:disabled {
   background: rgba(231, 76, 60, 0.1);
 }
 
+/* Task view mode */
+.task-view-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 0 8px;
+}
+
+.task-view-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.task-view-title {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.task-view-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.task-view-chip {
+  background: var(--surface-2, rgba(128,128,128,0.12));
+  border-radius: 12px;
+  font-size: 12px;
+  padding: 3px 10px;
+}
+
+.task-view-dates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.task-view-date-badge {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.task-view-sub-items {
+  border-top: 1px solid var(--line);
+  margin-top: 4px;
+  padding-top: 8px;
+}
+
+/* task sub-bullet links */
+.task-sub-bullet a {
+  color: var(--link, #5b8dd9);
+  text-decoration: none;
+}
+.task-sub-bullet a:hover {
+  text-decoration: underline;
+}
+
+/* task create sub-bullets */
+.task-create-sub-items textarea {
+  background: var(--surface-2, rgba(128,128,128,0.08));
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  padding: 8px 10px;
+  resize: vertical;
+  width: 100%;
+  box-sizing: border-box;
+}
+.task-create-sub-items textarea:focus {
+  border-color: var(--accent, #5b8dd9);
+  outline: none;
+}
+
 .dialog-buttons {
   display: flex;
   gap: 6px;

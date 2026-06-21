@@ -691,7 +691,23 @@ function handleUrlAction() {
 
 function handleSharedUrl(sharedUrl, sharedTitle = "") {
   const folder = localStorage.getItem("obsidian-web-viewer-clipper-folder") || "Clippings";
-  showClipperPopup({ title: sharedTitle, url: sharedUrl, folder });
+  const today = new Date().toISOString().slice(0, 10);
+  const safeTitle = (sharedTitle || sharedUrl).replace(/[/\\:*?"<>|]/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
+  const path = `${folder}/${today} ${safeTitle}.md`;
+  const content = `---\ntitle: "${safeTitle.replace(/"/g, '\\"')}"\nurl: ${sharedUrl}\ndate: ${today}\n---\n\n[${safeTitle}](${sharedUrl})`;
+  fetch("/api/clip", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path, content }),
+  })
+    .then((res) => res.json())
+    .then((json) => {
+      if (json.error) throw new Error(json.error);
+      showAppToast(`✓ 저장됨: ${safeTitle.length > 30 ? safeTitle.slice(0, 30) + "…" : safeTitle}`);
+    })
+    .catch((e) => {
+      showAppToast(`저장 실패: ${e.message}`, "error");
+    });
 }
 
 function showClipperPopup({ title, url, folder }) {
@@ -2296,6 +2312,9 @@ async function createAndOpenNote(title, dirPathOverride) {
 }
 
 async function openCreatedNoteInEditMode(path, node, content) {
+  if (state.activeView === "calendar") {
+    await createTab();
+  }
   state.currentPath = path;
   state.currentContent = content;
   state.currentNode = node;
@@ -2966,11 +2985,28 @@ async function handleEditorPaste(event) {
   const items = event.clipboardData?.items;
   if (!items) return;
   const imageItem = Array.from(items).find((item) => item.type.startsWith("image/"));
-  if (!imageItem) return;
+  if (imageItem) {
+    event.preventDefault();
+    const blob = imageItem.getAsFile();
+    if (blob) await uploadImageToEditor(blob, imageItem.type);
+    return;
+  }
+  const text = event.clipboardData.getData("text/plain")?.trim() || "";
+  if (/^https?:\/\/\S+$/.test(text)) {
+    event.preventDefault();
+    insertEditorText(els.markdownEditor, `![](${text})`);
+  }
+}
+
+function handleSubItemsPaste(event) {
+  const text = event.clipboardData?.getData("text/plain")?.trim() || "";
+  if (!/^https?:\/\/\S+$/.test(text)) return;
   event.preventDefault();
-  const blob = imageItem.getAsFile();
-  if (!blob) return;
-  await uploadImageToEditor(blob, imageItem.type);
+  const ta = event.target;
+  const { selectionStart, selectionEnd, value } = ta;
+  const insertion = `![](${text})`;
+  ta.value = value.slice(0, selectionStart) + insertion + value.slice(selectionEnd);
+  ta.setSelectionRange(selectionStart + insertion.length, selectionStart + insertion.length);
 }
 
 function registerUploadedFileInVault(filePath, size = 0) {
@@ -5007,7 +5043,26 @@ function renderSubItemContent(content) {
   if (mdImg) {
     return `<img class="task-sub-img" src="${escapeAttribute(mdImg[2])}" alt="${escapeAttribute(mdImg[1])}" loading="lazy">`;
   }
-  return `<span>${escapeHtml(content)}</span>`;
+  return `<span>${renderInlineMarkdown(content)}</span>`;
+}
+
+function renderInlineMarkdown(text) {
+  const parts = [];
+  let last = 0;
+  const linkRe = /\[([^\]]*)\]\((https?:\/\/[^\s)]+)\)/g;
+  let m;
+  while ((m = linkRe.exec(text)) !== null) {
+    parts.push(escapeHtml(text.slice(last, m.index)));
+    parts.push(`<a href="${m[2].replace(/"/g, "%22")}" target="_blank" rel="noopener noreferrer">${escapeHtml(m[1] || m[2])}</a>`);
+    last = m.index + m[0].length;
+  }
+  parts.push(escapeHtml(text.slice(last)));
+  let html = parts.join("");
+  html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  html = html.replace(/\*([^*\s][^*]*?)\*/g, "<em>$1</em>");
+  html = html.replace(/~~(.+?)~~/g, "<del>$1</del>");
+  html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
+  return html;
 }
 
 function renderSubItemsHtml(subItems) {
@@ -5998,6 +6053,7 @@ async function showTaskCreateDialog(dueDate, startDate = "") {
   state.taskDialogActiveField = null;
   state.taskDialogMeta = { kind: "할일", category: null, priority: null, tags: [] };
   if (els.taskTitleInput) els.taskTitleInput.value = "";
+  if (els.taskCreateSubItemsInput) els.taskCreateSubItemsInput.value = "";
   if (els.taskStartTimeInput) els.taskStartTimeInput.value = "";
   if (els.taskDueTimeInput) els.taskDueTimeInput.value = "";
   setTaskDialogDate("due", dueDate);
@@ -6205,8 +6261,11 @@ function bindTaskCreateDialog() {
     const dueTime = normalizeTaskTimeInput(els.taskDueTimeInput);
     const startPart = startDate ? ` 🛫 ${startDate}${startTime ? " " + startTime : ""}` : "";
     const duePart = ` 📅 ${dueDate}${dueTime ? " " + dueTime : ""}`;
+    const subItemsText = els.taskCreateSubItemsInput?.value || "";
+    const subItemLines = normalizeTaskSubItemsInput(subItemsText).map((line) => `  ${line}`);
     const taskLine = `${prefix}- [ ] ${title}${metaStr}${startPart}${duePart}`;
-    const nextContent = content + taskLine + "\n";
+    const subItemsStr = subItemLines.length ? "\n" + subItemLines.join("\n") : "";
+    const nextContent = content + taskLine + subItemsStr + "\n";
     await writeNodeContent(node, nextContent, { backup: false, previousContent: content });
     if (typeof node.content === "string") node.content = nextContent;
     if (state.currentPath === node.path) {
@@ -6258,6 +6317,26 @@ function bindTaskEditDialog() {
     if (els.taskEditDeferred.checked && els.taskEditChecked) els.taskEditChecked.checked = false;
   });
 
+  els.taskViewEditBtn?.addEventListener("click", () => {
+    setTaskDialogMode("edit");
+    els.taskEditTitleInput?.focus();
+    els.taskEditTitleInput?.select();
+  });
+
+  els.taskViewCloseBtn?.addEventListener("click", async () => {
+    const task = state.taskEditTask;
+    if (task) {
+      const checked = els.taskEditChecked?.checked ?? false;
+      const deferred = els.taskEditDeferred?.checked ?? false;
+      if (checked !== (task.checked ?? false) || deferred !== (task.deferred ?? false)) {
+        const dueDate = els.taskEditDueDateBtn?.dataset.date || task.dates?.due || task.dates?.end || task.date || "";
+        const startDate = els.taskEditStartDateBtn?.dataset.date || task.dates?.start || "";
+        await saveTaskEdit(task, task.text, state.taskEditMeta, dueDate, startDate, checked, task.dueTime || "", task.startTime || "", taskSubItemsToEditableText(task.subItems || []), deferred);
+      }
+    }
+    els.taskEditDialog.close("close");
+  });
+
   els.taskEditCancelBtn?.addEventListener("click", () => {
     els.taskEditDialog.close("cancel");
   });
@@ -6283,6 +6362,8 @@ function bindTaskEditDialog() {
   els.taskEditSubItemsInput?.addEventListener("keydown", handleTaskSubItemsEnter);
   els.taskEditSubItemsInput?.addEventListener("focus", ensureTaskEditSubItemBullet);
   els.taskEditSubItemsInput?.addEventListener("input", normalizeTaskEditSubItemDraft);
+  els.taskEditSubItemsInput?.addEventListener("paste", handleSubItemsPaste);
+  els.taskCreateSubItemsInput?.addEventListener("paste", handleSubItemsPaste);
   els.taskEditIndentButton?.addEventListener("click", () => adjustTaskEditSubItemDepth(false));
   els.taskEditOutdentButton?.addEventListener("click", () => adjustTaskEditSubItemDepth(true));
 
@@ -6436,6 +6517,43 @@ function renderTaskEditDatePicker(field) {
   });
 }
 
+function setTaskDialogMode(mode) {
+  const isView = mode === "view";
+  if (els.taskEditBodyEl) els.taskEditBodyEl.hidden = isView;
+  if (els.taskViewBody) els.taskViewBody.hidden = !isView;
+  if (els.taskEditDialogTitle) els.taskEditDialogTitle.textContent = isView ? "태스크" : "태스크 수정";
+  if (els.taskViewEditBtn) els.taskViewEditBtn.hidden = !isView;
+  if (els.taskViewCloseBtn) els.taskViewCloseBtn.hidden = !isView;
+  if (els.taskEditCancelBtn) els.taskEditCancelBtn.hidden = isView;
+  if (els.taskEditConfirmBtn) els.taskEditConfirmBtn.hidden = isView;
+}
+
+function renderTaskViewContent(task) {
+  const statusIcon = task.checked ? "✅" : task.deferred ? "⏭" : "⬜";
+  const meta = [];
+  if (task.kind) meta.push(task.kind === "일정" ? "🗓 일정" : "✓ 할일");
+  if (task.category) meta.push(task.category);
+  if (task.priority) {
+    const priMap = { "상": "🔴 상", "중": "🟡 중", "하": "🟢 하" };
+    meta.push(priMap[task.priority] || task.priority);
+  }
+  if (task.tags?.length) meta.push(...task.tags.map((t) => `#${t}`));
+  const dates = [];
+  if (task.dates?.start) dates.push(`🛫 ${task.dates.start}${task.startTime ? " " + task.startTime : ""}`);
+  const dueDate = task.dates?.due || task.dates?.end;
+  if (dueDate) dates.push(`📅 ${dueDate}${task.dueTime ? " " + task.dueTime : ""}`);
+  const metaHtml = meta.length
+    ? `<div class="task-view-meta">${meta.map((v) => `<span class="task-view-chip">${escapeHtml(v)}</span>`).join("")}</div>`
+    : "";
+  const datesHtml = dates.length
+    ? `<div class="task-view-dates">${dates.map((d) => `<span class="task-view-date-badge">${escapeHtml(d)}</span>`).join("")}</div>`
+    : "";
+  const subItemsHtml = task.subItems?.length
+    ? `<div class="task-view-sub-items task-sub-items-inline">${renderSubItemsHtml(task.subItems)}</div>`
+    : "";
+  return `<div class="task-view-title">${escapeHtml(statusIcon)} ${escapeHtml(task.text || "")}</div>${metaHtml}${datesHtml}${subItemsHtml}`;
+}
+
 async function showTaskEditDialog(task) {
   if (!els.taskEditDialog) return;
   state.taskEditTask = task;
@@ -6458,12 +6576,12 @@ async function showTaskEditDialog(task) {
   renderEditTagChips();
   updateTaskEditMetaUI();
   renderTaskEditDatePicker(null);
+  if (els.taskViewContent) els.taskViewContent.innerHTML = renderTaskViewContent(task);
+  setTaskDialogMode("view");
   els.taskEditDialog.showModal();
   positionTaskEditDialog();
   const vvEdit = window.visualViewport;
   if (vvEdit) vvEdit.addEventListener("resize", positionTaskEditDialog);
-  els.taskEditTitleInput?.focus();
-  els.taskEditTitleInput?.select();
   await new Promise((resolve) => {
     const onClose = () => {
       els.taskEditDialog.removeEventListener("close", onClose);
