@@ -367,6 +367,10 @@
           </div>
         </div>
         <div id="taskDatePickerCal" class="task-date-picker-cal" hidden></div>
+        <div class="task-create-field task-create-sub-items">
+          <label>하위 불릿 <span class="task-date-optional">(선택)</span></label>
+          <textarea id="taskCreateSubItemsInput" rows="3" spellcheck="false" placeholder="- 세부 내용"></textarea>
+        </div>
         <div class="dialog-buttons">
           <button type="button" id="taskCreateCancelBtn">취소</button>
           <button type="button" id="taskCreateConfirmBtn">만들기</button>
@@ -377,11 +381,14 @@
     <dialog id="taskEditDialog" class="task-create-dialog">
       <div class="task-create-form task-edit-form">
         <div class="task-edit-header">
-          <h3>태스크 수정</h3>
+          <h3 id="taskEditDialogTitle">태스크</h3>
           <label class="task-edit-done-label"><input type="checkbox" id="taskEditChecked" /> 완료</label>
           <label class="task-edit-done-label"><input type="checkbox" id="taskEditDeferred" /> 미루기</label>
         </div>
-        <div class="task-edit-body">
+        <div id="taskViewBody" class="task-view-body" hidden>
+          <div id="taskViewContent" class="task-view-content"></div>
+        </div>
+        <div class="task-edit-body" id="taskEditBodyEl">
           <div class="task-edit-main">
             <div class="task-create-field">
               <label>제목</label>
@@ -448,6 +455,8 @@
         <div class="dialog-buttons">
           <button type="button" id="taskEditOpenFileBtn" class="task-edit-open-btn">📄 파일 열기</button>
           <button type="button" id="taskEditDeleteBtn" class="task-edit-delete-btn">🗑 삭제</button>
+          <button type="button" id="taskViewCloseBtn" hidden>닫기</button>
+          <button type="button" id="taskViewEditBtn" hidden>편집</button>
           <button type="button" id="taskEditCancelBtn">취소</button>
           <button type="button" id="taskEditConfirmBtn">저장</button>
         </div>
