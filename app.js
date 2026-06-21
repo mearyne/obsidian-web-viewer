@@ -142,6 +142,8 @@ const els = {
   dailyNotePathInput: document.querySelector("#dailyNotePathInput"),
   newNotePathInput: document.querySelector("#newNotePathInput"),
   imagePathInput: document.querySelector("#imagePathInput"),
+  clipperFolderInput: document.querySelector("#clipperFolderInput"),
+  clipperBookmarkletLink: document.querySelector("#clipperBookmarkletLink"),
   searchExcludeInput: document.querySelector("#searchExcludeInput"),
   searchStatus: document.querySelector("#searchStatus"),
   contentSearchToggleButton: document.querySelector("#contentSearchToggleButton"),
@@ -376,6 +378,7 @@ els.editorImageInput?.addEventListener("change", async (e) => {
   await uploadImageToEditor(file, file.type);
 });
 els.imagePathInput?.addEventListener("input", handleImagePathInput);
+els.clipperFolderInput?.addEventListener("input", updateClipperBookmarklet);
 els.searchExcludeInput?.addEventListener("input", handleSearchExcludeInput);
 els.newNoteButton?.addEventListener("click", openNewNote);
 els.randomFileButton.addEventListener("click", openRandomMarkdown);
@@ -1971,6 +1974,9 @@ function initOptions() {
   const savedImagePath = localStorage.getItem("obsidian-web-viewer-image-path") || "";
   state.imageSavePath = savedImagePath;
   if (els.imagePathInput) els.imagePathInput.value = savedImagePath;
+  const savedClipperFolder = localStorage.getItem("obsidian-web-viewer-clipper-folder") || "Clippings";
+  if (els.clipperFolderInput) els.clipperFolderInput.value = savedClipperFolder;
+  updateClipperBookmarklet();
   const savedSearchExclude = localStorage.getItem("obsidian-web-viewer-search-exclude") || "";
   state.searchExcludePaths = parsePathList(savedSearchExclude);
   if (els.searchExcludeInput) els.searchExcludeInput.value = savedSearchExclude;
@@ -2059,6 +2065,16 @@ function handleImagePathInput() {
   state.imageSavePath = value;
   localStorage.setItem("obsidian-web-viewer-image-path", value);
   scheduleSettingsSave();
+}
+
+function updateClipperBookmarklet() {
+  if (!els.clipperBookmarkletLink) return;
+  const folder = normalizeVaultPath(els.clipperFolderInput?.value || "") || "Clippings";
+  localStorage.setItem("obsidian-web-viewer-clipper-folder", folder);
+  const origin = window.location.origin;
+  const src = `${origin}/clipper.js?folder=${encodeURIComponent(folder)}&_=`;
+  const js = `javascript:(function(){var s=document.createElement('script');s.src='${src}'+Date.now();document.body.appendChild(s);})();`;
+  els.clipperBookmarkletLink.href = js;
 }
 
 function handleSearchExcludeInput() {

@@ -1159,6 +1159,23 @@ button:disabled {
   width: 100%;
 }
 
+.clipper-bookmarklet-link {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--accent, #5b8dd9);
+  display: inline-block;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 7px 12px;
+  text-decoration: none;
+  user-select: none;
+}
+
+.clipper-bookmarklet-link:active {
+  opacity: 0.7;
+}
+
 .option-reset-button {
   background: var(--surface);
   border-color: var(--line);
