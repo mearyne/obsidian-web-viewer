@@ -6435,6 +6435,11 @@ function handleTaskTitleEnter(event, confirmButton) {
 
 function handleTaskSubItemsEnter(event) {
   if (event.target.readOnly) return;
+  if (event.key === "Tab" && !event.ctrlKey && !event.metaKey && !event.altKey && !event.isComposing) {
+    event.preventDefault();
+    adjustTaskEditSubItemDepth(event.shiftKey);
+    return;
+  }
   if (event.key !== "Enter" && event.key !== "NumpadEnter") return;
   if (event.isComposing || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return;
   event.preventDefault();
