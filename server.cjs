@@ -1142,20 +1142,35 @@ async function fetchAndParseUrl(targetUrl, res) {
     sendJsonCors(res, 502, { error: "Failed to fetch URL: " + (e.message || String(e)) }); return;
   }
 
+  let article;
   try {
-    const { document } = parseHTML(html);
-    const article = new Readability(document).parse();
-    if (!article) { sendJsonCors(res, 422, { error: "Could not extract article content" }); return; }
-    const markdown = createMarkdownContent(article.content || "", targetUrl);
-    sendJsonCors(res, 200, {
-      title: article.title || "",
-      markdown,
-      excerpt: article.excerpt || "",
-      url: targetUrl,
-    });
+    const { document: parseDoc } = parseHTML(html);
+    article = new Readability(parseDoc).parse();
   } catch (e) {
-    sendJsonCors(res, 500, { error: "Parse failed: " + (e.message || String(e)) });
+    console.error("[clip] Readability failed:", e);
+    sendJsonCors(res, 500, { error: "Readability failed: " + (e.message || String(e)) }); return;
   }
+  if (!article) { sendJsonCors(res, 422, { error: "Could not extract article content" }); return; }
+
+  let markdown;
+  try {
+    // Re-init linkedom globals fresh each request so prior parses can't corrupt state
+    const { window: fw, document: fd, DOMParser: fDP } = parseHTML("<html><body></body></html>");
+    global.window = fw;
+    global.document = fd;
+    global.DOMParser = fDP;
+    markdown = createMarkdownContent(article.content || "", targetUrl);
+  } catch (e) {
+    console.error("[clip] defuddle failed:", e);
+    sendJsonCors(res, 500, { error: "Defuddle failed: " + (e.message || String(e)) }); return;
+  }
+
+  sendJsonCors(res, 200, {
+    title: article.title || "",
+    markdown,
+    excerpt: article.excerpt || "",
+    url: targetUrl,
+  });
 }
 
 function sendClipBookmarklet(folder, req, res) {
@@ -1208,7 +1223,17 @@ function clipWebPage(body, res) {
     const today = new Date().toISOString().slice(0, 10);
     const title = typeof payload.title === "string" ? payload.title : "";
     const pageUrl = typeof payload.url === "string" ? payload.url : "";
-    const md = createMarkdownContent(payload.html, pageUrl);
+    let md;
+    try {
+      const { window: fw, document: fd, DOMParser: fDP } = parseHTML("<html><body></body></html>");
+      global.window = fw;
+      global.document = fd;
+      global.DOMParser = fDP;
+      md = createMarkdownContent(payload.html, pageUrl);
+    } catch (e) {
+      console.error("[clip] defuddle failed:", e);
+      sendJsonCors(res, 500, { error: "Defuddle failed: " + (e.message || String(e)) }); return;
+    }
     content = `---\ntitle: "${title.replace(/"/g, '\\"')}"\nurl: ${pageUrl}\ndate: ${today}\n---\n\n${md}`;
   } else {
     content = typeof payload.content === "string" ? payload.content : "";
