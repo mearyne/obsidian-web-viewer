@@ -5,7 +5,7 @@ const path = require("path");
 const crypto = require("crypto");
 const sharp = require("sharp");
 const { Readability } = require("@mozilla/readability");
-const JSDOMParser = require("@mozilla/readability/JSDOMParser");
+const { parseHTML } = require("linkedom");
 
 const root = __dirname;
 const bundledSampleRoot = path.join(root, "sample-vault");
@@ -1136,11 +1136,8 @@ async function fetchAndParseUrl(targetUrl, res) {
   }
 
   try {
-    const parser = new JSDOMParser();
-    const doc = parser.parse(html, targetUrl);
-    doc.documentURI = targetUrl;
-    doc.baseURI = targetUrl;
-    const article = new Readability(doc).parse();
+    const { document } = parseHTML(html);
+    const article = new Readability(document).parse();
     if (!article) { sendJsonCors(res, 422, { error: "Could not extract article content" }); return; }
     sendJsonCors(res, 200, {
       title: article.title || "",
