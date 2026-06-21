@@ -689,7 +689,7 @@ async function handleSharedUrl(sharedUrl) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "서버 오류");
     document.getElementById("owv-clip-overlay")?.remove();
-    showClipperPopup({ title: data.title, content: data.content, url: sharedUrl, folder });
+    showClipperPopup({ title: data.title, markdown: data.markdown, url: sharedUrl, folder });
   } catch (e) {
     const status = document.getElementById("owv-clip-status");
     if (status) {
@@ -703,72 +703,15 @@ async function handleSharedUrl(sharedUrl) {
   }
 }
 
-function htmlToMarkdownApp(html) {
-  function escMd(t) { return t.replace(/[*_[\]`\\]/g, "\\$&"); }
-  function toMd(node) {
-    if (node.nodeType === 3) return escMd(node.textContent);
-    if (node.nodeType !== 1) return "";
-    const tag = node.tagName.toLowerCase();
-    const kids = () => Array.from(node.childNodes).map(toMd).join("");
-    const block = (s) => "\n\n" + s.trim() + "\n\n";
-    switch (tag) {
-      case "script": case "style": case "noscript": case "iframe":
-      case "button": case "nav": case "footer": case "form": return "";
-      case "h1": return block("# " + kids().trim());
-      case "h2": return block("## " + kids().trim());
-      case "h3": return block("### " + kids().trim());
-      case "h4": return block("#### " + kids().trim());
-      case "h5": return block("##### " + kids().trim());
-      case "h6": return block("###### " + kids().trim());
-      case "p": return block(kids());
-      case "br": return "  \n";
-      case "hr": return block("---");
-      case "strong": case "b": return "**" + kids() + "**";
-      case "em": case "i": return "*" + kids() + "*";
-      case "s": case "del": return "~~" + kids() + "~~";
-      case "code": return node.closest("pre") ? node.textContent : "`" + node.textContent.replace(/`/g, "'") + "`";
-      case "pre": return block("```\n" + node.textContent.trim() + "\n```");
-      case "blockquote": return block(kids().trim().split("\n").map(l => "> " + l).join("\n"));
-      case "a": {
-        const href = node.getAttribute("href") || "";
-        const text = kids().trim();
-        if (!href || href.startsWith("#")) return text;
-        return text ? `[${text}](${href})` : href;
-      }
-      case "img": {
-        const src = node.getAttribute("src") || "";
-        const alt = node.getAttribute("alt") || "";
-        return src ? `![${alt}](${src})` : "";
-      }
-      case "ul": {
-        const lis = Array.from(node.children).filter(n => n.tagName === "LI");
-        return lis.length ? block(lis.map(li => "- " + Array.from(li.childNodes).map(toMd).join("").trim()).join("\n")) : block(kids());
-      }
-      case "ol": {
-        const olis = Array.from(node.children).filter(n => n.tagName === "LI");
-        return olis.length ? block(olis.map((li, i) => `${i + 1}. ` + Array.from(li.childNodes).map(toMd).join("").trim()).join("\n")) : block(kids());
-      }
-      case "li": return kids();
-      default: return kids();
-    }
-  }
-  const div = document.createElement("div");
-  div.innerHTML = html;
-  return toMd(div).replace(/\n{3,}/g, "\n\n").trim();
-}
-
-function showClipperPopup({ title, content, url, loading = false, folder }) {
+function showClipperPopup({ title, markdown = "", url, loading = false, folder }) {
   document.getElementById("owv-clip-overlay")?.remove();
 
   const today = new Date().toISOString().slice(0, 10);
   const safeTitle = (title || "Clipped Page").replace(/[/\\:*?"<>|]/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
   const defaultPath = `${folder || "Clippings"}/${today} ${safeTitle}.md`;
-  const md = content ? htmlToMarkdownApp(content) : "";
 
-  const buildContent = (t) => {
-    const fm = `---\ntitle: "${t.replace(/"/g, '\\"')}"\nurl: ${url}\ndate: ${today}\n---\n\n`;
-    return fm + md;
-  };
+  const buildContent = (t) =>
+    `---\ntitle: "${t.replace(/"/g, '\\"')}"\nurl: ${url}\ndate: ${today}\n---\n\n${markdown}`;
 
   const overlay = document.createElement("div");
   overlay.id = "owv-clip-overlay";
@@ -792,7 +735,7 @@ function showClipperPopup({ title, content, url, loading = false, folder }) {
 
   titleInput.value = title || "";
   pathInput.value = defaultPath;
-  preview.textContent = loading ? "" : buildContent(title || "").slice(0, 4000) + (md.length > 3500 ? "\n\n…(미리보기 생략)" : "");
+  preview.textContent = loading ? "" : markdown.slice(0, 4000) + (markdown.length > 4000 ? "\n\n…(미리보기 생략)" : "");
 
   titleInput.addEventListener("input", () => {
     const t = titleInput.value.trim() || safeTitle;

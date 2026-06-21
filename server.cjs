@@ -7,6 +7,13 @@ const sharp = require("sharp");
 const { Readability } = require("@mozilla/readability");
 const { parseHTML } = require("linkedom");
 
+// Setup browser-like globals required by defuddle
+const { window: _lwin, document: _ldoc, DOMParser: _DOMParser } = parseHTML("<html><body></body></html>");
+global.window = _lwin;
+global.document = _ldoc;
+global.DOMParser = _DOMParser;
+const { createMarkdownContent } = require("defuddle/full");
+
 const root = __dirname;
 const bundledSampleRoot = path.join(root, "sample-vault");
 const configuredVaultRoot = process.env.VAULT_PATH || process.env.OBSIDIAN_VAULT_PATH || process.env.OBSIDIAN_VALUT_PATH;
@@ -1139,9 +1146,10 @@ async function fetchAndParseUrl(targetUrl, res) {
     const { document } = parseHTML(html);
     const article = new Readability(document).parse();
     if (!article) { sendJsonCors(res, 422, { error: "Could not extract article content" }); return; }
+    const markdown = createMarkdownContent(article.content || "", targetUrl);
     sendJsonCors(res, 200, {
       title: article.title || "",
-      content: article.content || "",
+      markdown,
       excerpt: article.excerpt || "",
       url: targetUrl,
     });
@@ -1195,8 +1203,17 @@ function clipWebPage(body, res) {
     return;
   }
 
-  const content = typeof payload.content === "string" ? payload.content : "";
-  if (!content) { sendJsonCors(res, 400, { error: "Missing content" }); return; }
+  let content;
+  if (typeof payload.html === "string" && payload.html) {
+    const today = new Date().toISOString().slice(0, 10);
+    const title = typeof payload.title === "string" ? payload.title : "";
+    const pageUrl = typeof payload.url === "string" ? payload.url : "";
+    const md = createMarkdownContent(payload.html, pageUrl);
+    content = `---\ntitle: "${title.replace(/"/g, '\\"')}"\nurl: ${pageUrl}\ndate: ${today}\n---\n\n${md}`;
+  } else {
+    content = typeof payload.content === "string" ? payload.content : "";
+  }
+  if (!content) { sendJsonCors(res, 400, { error: "Missing content or html" }); return; }
 
   let finalSafePath = safePath;
   let finalFilePath = resolveVaultFilePath(safePath);
