@@ -1159,22 +1159,6 @@ button:disabled {
   width: 100%;
 }
 
-.clipper-bookmarklet-link {
-  background: var(--surface-2);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  color: var(--accent, #5b8dd9);
-  display: inline-block;
-  font-size: 13px;
-  font-weight: 500;
-  padding: 7px 12px;
-  text-decoration: none;
-  user-select: none;
-}
-
-.clipper-bookmarklet-link:active {
-  opacity: 0.7;
-}
 
 .option-reset-button {
   background: var(--surface);
@@ -2215,9 +2199,14 @@ button:disabled {
 }
 
 .task-meta-chip:hover {
-  border-color: var(--accent);
-  color: var(--text);
+  background: color-mix(in srgb, var(--accent, #5b8dd9) 18%, var(--surface-2));
+  border-color: var(--accent, #5b8dd9);
+  color: var(--accent, #5b8dd9);
 }
+
+.task-pri-chip-high:hover { background: rgba(231,76,60,0.2); border-color: #e74c3c; color: #e74c3c; }
+.task-pri-chip-mid:hover  { background: rgba(230,162,15,0.2); border-color: #c98c0a; color: #c98c0a; }
+.task-pri-chip-low:hover  { background: rgba(52,152,219,0.2); border-color: #3498db; color: #3498db; }
 
 .task-meta-chip.active {
   background: var(--accent);
@@ -2312,122 +2301,63 @@ button:disabled {
   background: rgba(231, 76, 60, 0.1);
 }
 
-/* ── Task read mode ──────────────────────────────────────────────────────── */
+/* ── Task read mode (task-mode-view) ─────────────────────────────────────── */
 .task-edit-header h3 {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.task-view-body {
-  padding: 2px 0 6px;
-}
-
-/* PC: two-column (info | sub-bullets) when sub-items present */
-.task-view-content {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-@media (min-width: 601px) {
-  .task-view-content:has(.task-view-sub-items) {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0 24px;
-    align-items: start;
-  }
-}
-
-/* Left column: status + dates + meta */
-.task-view-main {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.task-view-status {
-  align-self: flex-start;
-  border-radius: 20px;
-  font-size: 11px;
+/* Title input: borderless, larger in view mode */
+.task-mode-view #taskEditTitleInput {
+  background: transparent;
+  border-color: transparent;
+  cursor: default;
+  font-size: 17px;
   font-weight: 700;
-  letter-spacing: 0.5px;
-  padding: 3px 11px;
-  text-transform: uppercase;
+  padding-left: 0;
 }
-.task-view-status.checked  { background: rgba(76,175,80,0.15);  color: #4caf50; }
-.task-view-status.deferred { background: rgba(255,152,0,0.15);   color: #e09000; }
-.task-view-status.pending  { background: rgba(91,141,217,0.15);  color: #5b8dd9; }
-
-/* Dates row */
-.task-view-dates {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+.task-mode-view #taskEditTitleInput:focus {
+  border-color: transparent;
+  box-shadow: none;
+  outline: none;
 }
 
-.task-view-date-badge {
-  align-items: center;
-  background: var(--surface-2, rgba(128,128,128,0.1));
-  border-radius: 8px;
+/* Meta chips: no hover in view mode */
+.task-mode-view .task-meta-chip {
+  cursor: default;
+  pointer-events: none;
+}
+
+/* Date / time inputs: hide border, show as plain text */
+.task-mode-view .date-picker-btn:disabled,
+.task-mode-view .time-input:disabled {
+  background: transparent;
+  border-color: transparent;
   color: var(--text);
-  display: inline-flex;
-  font-size: 13px;
-  gap: 4px;
-  padding: 6px 12px;
+  cursor: default;
+  opacity: 1;
 }
 
-.task-view-date-badge em {
-  color: var(--accent, #5b8dd9);
-  font-style: normal;
-  font-weight: 600;
+/* Depth controls hidden in view mode */
+.task-mode-view .task-edit-depth-controls {
+  display: none;
 }
 
-/* Meta chips row */
-.task-view-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+/* Sub-items textarea: borderless read-only area */
+.task-mode-view .task-edit-sub-items {
+  background: var(--surface-2);
 }
-
-.task-view-chip {
-  background: var(--surface-2, rgba(128,128,128,0.1));
-  border-radius: 8px;
-  color: var(--text);
-  font-size: 12.5px;
-  font-weight: 500;
-  padding: 4px 12px;
+.task-mode-view .task-edit-sub-items textarea {
+  background: transparent;
+  border-color: transparent;
+  cursor: default;
+  resize: none;
 }
-.task-view-chip.kind     { background: rgba(91,141,217,0.13);  color: #5b8dd9; }
-.task-view-chip.pri-high { background: rgba(231,76,60,0.12);   color: #e05a5a; }
-.task-view-chip.pri-mid  { background: rgba(230,162,60,0.14);  color: #c49028; }
-.task-view-chip.pri-low  { background: rgba(76,175,80,0.12);   color: #4caf50; }
-.task-view-chip.tag      { color: var(--muted); }
-
-/* Right column (PC) / bottom (mobile): sub-bullets */
-.task-view-sub-items {
-  background: var(--surface-2, rgba(128,128,128,0.06));
-  border-radius: 10px;
-  padding: 10px 14px;
-}
-
-/* Mobile: add top gap when stacked */
-@media (max-width: 600px) {
-  .task-view-sub-items { margin-top: 6px; }
-  .task-view-date-badge { font-size: 12px; padding: 5px 10px; }
-  .task-view-chip { font-size: 12px; padding: 3px 10px; }
-}
-
-/* Override calendar-sized bullet styles inside read mode */
-.task-view-sub-body .task-sub-bullet {
-  color: var(--text);
-  font-size: 13.5px;
-  gap: 7px;
-  line-height: 1.6;
-}
-.task-view-sub-body .task-sub-bullet span:first-child {
-  font-size: 12px;
-  opacity: 0.4;
+.task-mode-view .task-edit-sub-items textarea:focus {
+  border-color: transparent;
+  box-shadow: none;
+  outline: none;
 }
 
 /* task sub-bullet links */

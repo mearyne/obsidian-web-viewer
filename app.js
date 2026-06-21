@@ -143,7 +143,6 @@ const els = {
   newNotePathInput: document.querySelector("#newNotePathInput"),
   imagePathInput: document.querySelector("#imagePathInput"),
   clipperFolderInput: document.querySelector("#clipperFolderInput"),
-  clipperBookmarkletLink: document.querySelector("#clipperBookmarkletLink"),
   searchExcludeInput: document.querySelector("#searchExcludeInput"),
   searchStatus: document.querySelector("#searchStatus"),
   contentSearchToggleButton: document.querySelector("#contentSearchToggleButton"),
@@ -184,8 +183,6 @@ const els = {
   taskEditOutdentButton: document.querySelector("#taskEditOutdentButton"),
   taskCreateSubItemsInput: document.querySelector("#taskCreateSubItemsInput"),
   taskEditBodyEl: document.querySelector("#taskEditBodyEl"),
-  taskViewBody: document.querySelector("#taskViewBody"),
-  taskViewContent: document.querySelector("#taskViewContent"),
   taskEditDialogTitle: document.querySelector("#taskEditDialogTitle"),
   taskViewEditBtn: document.querySelector("#taskViewEditBtn"),
   taskViewCloseBtn: document.querySelector("#taskViewCloseBtn"),
@@ -385,7 +382,10 @@ els.editorImageInput?.addEventListener("change", async (e) => {
   await uploadImageToEditor(file, file.type);
 });
 els.imagePathInput?.addEventListener("input", handleImagePathInput);
-els.clipperFolderInput?.addEventListener("input", updateClipperBookmarklet);
+els.clipperFolderInput?.addEventListener("input", () => {
+  const folder = normalizeVaultPath(els.clipperFolderInput.value || "") || "Clippings";
+  localStorage.setItem("obsidian-web-viewer-clipper-folder", folder);
+});
 els.searchExcludeInput?.addEventListener("input", handleSearchExcludeInput);
 els.newNoteButton?.addEventListener("click", openNewNote);
 els.randomFileButton.addEventListener("click", openRandomMarkdown);
@@ -2086,7 +2086,6 @@ function initOptions() {
   if (els.imagePathInput) els.imagePathInput.value = savedImagePath;
   const savedClipperFolder = localStorage.getItem("obsidian-web-viewer-clipper-folder") || "Clippings";
   if (els.clipperFolderInput) els.clipperFolderInput.value = savedClipperFolder;
-  updateClipperBookmarklet();
   const savedSearchExclude = localStorage.getItem("obsidian-web-viewer-search-exclude") || "";
   state.searchExcludePaths = parsePathList(savedSearchExclude);
   if (els.searchExcludeInput) els.searchExcludeInput.value = savedSearchExclude;
@@ -2177,20 +2176,6 @@ function handleImagePathInput() {
   scheduleSettingsSave();
 }
 
-async function updateClipperBookmarklet() {
-  if (!els.clipperBookmarkletLink) return;
-  const folder = normalizeVaultPath(els.clipperFolderInput?.value || "") || "Clippings";
-  localStorage.setItem("obsidian-web-viewer-clipper-folder", folder);
-  els.clipperBookmarkletLink.textContent = "📎 Clip to Vault (로딩 중…)";
-  try {
-    const res = await fetch(`/api/clip-bookmarklet?folder=${encodeURIComponent(folder)}`);
-    const bookmarklet = await res.text();
-    els.clipperBookmarkletLink.href = bookmarklet;
-    els.clipperBookmarkletLink.textContent = "📎 Clip to Vault";
-  } catch {
-    els.clipperBookmarkletLink.textContent = "📎 Clip to Vault (로드 실패)";
-  }
-}
 
 function handleSearchExcludeInput() {
   state.searchExcludePaths = parsePathList(els.searchExcludeInput?.value || "");
@@ -3003,7 +2988,42 @@ async function handleEditorPaste(event) {
   }
 }
 
-function handleSubItemsPaste(event) {
+async function handleSubItemsPaste(event) {
+  if (event.target.readOnly) return;
+  // Image paste
+  const items = event.clipboardData?.items;
+  if (items) {
+    const imageItem = Array.from(items).find((i) => i.type.startsWith("image/"));
+    if (imageItem) {
+      event.preventDefault();
+      const blob = imageItem.getAsFile();
+      if (!blob) return;
+      try {
+        const now = new Date();
+        const pad = (n) => String(n).padStart(2, "0");
+        const ext = imageItem.type === "image/png" ? "png" : imageItem.type === "image/gif" ? "gif" : imageItem.type === "image/webp" ? "webp" : "jpg";
+        const filename = `${formatDate(now)} ${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())} ${Math.random().toString(36).slice(2, 7)}.${ext}`;
+        const dir = normalizeVaultPath(state.imageSavePath || els.imagePathInput?.value || "");
+        const filePath = dir ? `${dir}/${filename}` : filename;
+        const res = await fetch(`/api/vault-binary-file?path=${encodeURIComponent(filePath)}`, {
+          method: "PUT",
+          headers: { "Content-Type": imageItem.type },
+          body: blob,
+        });
+        if (!res.ok) throw new Error("upload failed");
+        registerUploadedFileInVault(filePath, blob.size);
+        const wikiLink = `![[${filePath}]]`;
+        const ta = event.target;
+        const { selectionStart, selectionEnd, value } = ta;
+        ta.value = value.slice(0, selectionStart) + wikiLink + value.slice(selectionEnd);
+        ta.setSelectionRange(selectionStart + wikiLink.length, selectionStart + wikiLink.length);
+      } catch {
+        alert("이미지 업로드에 실패했습니다.");
+      }
+      return;
+    }
+  }
+  // URL paste
   const text = event.clipboardData?.getData("text/plain")?.trim() || "";
   if (!/^https?:\/\/\S+$/.test(text)) return;
   event.preventDefault();
@@ -6403,6 +6423,7 @@ function handleTaskTitleEnter(event, confirmButton) {
 }
 
 function handleTaskSubItemsEnter(event) {
+  if (event.target.readOnly) return;
   if (event.key !== "Enter" && event.key !== "NumpadEnter") return;
   if (event.isComposing || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return;
   event.preventDefault();
@@ -6420,13 +6441,14 @@ function handleTaskSubItemsEnter(event) {
 
 function ensureTaskEditSubItemBullet(event) {
   const textarea = event.currentTarget;
-  if (textarea.value.trim()) return;
+  if (textarea.readOnly || textarea.value.trim()) return;
   textarea.value = "- ";
   textarea.setSelectionRange(textarea.value.length, textarea.value.length);
 }
 
 function normalizeTaskEditSubItemDraft(event) {
   const textarea = event.currentTarget;
+  if (textarea.readOnly) return;
   const { value, selectionStart, selectionEnd } = textarea;
   const nextValue = value.replace(/(^|\n)([ \t]*)(?![-*+]\s)(\S)/g, "$1$2- $3");
   if (nextValue === value) return;
@@ -6524,8 +6546,21 @@ function renderTaskEditDatePicker(field) {
 
 function setTaskDialogMode(mode) {
   const isView = mode === "view";
-  if (els.taskEditBodyEl) els.taskEditBodyEl.hidden = isView;
-  if (els.taskViewBody) els.taskViewBody.hidden = !isView;
+  const form = els.taskEditDialog?.querySelector(".task-create-form");
+  if (form) form.classList.toggle("task-mode-view", isView);
+
+  if (els.taskEditTitleInput) els.taskEditTitleInput.readOnly = isView;
+  if (els.taskEditSubItemsInput) els.taskEditSubItemsInput.readOnly = isView;
+
+  [
+    els.taskEditStartDateBtn,
+    els.taskEditDueDateBtn,
+    els.taskEditStartTimeInput,
+    els.taskEditDueTimeInput,
+    els.taskEditIndentButton,
+    els.taskEditOutdentButton,
+  ].forEach((el) => { if (el) el.disabled = isView; });
+
   if (els.taskEditDialogTitle) {
     els.taskEditDialogTitle.textContent = isView
       ? (els.taskEditTitleInput?.value || "태스크")
@@ -6535,47 +6570,6 @@ function setTaskDialogMode(mode) {
   if (els.taskViewCloseBtn) els.taskViewCloseBtn.hidden = !isView;
   if (els.taskEditCancelBtn) els.taskEditCancelBtn.hidden = isView;
   if (els.taskEditConfirmBtn) els.taskEditConfirmBtn.hidden = isView;
-}
-
-function renderTaskViewContent(task) {
-  const statusClass = task.checked ? "checked" : task.deferred ? "deferred" : "pending";
-  const statusLabel = task.checked ? "✓ 완료" : task.deferred ? "⏭ 미룸" : "● 진행 중";
-
-  const dateParts = [];
-  if (task.dates?.start) {
-    const time = task.startTime ? `<em>${escapeHtml(task.startTime)}</em>` : "";
-    dateParts.push(`<span class="task-view-date-badge">🛫 ${escapeHtml(task.dates.start)}${time ? " " + time : ""}</span>`);
-  }
-  const dueDate = task.dates?.due || task.dates?.end;
-  if (dueDate) {
-    const time = task.dueTime ? `<em>${escapeHtml(task.dueTime)}</em>` : "";
-    dateParts.push(`<span class="task-view-date-badge due">📅 ${escapeHtml(dueDate)}${time ? " " + time : ""}</span>`);
-  }
-
-  const chips = [];
-  if (task.kind) chips.push(`<span class="task-view-chip kind">${escapeHtml(task.kind === "일정" ? "🗓 일정" : "✓ 할일")}</span>`);
-  if (task.category) chips.push(`<span class="task-view-chip">${escapeHtml(task.category)}</span>`);
-  if (task.priority) {
-    const pClass = { "상": "pri-high", "중": "pri-mid", "하": "pri-low" }[task.priority] || "";
-    const pLabel = { "상": "↑ 상", "중": "— 중", "하": "↓ 하" }[task.priority] || task.priority;
-    chips.push(`<span class="task-view-chip ${pClass}">${escapeHtml(pLabel)}</span>`);
-  }
-  task.tags?.forEach((t) => chips.push(`<span class="task-view-chip tag">#${escapeHtml(t)}</span>`));
-
-  const datesHtml = dateParts.length ? `<div class="task-view-dates">${dateParts.join("")}</div>` : "";
-  const metaHtml = chips.length ? `<div class="task-view-meta">${chips.join("")}</div>` : "";
-  const subItemsHtml = task.subItems?.length
-    ? `<div class="task-view-sub-items"><div class="task-view-sub-body">${renderSubItemsHtml(task.subItems)}</div></div>`
-    : "";
-
-  return `
-    <div class="task-view-main">
-      <span class="task-view-status ${statusClass}">${statusLabel}</span>
-      ${datesHtml}
-      ${metaHtml}
-    </div>
-    ${subItemsHtml}
-  `.trim();
 }
 
 async function showTaskEditDialog(task) {
@@ -6600,7 +6594,6 @@ async function showTaskEditDialog(task) {
   renderEditTagChips();
   updateTaskEditMetaUI();
   renderTaskEditDatePicker(null);
-  if (els.taskViewContent) els.taskViewContent.innerHTML = renderTaskViewContent(task);
   setTaskDialogMode("view");
   els.taskEditDialog.showModal();
   positionTaskEditDialog();
