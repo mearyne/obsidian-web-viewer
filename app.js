@@ -6584,6 +6584,20 @@ function setTaskDialogMode(mode) {
   if (els.taskViewCloseBtn) els.taskViewCloseBtn.hidden = !isView;
   if (els.taskEditCancelBtn) els.taskEditCancelBtn.hidden = isView;
   if (els.taskEditConfirmBtn) els.taskEditConfirmBtn.hidden = isView;
+
+  // PC view mode: clamp right column height to left column, enable scroll
+  if (!isView) {
+    if (els.taskEditSubItems) els.taskEditSubItems.style.maxHeight = "";
+  } else {
+    requestAnimationFrame(() => {
+      if (window.innerWidth > 768) {
+        const leftH = els.taskEditBodyEl?.querySelector(".task-edit-main")?.offsetHeight || 0;
+        if (leftH > 0 && els.taskEditSubItems) {
+          els.taskEditSubItems.style.maxHeight = leftH + "px";
+        }
+      }
+    });
+  }
 }
 
 async function showTaskEditDialog(task) {

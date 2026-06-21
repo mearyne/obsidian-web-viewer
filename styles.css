@@ -2359,6 +2359,18 @@ button:disabled {
   visibility: hidden;
 }
 
+/* PC view mode: right column clipped to left column height, preview scrolls */
+@media (min-width: 769px) {
+  .task-mode-view #taskEditSubItems {
+    overflow: hidden;
+  }
+  .task-mode-view .task-sub-items-preview {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+  }
+}
+
 /* Sub-items: preview replaces textarea in view mode */
 .task-sub-items-preview {
   display: flex;
