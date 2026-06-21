@@ -6534,29 +6534,45 @@ function setTaskDialogMode(mode) {
 }
 
 function renderTaskViewContent(task) {
-  const statusIcon = task.checked ? "✅" : task.deferred ? "⏭" : "⬜";
-  const meta = [];
-  if (task.kind) meta.push(task.kind === "일정" ? "🗓 일정" : "✓ 할일");
-  if (task.category) meta.push(task.category);
-  if (task.priority) {
-    const priMap = { "상": "🔴 상", "중": "🟡 중", "하": "🟢 하" };
-    meta.push(priMap[task.priority] || task.priority);
+  const statusClass = task.checked ? "checked" : task.deferred ? "deferred" : "pending";
+  const statusLabel = task.checked ? "✓ 완료" : task.deferred ? "⏭ 미룸" : "● 진행 중";
+
+  const dateParts = [];
+  if (task.dates?.start) {
+    const time = task.startTime ? `<em>${escapeHtml(task.startTime)}</em>` : "";
+    dateParts.push(`<span class="task-view-date-badge">🛫 ${escapeHtml(task.dates.start)}${time ? " " + time : ""}</span>`);
   }
-  if (task.tags?.length) meta.push(...task.tags.map((t) => `#${t}`));
-  const dates = [];
-  if (task.dates?.start) dates.push(`🛫 ${task.dates.start}${task.startTime ? " " + task.startTime : ""}`);
   const dueDate = task.dates?.due || task.dates?.end;
-  if (dueDate) dates.push(`📅 ${dueDate}${task.dueTime ? " " + task.dueTime : ""}`);
-  const metaHtml = meta.length
-    ? `<div class="task-view-meta">${meta.map((v) => `<span class="task-view-chip">${escapeHtml(v)}</span>`).join("")}</div>`
-    : "";
-  const datesHtml = dates.length
-    ? `<div class="task-view-dates">${dates.map((d) => `<span class="task-view-date-badge">${escapeHtml(d)}</span>`).join("")}</div>`
-    : "";
+  if (dueDate) {
+    const time = task.dueTime ? `<em>${escapeHtml(task.dueTime)}</em>` : "";
+    dateParts.push(`<span class="task-view-date-badge due">📅 ${escapeHtml(dueDate)}${time ? " " + time : ""}</span>`);
+  }
+
+  const chips = [];
+  if (task.kind) chips.push(`<span class="task-view-chip kind">${escapeHtml(task.kind === "일정" ? "🗓 일정" : "✓ 할일")}</span>`);
+  if (task.category) chips.push(`<span class="task-view-chip">${escapeHtml(task.category)}</span>`);
+  if (task.priority) {
+    const pClass = { "상": "pri-high", "중": "pri-mid", "하": "pri-low" }[task.priority] || "";
+    const pLabel = { "상": "↑ 상", "중": "— 중", "하": "↓ 하" }[task.priority] || task.priority;
+    chips.push(`<span class="task-view-chip ${pClass}">${escapeHtml(pLabel)}</span>`);
+  }
+  task.tags?.forEach((t) => chips.push(`<span class="task-view-chip tag">#${escapeHtml(t)}</span>`));
+
+  const datesHtml = dateParts.length ? `<div class="task-view-dates">${dateParts.join("")}</div>` : "";
+  const metaHtml = chips.length ? `<div class="task-view-meta">${chips.join("")}</div>` : "";
   const subItemsHtml = task.subItems?.length
-    ? `<div class="task-view-sub-items task-sub-items-inline">${renderSubItemsHtml(task.subItems)}</div>`
+    ? `<div class="task-view-sub-items"><div class="task-view-sub-body">${renderSubItemsHtml(task.subItems)}</div></div>`
     : "";
-  return `<div class="task-view-title">${escapeHtml(statusIcon)} ${escapeHtml(task.text || "")}</div>${metaHtml}${datesHtml}${subItemsHtml}`;
+
+  return `
+    <div class="task-view-hero">
+      <span class="task-view-status ${statusClass}">${statusLabel}</span>
+      <p class="task-view-title">${escapeHtml(task.text || "")}</p>
+    </div>
+    ${datesHtml}
+    ${metaHtml}
+    ${subItemsHtml}
+  `.trim();
 }
 
 async function showTaskEditDialog(task) {
