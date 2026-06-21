@@ -4,6 +4,8 @@ const os = require("os");
 const path = require("path");
 const crypto = require("crypto");
 const sharp = require("sharp");
+const { Readability } = require("@mozilla/readability");
+const JSDOMParser = require("@mozilla/readability/JSDOMParser");
 
 const root = __dirname;
 const bundledSampleRoot = path.join(root, "sample-vault");
@@ -207,6 +209,12 @@ const server = http.createServer((req, res) => {
 
   if (requestPath === "/api/search") {
     searchVaultContent(url.searchParams.get("q") || "", url.searchParams.get("limit"), res);
+    return;
+  }
+
+  if (requestPath === "/api/fetch-clip") {
+    const targetUrl = url.searchParams.get("url") || "";
+    fetchAndParseUrl(targetUrl, res);
     return;
   }
 
@@ -1097,6 +1105,52 @@ function sendJsonNoStore(res, status, value) {
     "Cache-Control": "no-store",
   });
   res.end(JSON.stringify(value));
+}
+
+async function fetchAndParseUrl(targetUrl, res) {
+  if (!targetUrl) { sendJsonCors(res, 400, { error: "url parameter required" }); return; }
+
+  let parsed;
+  try { parsed = new URL(targetUrl); } catch {
+    sendJsonCors(res, 400, { error: "Invalid URL" }); return;
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    sendJsonCors(res, 400, { error: "Only http/https URLs are supported" }); return;
+  }
+
+  let html;
+  try {
+    const response = await fetch(targetUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+      },
+      redirect: "follow",
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!response.ok) { sendJsonCors(res, 502, { error: `HTTP ${response.status} from target` }); return; }
+    html = await response.text();
+  } catch (e) {
+    sendJsonCors(res, 502, { error: "Failed to fetch URL: " + (e.message || String(e)) }); return;
+  }
+
+  try {
+    const parser = new JSDOMParser();
+    const doc = parser.parse(html, targetUrl);
+    doc.documentURI = targetUrl;
+    doc.baseURI = targetUrl;
+    const article = new Readability(doc).parse();
+    if (!article) { sendJsonCors(res, 422, { error: "Could not extract article content" }); return; }
+    sendJsonCors(res, 200, {
+      title: article.title || "",
+      content: article.content || "",
+      excerpt: article.excerpt || "",
+      url: targetUrl,
+    });
+  } catch (e) {
+    sendJsonCors(res, 500, { error: "Parse failed: " + (e.message || String(e)) });
+  }
 }
 
 function sendClipBookmarklet(folder, req, res) {

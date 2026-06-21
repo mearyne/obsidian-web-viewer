@@ -24,6 +24,15 @@
       "purpose": "any maskable"
     }
   ],
+  "share_target": {
+    "action": "/",
+    "method": "GET",
+    "params": {
+      "url": "url",
+      "title": "title",
+      "text": "text"
+    }
+  },
   "shortcuts": [
     {
       "name": "새 노트",

@@ -674,6 +674,161 @@ function handleUrlAction() {
     window.history.replaceState(null, "", window.location.pathname);
     window.addEventListener("vaultReady", () => openNewNote(), { once: true });
   }
+  const sharedUrl = params.get("url") || params.get("text") || "";
+  if (sharedUrl && sharedUrl.startsWith("http")) {
+    window.history.replaceState(null, "", window.location.pathname);
+    handleSharedUrl(sharedUrl);
+  }
+}
+
+async function handleSharedUrl(sharedUrl) {
+  const folder = localStorage.getItem("obsidian-web-viewer-clipper-folder") || "Clippings";
+  showClipperPopup({ title: "불러오는 중…", content: "", url: sharedUrl, loading: true, folder });
+  try {
+    const res = await fetch(`/api/fetch-clip?url=${encodeURIComponent(sharedUrl)}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "서버 오류");
+    document.getElementById("owv-clip-overlay")?.remove();
+    showClipperPopup({ title: data.title, content: data.content, url: sharedUrl, folder });
+  } catch (e) {
+    const status = document.getElementById("owv-clip-status");
+    if (status) {
+      status.textContent = "불러오기 실패: " + e.message;
+      status.style.color = "#e05a5a";
+    }
+    const preview = document.getElementById("owv-clip-preview");
+    if (preview) preview.textContent = "";
+    const saveBtn = document.getElementById("owv-clip-save");
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = "Vault에 저장"; }
+  }
+}
+
+function htmlToMarkdownApp(html) {
+  function escMd(t) { return t.replace(/[*_[\]`\\]/g, "\\$&"); }
+  function toMd(node) {
+    if (node.nodeType === 3) return escMd(node.textContent);
+    if (node.nodeType !== 1) return "";
+    const tag = node.tagName.toLowerCase();
+    const kids = () => Array.from(node.childNodes).map(toMd).join("");
+    const block = (s) => "\n\n" + s.trim() + "\n\n";
+    switch (tag) {
+      case "script": case "style": case "noscript": case "iframe":
+      case "button": case "nav": case "footer": case "form": return "";
+      case "h1": return block("# " + kids().trim());
+      case "h2": return block("## " + kids().trim());
+      case "h3": return block("### " + kids().trim());
+      case "h4": return block("#### " + kids().trim());
+      case "h5": return block("##### " + kids().trim());
+      case "h6": return block("###### " + kids().trim());
+      case "p": return block(kids());
+      case "br": return "  \n";
+      case "hr": return block("---");
+      case "strong": case "b": return "**" + kids() + "**";
+      case "em": case "i": return "*" + kids() + "*";
+      case "s": case "del": return "~~" + kids() + "~~";
+      case "code": return node.closest("pre") ? node.textContent : "`" + node.textContent.replace(/`/g, "'") + "`";
+      case "pre": return block("```\n" + node.textContent.trim() + "\n```");
+      case "blockquote": return block(kids().trim().split("\n").map(l => "> " + l).join("\n"));
+      case "a": {
+        const href = node.getAttribute("href") || "";
+        const text = kids().trim();
+        if (!href || href.startsWith("#")) return text;
+        return text ? `[${text}](${href})` : href;
+      }
+      case "img": {
+        const src = node.getAttribute("src") || "";
+        const alt = node.getAttribute("alt") || "";
+        return src ? `![${alt}](${src})` : "";
+      }
+      case "ul": {
+        const lis = Array.from(node.children).filter(n => n.tagName === "LI");
+        return lis.length ? block(lis.map(li => "- " + Array.from(li.childNodes).map(toMd).join("").trim()).join("\n")) : block(kids());
+      }
+      case "ol": {
+        const olis = Array.from(node.children).filter(n => n.tagName === "LI");
+        return olis.length ? block(olis.map((li, i) => `${i + 1}. ` + Array.from(li.childNodes).map(toMd).join("").trim()).join("\n")) : block(kids());
+      }
+      case "li": return kids();
+      default: return kids();
+    }
+  }
+  const div = document.createElement("div");
+  div.innerHTML = html;
+  return toMd(div).replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function showClipperPopup({ title, content, url, loading = false, folder }) {
+  document.getElementById("owv-clip-overlay")?.remove();
+
+  const today = new Date().toISOString().slice(0, 10);
+  const safeTitle = (title || "Clipped Page").replace(/[/\\:*?"<>|]/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
+  const defaultPath = `${folder || "Clippings"}/${today} ${safeTitle}.md`;
+  const md = content ? htmlToMarkdownApp(content) : "";
+
+  const buildContent = (t) => {
+    const fm = `---\ntitle: "${t.replace(/"/g, '\\"')}"\nurl: ${url}\ndate: ${today}\n---\n\n`;
+    return fm + md;
+  };
+
+  const overlay = document.createElement("div");
+  overlay.id = "owv-clip-overlay";
+
+  const styleEl = document.createElement("style");
+  styleEl.textContent = "#owv-clip-overlay{position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,.65);display:flex;align-items:flex-end;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}#owv-clip-sheet{background:#1e2124;color:#e2e4e7;width:100%;max-width:680px;max-height:88vh;border-radius:16px 16px 0 0;display:flex;flex-direction:column;box-shadow:0 -8px 40px rgba(0,0,0,.5);box-sizing:border-box}#owv-clip-header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px}#owv-clip-badge{font-size:14px;font-weight:600;color:#8b9eb7}#owv-clip-close{background:none;border:none;cursor:pointer;font-size:22px;color:#8b9eb7;line-height:1;padding:0 4px}#owv-clip-fields{padding:0 16px 10px;display:flex;flex-direction:column;gap:8px}.owv-field{display:flex;flex-direction:column;gap:3px}.owv-field label{font-size:11px;color:#8b9eb7}.owv-field input{background:#2a2f35;border:1px solid #3a4048;border-radius:8px;color:#e2e4e7;font-size:14px;padding:8px 10px;width:100%;box-sizing:border-box;outline:none;font-family:inherit}.owv-field input:focus{border-color:#5b8dd9}#owv-clip-preview{flex:1;overflow-y:auto;margin:0 16px;background:#16191c;border-radius:8px;padding:10px 12px;font-size:12px;line-height:1.65;color:#b0bac6;white-space:pre-wrap;word-break:break-word;font-family:ui-monospace,monospace;min-height:80px}#owv-clip-status{padding:6px 16px;font-size:13px;color:#8b9eb7;min-height:22px;text-align:center}#owv-clip-footer{padding:10px 16px 20px;display:flex;gap:8px}#owv-clip-cancel{background:#2a2f35;border:none;border-radius:8px;color:#e2e4e7;font-size:15px;padding:11px 18px;cursor:pointer;font-family:inherit}#owv-clip-save{flex:1;background:#4a7fd4;border:none;border-radius:8px;color:#fff;font-size:15px;font-weight:600;padding:11px;cursor:pointer;font-family:inherit}#owv-clip-save:disabled{background:#3a4048;color:#8b9eb7}";
+
+  const sheet = document.createElement("div");
+  sheet.id = "owv-clip-sheet";
+  sheet.innerHTML = `<div id="owv-clip-header"><span id="owv-clip-badge">📎 Web Clipper</span><button id="owv-clip-close" aria-label="닫기">×</button></div><div id="owv-clip-fields"><div class="owv-field"><label>제목</label><input id="owv-clip-title" type="text" autocomplete="off" /></div><div class="owv-field"><label>저장 경로</label><input id="owv-clip-path" type="text" autocomplete="off" /></div></div><div id="owv-clip-preview"></div><div id="owv-clip-status">${loading ? "페이지 내용을 불러오는 중…" : ""}</div><div id="owv-clip-footer"><button id="owv-clip-cancel">취소</button><button id="owv-clip-save"${loading ? " disabled" : ""}>Vault에 저장</button></div>`;
+
+  overlay.appendChild(styleEl);
+  overlay.appendChild(sheet);
+  document.body.appendChild(overlay);
+
+  const titleInput = document.getElementById("owv-clip-title");
+  const pathInput = document.getElementById("owv-clip-path");
+  const preview = document.getElementById("owv-clip-preview");
+  const status = document.getElementById("owv-clip-status");
+  const saveBtn = document.getElementById("owv-clip-save");
+
+  titleInput.value = title || "";
+  pathInput.value = defaultPath;
+  preview.textContent = loading ? "" : buildContent(title || "").slice(0, 4000) + (md.length > 3500 ? "\n\n…(미리보기 생략)" : "");
+
+  titleInput.addEventListener("input", () => {
+    const t = titleInput.value.trim() || safeTitle;
+    pathInput.value = `${folder || "Clippings"}/${today} ${t.replace(/[/\\:*?"<>|]/g, " ").trim().slice(0, 80)}.md`;
+  });
+
+  const close = () => overlay.remove();
+  document.getElementById("owv-clip-close").addEventListener("click", close);
+  document.getElementById("owv-clip-cancel").addEventListener("click", close);
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+
+  saveBtn.addEventListener("click", async () => {
+    const saveTitle = titleInput.value.trim() || safeTitle;
+    const savePath = pathInput.value.trim() || defaultPath;
+    saveBtn.disabled = true;
+    saveBtn.textContent = "저장 중…";
+    status.textContent = "";
+    try {
+      const res = await fetch("/api/clip", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: savePath, content: buildContent(saveTitle) }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "HTTP error");
+      status.textContent = "✓ 저장 완료: " + json.path;
+      status.style.color = "#4caf7d";
+      saveBtn.textContent = "저장됨 ✓";
+      setTimeout(close, 1800);
+    } catch (e) {
+      status.textContent = "저장 실패: " + e.message;
+      status.style.color = "#e05a5a";
+      saveBtn.disabled = false;
+      saveBtn.textContent = "Vault에 저장";
+    }
+  });
 }
 
 function closeSidebarFromMain(event) {
