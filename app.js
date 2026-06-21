@@ -179,6 +179,7 @@ const els = {
   taskEditTagChips: document.querySelector("#taskEditTagChips"),
   taskEditSubItems: document.querySelector("#taskEditSubItems"),
   taskEditSubItemsInput: document.querySelector("#taskEditSubItemsInput"),
+  taskSubItemsPreview: document.querySelector("#taskSubItemsPreview"),
   taskEditIndentButton: document.querySelector("#taskEditIndentButton"),
   taskEditOutdentButton: document.querySelector("#taskEditOutdentButton"),
   taskCreateSubItemsInput: document.querySelector("#taskCreateSubItemsInput"),
@@ -6561,7 +6562,14 @@ function setTaskDialogMode(mode) {
   if (form) form.classList.toggle("task-mode-view", isView);
 
   if (els.taskEditTitleInput) els.taskEditTitleInput.readOnly = isView;
-  if (els.taskEditSubItemsInput) els.taskEditSubItemsInput.readOnly = isView;
+  if (els.taskEditSubItemsInput) {
+    els.taskEditSubItemsInput.readOnly = isView;
+    els.taskEditSubItemsInput.hidden = isView;
+  }
+  if (els.taskSubItemsPreview) {
+    els.taskSubItemsPreview.hidden = !isView;
+    if (isView) els.taskSubItemsPreview.innerHTML = renderSubItemsHtml(state.taskEditTask?.subItems || []);
+  }
 
   [
     els.taskEditStartDateBtn,

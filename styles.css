@@ -2335,20 +2335,28 @@ button:disabled {
   visibility: hidden;
 }
 
-/* Sub-items textarea: borderless read-only area */
-.task-mode-view .task-edit-sub-items {
-  background: var(--surface-2);
+/* Sub-items: preview replaces textarea in view mode */
+.task-sub-items-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  line-height: 1.6;
+  min-height: 40px;
 }
-.task-mode-view .task-edit-sub-items textarea {
-  background: transparent;
-  border-color: transparent;
-  cursor: default;
-  resize: none;
+
+.task-sub-items-preview .task-sub-bullet {
+  color: var(--text);
+  display: flex;
+  font-size: 13.5px;
+  gap: 6px;
 }
-.task-mode-view .task-edit-sub-items textarea:focus {
-  border-color: transparent;
-  box-shadow: none;
-  outline: none;
+
+.task-sub-items-preview .task-sub-img {
+  border-radius: 8px;
+  display: block;
+  max-height: none;
+  max-width: 100%;
+  object-fit: contain;
 }
 
 /* task sub-bullet links */
