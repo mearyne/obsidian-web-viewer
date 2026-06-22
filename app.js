@@ -3799,6 +3799,11 @@ async function buildRecentCalendarView(type) {
 }
 
 async function openNextCalendarKind() {
+  const calTab = state.tabs.find((t) => t.view === "calendar");
+  if (calTab && calTab.id !== state.activeTabId) {
+    await switchTab(calTab.id);
+    return;
+  }
   if (state.activeView !== "calendar") {
     await buildCalendarView();
   } else if (state.calendarKind === "tasks") {
@@ -3977,10 +3982,8 @@ function setCalendarMode(mode) {
 }
 
 async function openCalendarFromShortcut() {
-  const active = activeTab();
-  const isMobileNewTab = isTouchPrimaryDevice() && active && !active.path && !active.view;
   const calTab = state.tabs.find((t) => t.view === "calendar");
-  if (calTab && calTab.id !== state.activeTabId && !isMobileNewTab) {
+  if (calTab && calTab.id !== state.activeTabId) {
     await switchTab(calTab.id);
     return;
   }
