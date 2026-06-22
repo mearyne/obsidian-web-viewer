@@ -4282,18 +4282,25 @@ button.calendar-more {
 @media (max-width: 780px) {
   .calendar-toolbar {
     align-items: center;
-    flex-wrap: wrap;
-    gap: 6px;
-    overflow-x: visible;
+    flex-wrap: nowrap;
+    gap: 4px;
+    overflow-x: auto;
+  }
+
+  .calendar-month-nav {
+    flex: 0 0 auto;
+    min-width: 0;
+    order: 1;
   }
 
   .calendar-toolbar-filter-btn {
     align-items: center;
     display: inline-flex;
+    flex: 0 0 auto;
     justify-content: center;
     min-height: 30px;
-    order: 1;
-    padding: 0 10px;
+    order: 2;
+    padding: 0 8px;
   }
 
   .calendar-toolbar-filter-btn span {
@@ -4301,15 +4308,8 @@ button.calendar-more {
   }
 
   .calendar-nav-group {
-    flex: 1 1 auto;
+    flex: 0 0 auto;
     margin-left: 0;
-    min-width: 0;
-    order: 2;
-  }
-
-  .calendar-month-nav {
-    flex: 1 0 100%;
-    min-width: 0;
     order: 3;
   }
 
@@ -4321,9 +4321,7 @@ button.calendar-more {
 
   .calendar-nav-group .calendar-date-jump {
     flex: 0 0 auto;
-    max-width: 110px;
-    min-width: 0;
-    width: 90px;
+    width: 86px;
   }
 
   .calendar-mode-switch {
