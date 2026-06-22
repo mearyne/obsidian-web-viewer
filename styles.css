@@ -4287,36 +4287,28 @@ button.calendar-more {
     overflow-x: visible;
   }
 
-  .calendar-toolbar span.calendar-toolbar-month-label {
-    color: var(--muted);
-    display: block;
-    font-size: 12px;
-    line-height: 1.2;
-    padding: 0 6px;
-    white-space: nowrap;
-  }
-
   .calendar-toolbar-filter-btn {
-    display: inline-flex;
     align-items: center;
+    display: inline-flex;
     justify-content: center;
     min-height: 30px;
-    min-width: 66px;
+    order: 1;
     padding: 0 10px;
   }
 
-  .calendar-month-nav {
-    flex: 1 0 100%;
-    min-width: 0;
-  }
-
-  .calendar-toolbar-filter-btn {
-    order: 2;
+  .calendar-toolbar-filter-btn span {
+    display: inline;
   }
 
   .calendar-nav-group {
     flex: 1 1 auto;
     margin-left: 0;
+    min-width: 0;
+    order: 2;
+  }
+
+  .calendar-month-nav {
+    flex: 1 0 100%;
     min-width: 0;
     order: 3;
   }
@@ -4328,9 +4320,10 @@ button.calendar-more {
   }
 
   .calendar-nav-group .calendar-date-jump {
-    flex: 1 1 92px;
-    min-width: 92px;
-    width: 92px;
+    flex: 0 0 auto;
+    max-width: 110px;
+    min-width: 0;
+    width: 90px;
   }
 
   .calendar-mode-switch {
