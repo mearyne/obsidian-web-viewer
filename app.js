@@ -723,24 +723,53 @@ function handleUrlAction() {
 }
 
 function handleSharedUrl(sharedUrl, sharedTitle = "") {
-  const folder = localStorage.getItem("obsidian-web-viewer-clipper-folder") || "Clippings";
-  const today = new Date().toISOString().slice(0, 10);
-  const safeTitle = (sharedTitle || sharedUrl).replace(/[/\\:*?"<>|]/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
-  const path = `${folder}/${today} ${safeTitle}.md`;
-  const content = `---\ntitle: "${safeTitle.replace(/"/g, '\\"')}"\nurl: ${sharedUrl}\ndate: ${today}\n---\n\n[${safeTitle}](${sharedUrl})`;
-  fetch("/api/clip", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ path, content }),
-  })
-    .then((res) => res.json())
-    .then((json) => {
-      if (json.error) throw new Error(json.error);
-      showAppToast(`✓ 저장됨: ${safeTitle.length > 30 ? safeTitle.slice(0, 30) + "…" : safeTitle}`);
-    })
-    .catch((e) => {
-      showAppToast(`저장 실패: ${e.message}`, "error");
-    });
+  const doCreate = async () => {
+    if (!state.serverVaultWritable) {
+      showAppToast("공유 저장 실패: Vault가 쓰기 불가능합니다.", "error");
+      return;
+    }
+    const folder = localStorage.getItem("obsidian-web-viewer-clipper-folder") || "Clippings";
+    const today = new Date().toISOString().slice(0, 10);
+    const safeTitle = (sharedTitle || sharedUrl).replace(/[/\\:*?"<>|]/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
+    const fileName = `${today} ${safeTitle}.md`;
+    const dirPath = folder;
+    const filePath = dirPath ? `${dirPath}/${fileName}` : fileName;
+    const esc = (s) => (s || "").replace(/"/g, '\\"');
+    const makeFrontmatter = (title) => `---\ntitle: "${esc(title)}"\nurl: ${sharedUrl}\ndate: ${today}\n---\n\n`;
+    const embedLoading = "```embed\nstatus: \"loading\"\nurl: \"" + sharedUrl + "\"\n```";
+    const initialContent = makeFrontmatter(safeTitle) + embedLoading;
+    try {
+      const metadata = await writeServerFile(filePath, initialContent, { backup: false });
+      if (dirPath) ensureDirectoryNodePath(dirPath);
+      const node = { name: fileName, path: filePath, content: initialContent, serverBacked: true, kind: "file", ...metadata };
+      state.files.set(filePath, node);
+      const dir = state.directories.get(dirPath || "");
+      if (dir) dir.children.set(node.name, node);
+      refreshDirectoryMetadataFrom(filePath);
+      renderTree();
+      refreshRecentFilesCache();
+      invalidateRandomMarkdownCache();
+      await openFile(filePath);
+      // Fetch real metadata and update note
+      const meta = await fetchLinkMeta(sharedUrl);
+      const updatedTitle = meta.title || safeTitle;
+      const fullBlock = buildEmbedBlock(meta, sharedUrl);
+      const updatedContent = makeFrontmatter(updatedTitle) + fullBlock;
+      await writeServerFile(filePath, updatedContent, { backup: false });
+      node.content = updatedContent;
+      if (state.currentPath === filePath) {
+        state.currentContent = updatedContent;
+        renderCurrentDocument();
+      }
+    } catch (e) {
+      showAppToast(`공유 저장 실패: ${e.message}`, "error");
+    }
+  };
+  if (state.serverVaultWritable) {
+    void doCreate();
+  } else {
+    window.addEventListener("vaultReady", () => void doCreate(), { once: true });
+  }
 }
 
 function showClipperPopup({ title, url, folder }) {
