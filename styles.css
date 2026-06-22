@@ -592,6 +592,10 @@ button:disabled {
   user-select: none;
 }
 
+.mobile-doc-title {
+  display: none;
+}
+
 .header-left {
   align-items: center;
   display: flex;
@@ -3819,6 +3823,18 @@ button.calendar-more {
     display: flex;
     min-width: 0;
     gap: 6px;
+  }
+
+  .mobile-doc-title {
+    color: var(--text);
+    display: block;
+    flex: 1 1 0;
+    font-size: 14px;
+    font-weight: 600;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .note-title-row h2,

@@ -214,6 +214,7 @@ const els = {
   splitMarkdownView: document.querySelector("#splitMarkdownView"),
   vaultStatus: document.querySelector("#vaultStatus"),
   notePath: document.querySelector("#notePath"),
+  mobileDocTitle: document.querySelector("#mobileDocTitle"),
   noteTitle: document.querySelector("#noteTitle"),
   syncStatus: document.querySelector("#syncStatus"),
   viewerWrap: document.querySelector(".viewer-wrap"),
@@ -1802,6 +1803,7 @@ async function openFile(path) {
     pushNavigationHistory({ type: "file", path });
     els.notePath.textContent = displayDocumentTitle(node.name);
     els.notePath.title = path;
+    if (els.mobileDocTitle) els.mobileDocTitle.textContent = displayDocumentTitle(node.name);
     els.noteTitle.textContent = displayDocumentTitle(node.name);
     const curTab = activeTab();
     const pinnedTabChanged = curTab?.pinned && (curTab.path !== path || curTab.title !== displayDocumentTitle(node.name));
@@ -2056,6 +2058,7 @@ async function deleteCurrentFileNode(node) {
     renderTree();
     refreshRecentFilesCache();
     els.notePath.textContent = "문서를 선택하세요";
+    if (els.mobileDocTitle) els.mobileDocTitle.textContent = "";
     els.noteTitle.textContent = "Obsidian Markdown Viewer";
     els.markdownView.classList.add("empty-state");
     els.markdownView.innerHTML = "<p>문서를 선택하세요.</p>";
@@ -2384,6 +2387,7 @@ async function openCreatedNoteInEditMode(path, node, content) {
   pushNavigationHistory({ type: "file", path });
   els.notePath.textContent = displayDocumentTitle(node.name);
   els.notePath.title = path;
+  if (els.mobileDocTitle) els.mobileDocTitle.textContent = displayDocumentTitle(node.name);
   els.noteTitle.textContent = displayDocumentTitle(node.name);
   const curTab = activeTab();
   if (curTab) { curTab.path = path; curTab.title = displayDocumentTitle(node.name); curTab.view = null; }
