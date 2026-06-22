@@ -4470,6 +4470,7 @@ function renderCalendar() {
 
   }
 
+  const toolbarMonthLabel = `${state.calendarDate.getFullYear()}-${String(state.calendarDate.getMonth() + 1).padStart(2, "0")}`;
   els.calendarView.innerHTML = `
     <div class="calendar-shell calendar-mode-${state.calendarMode} mobile-${state.mobileCalendarMode}" style="--calendar-row-count: ${rowLimit};">
       <div class="calendar-toolbar">
@@ -4479,6 +4480,7 @@ function renderCalendar() {
           <button type="button" data-calendar-action="next">&gt;</button>
         </div>
         ${showingTasks ? renderCalendarFilterToggleButton("calendar-toolbar-filter-btn") : ""}
+        <span class="calendar-toolbar-month-label">${toolbarMonthLabel}</span>
         <div class="calendar-nav-group">
           <button class="calendar-today-button" type="button" data-calendar-action="today">Today</button>
           <input class="calendar-date-jump" type="date" value="${formatDate(state.calendarDate)}" aria-label="날짜로 이동" title="날짜로 이동">
@@ -6114,6 +6116,7 @@ async function showTaskCreateDialog(dueDate, startDate = "") {
   if (els.taskCreateSubItemsInput) els.taskCreateSubItemsInput.value = "";
   if (els.taskStartTimeInput) els.taskStartTimeInput.value = "";
   if (els.taskDueTimeInput) els.taskDueTimeInput.value = "";
+  syncMobileTaskTimePlaceholders();
   setTaskDialogDate("due", dueDate);
   setTaskDialogDate("start", startDate);
   renderTaskDatePicker(null);
@@ -6172,8 +6175,17 @@ function setTaskDialogDate(field, value) {
   const btn = field === "start" ? els.taskStartDateBtn : els.taskDueDateBtn;
   if (!btn) return;
   btn.dataset.date = value || "";
-  btn.textContent = value ? formatDateKorean(value) : (field === "start" ? "날짜 없음" : "날짜 선택");
+  if (!btn.dataset.emptyLabel) btn.dataset.emptyLabel = btn.textContent || "";
+  const emptyLabel = isTouchPrimaryDevice() ? "--" : btn.dataset.emptyLabel;
+  btn.textContent = value ? formatDateKorean(value) : emptyLabel;
   btn.classList.toggle("has-date", Boolean(value));
+}
+
+function syncMobileTaskTimePlaceholders() {
+  if (!isTouchPrimaryDevice()) return;
+  [els.taskStartTimeInput, els.taskDueTimeInput, els.taskEditStartTimeInput, els.taskEditDueTimeInput].forEach((input) => {
+    if (input) input.placeholder = "--";
+  });
 }
 
 function applyTaskCreateStartDateHint() {
@@ -6552,7 +6564,9 @@ function setTaskEditDate(field, value) {
   const btn = field === "start" ? els.taskEditStartDateBtn : els.taskEditDueDateBtn;
   if (!btn) return;
   btn.dataset.date = value || "";
-  btn.textContent = value ? formatDateKorean(value) : (field === "start" ? "날짜 없음" : "날짜 선택");
+  if (!btn.dataset.emptyLabel) btn.dataset.emptyLabel = btn.textContent || "";
+  const emptyLabel = isTouchPrimaryDevice() ? "--" : btn.dataset.emptyLabel;
+  btn.textContent = value ? formatDateKorean(value) : emptyLabel;
   btn.classList.toggle("has-date", Boolean(value));
 }
 
@@ -6671,6 +6685,7 @@ async function showTaskEditDialog(task) {
   if (els.taskEditDeferred) els.taskEditDeferred.checked = task.deferred || false;
   if (els.taskEditStartTimeInput) els.taskEditStartTimeInput.value = task.startTime || "";
   if (els.taskEditDueTimeInput) els.taskEditDueTimeInput.value = task.dueTime || "";
+  syncMobileTaskTimePlaceholders();
   renderTaskEditSubItems(task.subItems);
   setTaskEditDate("start", task.dates?.start || "");
   setTaskEditDate("due", task.dates?.due || task.dates?.end || task.date || "");

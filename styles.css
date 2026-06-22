@@ -3759,18 +3759,10 @@ button.calendar-more {
   }
 
   .note-header .header-left {
-    display: contents;
-  }
-
-  .note-header .header-left > .icon-button {
-    grid-column: 1;
-    grid-row: 1;
-  }
-
-  .note-header .header-left > div {
-    grid-column: 1 / -1;
-    grid-row: 2;
+    align-items: center;
+    display: flex;
     min-width: 0;
+    gap: 6px;
   }
 
   .note-title-row h2,
@@ -4260,6 +4252,24 @@ button.calendar-more {
     flex-wrap: wrap;
     gap: 6px;
     overflow-x: visible;
+  }
+
+  .calendar-toolbar span.calendar-toolbar-month-label {
+    color: var(--muted);
+    display: block;
+    font-size: 12px;
+    line-height: 1.2;
+    padding: 0 6px;
+    white-space: nowrap;
+  }
+
+  .calendar-toolbar-filter-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 30px;
+    min-width: 66px;
+    padding: 0 10px;
   }
 
   .calendar-month-nav {
