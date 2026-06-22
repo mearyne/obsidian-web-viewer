@@ -346,6 +346,9 @@
           </div>
         </div>
         <div id="taskDatePickerCal" class="task-date-picker-cal" hidden></div>
+        <div class="task-create-field task-create-sub-items">
+          <textarea id="taskCreateSubItemsInput" rows="3" spellcheck="false" placeholder="- 세부 내용"></textarea>
+        </div>
         <div class="dialog-buttons">
           <button type="button" id="taskCreateCancelBtn">취소</button>
           <button type="button" id="taskCreateConfirmBtn">만들기</button>
@@ -412,6 +415,16 @@
               </div>
             </div>
             <div id="taskEditDatePickerCal" class="task-date-picker-cal" hidden></div>
+          </div>
+          <div id="taskEditSubItems" class="task-edit-sub-items">
+            <div class="task-edit-sub-items-header">
+              <div class="task-edit-depth-controls" aria-label="하위 불릿 깊이 조절">
+                <button type="button" id="taskEditOutdentButton" class="icon-button" aria-label="내어쓰기" title="내어쓰기">⇤</button>
+                <button type="button" id="taskEditIndentButton" class="icon-button" aria-label="들여쓰기" title="들여쓰기">⇥</button>
+              </div>
+            </div>
+            <textarea id="taskEditSubItemsInput" rows="10" spellcheck="false" placeholder="- 세부 내용"></textarea>
+            <div id="taskSubItemsPreview" class="task-sub-items-preview" hidden></div>
           </div>
         </div>
         <div class="dialog-buttons">
