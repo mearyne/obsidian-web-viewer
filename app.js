@@ -3067,7 +3067,7 @@ async function fetchLinkTitle(url) {
 
 function buildEmbedBlock(meta, url) {
   const esc = (s) => (s || "").replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-  return "```embed\ntitle: \"" + esc(meta.title) + "\"\ndescription: \"" + esc(meta.description) + "\"\nimage: \"" + esc(meta.image) + "\"\nurl: \"" + esc(url) + "\"\nfavicon: \"" + esc(meta.favicon) + "\"\n```";
+  return "```embed\ntitle: \"" + esc(meta.title) + "\"\ndescription: \"" + esc(meta.description) + "\"\nimage: \"" + esc(meta.image) + "\"\nurl: \"" + esc(url) + "\"\n```";
 }
 
 async function handleEditorPaste(event) {
@@ -3090,7 +3090,7 @@ async function handleEditorPaste(event) {
     } else {
       const ta = els.markdownEditor;
       const insertAt = ta.selectionStart;
-      const embedPlaceholder = "```embed\nurl: \"" + text + "\"\n```";
+      const embedPlaceholder = "```embed\nstatus: \"loading\"\nurl: \"" + text + "\"\n```";
       insertEditorText(ta, embedPlaceholder);
       fetchLinkMeta(text).then((meta) => {
         const fullBlock = buildEmbedBlock(meta, text);
@@ -7379,20 +7379,25 @@ function renderEmbedBlock(code) {
     const m = code.match(new RegExp(`^${key}:\\s*"((?:[^"\\\\]|\\\\.)*)"`, "m"));
     return m ? m[1].replace(/\\"/g, '"').replace(/\\\\/g, "\\") : "";
   };
+  const status = get("status");
   const title = get("title");
   const description = get("description");
   const image = get("image");
   const url = get("url");
-  const favicon = get("favicon");
   if (!url) return `<pre class="code-block language-text"><code>${escapeHtml(code)}</code></pre>`;
+  if (status === "loading") {
+    return `<div class="link-embed-card link-embed-loading">` +
+      `<div class="link-embed-body">` +
+      `<div class="link-embed-title link-embed-fetching">불러오는 중...</div>` +
+      `<div class="link-embed-url"><span>${escapeHtml(url)}</span></div>` +
+      `</div></div>`;
+  }
   return `<a href="${escapeAttribute(url)}" target="_blank" rel="noopener" class="link-embed-card">` +
     (image ? `<div class="link-embed-image" style="background-image:url('${escapeAttribute(image)}')"></div>` : "") +
     `<div class="link-embed-body">` +
     `<div class="link-embed-title">${escapeHtml(title || url)}</div>` +
     (description ? `<div class="link-embed-description">${escapeHtml(description)}</div>` : "") +
-    `<div class="link-embed-url">` +
-    (favicon ? `<img src="${escapeAttribute(favicon)}" alt="" class="link-embed-favicon" loading="lazy">` : "") +
-    `<span>${escapeHtml(url)}</span></div>` +
+    `<div class="link-embed-url"><span>${escapeHtml(url)}</span></div>` +
     `</div></a>`;
 }
 

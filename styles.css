@@ -1440,11 +1440,20 @@ button:disabled {
   white-space: nowrap;
 }
 
-.link-embed-favicon {
-  flex: 0 0 auto;
-  height: 14px;
-  object-fit: contain;
-  width: 14px;
+.link-embed-loading {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.link-embed-fetching {
+  animation: link-embed-blink 1.2s ease-in-out infinite;
+  color: var(--muted);
+  font-weight: 400;
+}
+
+@keyframes link-embed-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 
 .markdown-body .code-block {
