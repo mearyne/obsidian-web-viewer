@@ -116,6 +116,7 @@ const state = {
   randomMarkdownPaths: [],
   randomSeenByTab: new Map(),
   randomOldFirst: false,
+  randomNoticeToast: null,
   customConfirmResolve: null,
   lastGPressAt: 0,
   taskCreateSourceDate: "",
@@ -391,7 +392,9 @@ els.clipperFolderInput?.addEventListener("input", () => {
 });
 els.searchExcludeInput?.addEventListener("input", handleSearchExcludeInput);
 els.newNoteButton?.addEventListener("click", openNewNote);
-els.randomFileButton.addEventListener("click", openRandomMarkdown);
+els.randomFileButton.addEventListener("click", () => {
+  void triggerRandomAction();
+});
 els.randomPriorityToggleButton?.addEventListener("click", toggleRandomPriorityMode);
 els.calendarButton.addEventListener("click", openNextCalendarKind);
 els.matrixButton?.addEventListener("click", buildMatrixView);
@@ -626,7 +629,7 @@ function handleGlobalKeydown(event) {
     if (event.key.toLowerCase() === "r") {
       event.preventDefault();
       event.stopPropagation();
-      openRandomMarkdown({ showProgress: true });
+      void triggerRandomAction();
       return;
     }
     if (event.key.toLowerCase() === "c") {
@@ -660,7 +663,7 @@ function handleGlobalKeydown(event) {
   } else if (!event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && (event.code === "KeyR" || event.key.toLowerCase() === "r")) {
     event.preventDefault();
     event.stopPropagation();
-    void openRandomMarkdown({ showProgress: true });
+    void triggerRandomAction();
   } else if (event.key === "Escape") {
     closeOptionsMenu();
     closeImageLightbox();
@@ -673,6 +676,10 @@ function handleGlobalKeydown(event) {
 
 function isTypingTarget(target) {
   return Boolean(target?.closest?.("input, textarea, select, [contenteditable='true']"));
+}
+
+function triggerRandomAction() {
+  return openRandomMarkdown({ showProgress: true });
 }
 
 installCustomAlerts();
@@ -887,7 +894,7 @@ function setSidebarWidth(width) {
 async function openRandomMarkdown({ showProgress = false } = {}) {
   const files = getRandomMarkdownPaths();
   if (!files.length) {
-    alert(showProgress ? "랜덤 파일: 0개 중 0개" : "조건에 맞는 랜덤 파일이 없습니다.");
+    showRandomNotice(showProgress ? "랜덤 파일: 0개 중 0개" : "조건에 맞는 랜덤 파일이 없습니다.", "error");
     return;
   }
 
@@ -896,7 +903,7 @@ async function openRandomMarkdown({ showProgress = false } = {}) {
   const nonCurrentCandidates = candidates.filter((path) => path !== state.currentPath);
   if (nonCurrentCandidates.length) candidates = nonCurrentCandidates;
   if (!candidates.length) {
-    alert(showProgress ? randomProgressText(files, seen) : "조건에 맞는 새 랜덤 파일이 없습니다.");
+    showRandomNotice(showProgress ? randomProgressText(files, seen) : "조건에 맞는 새 랜덤 파일이 없습니다.", "error");
     return;
   }
 
@@ -904,8 +911,29 @@ async function openRandomMarkdown({ showProgress = false } = {}) {
   if (state.activeView === "calendar") showNoteView();
   await openFile(path);
   seen.add(path);
-  if (showProgress) showAppToast(randomProgressText(files, seen));
+  if (showProgress) showRandomNotice(randomProgressText(files, seen));
   scrollViewerTop();
+}
+
+function showRandomNotice(message, variant = "info") {
+  if (state.randomNoticeToast) {
+    state.randomNoticeToast.remove();
+  }
+
+  const host = ensureToastHost();
+  const toast = document.createElement("div");
+  toast.className = `app-toast ${variant}`;
+  toast.textContent = String(message || "");
+  host.append(toast);
+  state.randomNoticeToast = toast;
+  requestAnimationFrame(() => toast.classList.add("show"));
+  window.setTimeout(() => {
+    toast.classList.remove("show");
+    window.setTimeout(() => {
+      toast.remove();
+      if (state.randomNoticeToast === toast) state.randomNoticeToast = null;
+    }, 180);
+  }, 2800);
 }
 
 function getRandomMarkdownPaths() {
