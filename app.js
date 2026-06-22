@@ -168,7 +168,9 @@ const els = {
   taskEditChecked: document.querySelector("#taskEditChecked"),
   taskEditDeferred: document.querySelector("#taskEditDeferred"),
   taskEditStartDateBtn: document.querySelector("#taskEditStartDateBtn"),
+  taskEditStartDateClearBtn: document.querySelector("#taskEditStartDateClearBtn"),
   taskEditDueDateBtn: document.querySelector("#taskEditDueDateBtn"),
+  taskEditDueDateClearBtn: document.querySelector("#taskEditDueDateClearBtn"),
   taskEditDatePickerCal: document.querySelector("#taskEditDatePickerCal"),
   taskEditStartTimeInput: document.querySelector("#taskEditStartTimeInput"),
   taskEditDueTimeInput: document.querySelector("#taskEditDueTimeInput"),
@@ -5954,7 +5956,8 @@ function taskDateMarkerForMove(task, sourceDate) {
 function calendarTaskMoveMode(task, sourceDate) {
   const startKey = task?.dates?.start || "";
   const endKey = task?.dates?.end || task?.dates?.due || "";
-  if (!startKey || !endKey || !sourceDate || startKey === endKey) return "single";
+  if (!startKey || !endKey || !sourceDate) return "single";
+  if (startKey === endKey) return "range-shift";
   if (sourceDate !== startKey && sourceDate !== endKey) return "range-shift";
   return "single";
 }
@@ -6413,10 +6416,22 @@ function bindTaskEditDialog() {
     renderTaskEditDatePicker(state.taskEditActiveField);
   });
 
+  els.taskEditStartDateClearBtn?.addEventListener("click", () => {
+    setTaskEditDate("start", "");
+    state.taskEditActiveField = null;
+    renderTaskEditDatePicker(null);
+  });
+
   els.taskEditDueDateBtn?.addEventListener("click", () => {
     const field = "due";
     state.taskEditActiveField = state.taskEditActiveField === field ? null : field;
     renderTaskEditDatePicker(state.taskEditActiveField);
+  });
+
+  els.taskEditDueDateClearBtn?.addEventListener("click", () => {
+    setTaskEditDate("due", "");
+    state.taskEditActiveField = null;
+    renderTaskEditDatePicker(null);
   });
 
   els.taskEditChecked?.addEventListener("change", () => {
@@ -6590,12 +6605,14 @@ function renderEditTagChips() {
 
 function setTaskEditDate(field, value) {
   const btn = field === "start" ? els.taskEditStartDateBtn : els.taskEditDueDateBtn;
+  const clearBtn = field === "start" ? els.taskEditStartDateClearBtn : els.taskEditDueDateClearBtn;
   if (!btn) return;
   btn.dataset.date = value || "";
   if (!btn.dataset.emptyLabel) btn.dataset.emptyLabel = btn.textContent || "";
   const emptyLabel = isTouchPrimaryDevice() ? "--" : btn.dataset.emptyLabel;
   btn.textContent = value ? formatDateKorean(value) : emptyLabel;
   btn.classList.toggle("has-date", Boolean(value));
+  if (clearBtn) clearBtn.hidden = !value;
 }
 
 function renderTaskEditDatePicker(field) {
@@ -6665,7 +6682,9 @@ function setTaskDialogMode(mode) {
 
   [
     els.taskEditStartDateBtn,
+    els.taskEditStartDateClearBtn,
     els.taskEditDueDateBtn,
+    els.taskEditDueDateClearBtn,
     els.taskEditStartTimeInput,
     els.taskEditDueTimeInput,
     els.taskEditIndentButton,

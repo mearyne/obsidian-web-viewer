@@ -2042,8 +2042,31 @@ button:disabled {
   gap: 6px;
 }
 
-.date-time-row .date-picker-btn {
-  width: 100%;
+.date-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.date-picker-row .date-picker-btn {
+  flex: 1;
+}
+
+.date-clear-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 4px 6px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.date-clear-btn:hover {
+  background: var(--surface-2);
+  color: var(--text);
 }
 
 .time-input {
@@ -2378,6 +2401,16 @@ button:disabled {
   gap: 6px;
   line-height: 1.6;
   min-height: 40px;
+}
+
+.task-sub-empty {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  font-size: 13px;
+  justify-content: center;
+  min-height: 60px;
+  width: 100%;
 }
 
 .task-sub-items-preview .task-sub-bullet {
