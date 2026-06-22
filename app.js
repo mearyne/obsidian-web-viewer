@@ -5120,8 +5120,12 @@ function renderInlineMarkdown(text) {
 }
 
 function renderSubItemsHtml(subItems) {
-  if (!subItems || !subItems.length) return "";
-  return subItems.map((item) => {
+  const normalizedSubItems = (subItems || [])
+    .map((item) => String(item || ""))
+    .filter((item) => item.trim().length > 0);
+  if (!normalizedSubItems.length) return `<div class="task-sub-empty">비어있음</div>`;
+
+  return normalizedSubItems.map((item) => {
     const indent = item.match(/^(\s*)/)?.[1] || "";
     const body = item.slice(indent.length);
     const listItem = body.match(/^[-*+]\s+(.*)$/);
