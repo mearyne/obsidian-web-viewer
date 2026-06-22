@@ -6626,9 +6626,7 @@ function setTaskEditDate(field, value) {
   const clearBtn = field === "start" ? els.taskEditStartDateClearBtn : els.taskEditDueDateClearBtn;
   if (!btn) return;
   btn.dataset.date = value || "";
-  if (!btn.dataset.emptyLabel) btn.dataset.emptyLabel = btn.textContent || "";
-  const emptyLabel = isTouchPrimaryDevice() ? "--" : btn.dataset.emptyLabel;
-  btn.textContent = value ? formatDateKorean(value) : emptyLabel;
+  btn.textContent = value ? formatDateKorean(value) : "----";
   btn.classList.toggle("has-date", Boolean(value));
   if (clearBtn) clearBtn.hidden = !value;
 }
@@ -6708,16 +6706,28 @@ function setTaskDialogMode(mode) {
 
   [
     els.taskEditStartDateBtn,
-    els.taskEditStartDateClearBtn,
     els.taskEditDueDateBtn,
-    els.taskEditDueDateClearBtn,
     els.taskEditStartTimeInput,
-    els.taskEditStartTimeClearBtn,
     els.taskEditDueTimeInput,
-    els.taskEditDueTimeClearBtn,
     els.taskEditIndentButton,
     els.taskEditOutdentButton,
   ].forEach((el) => { if (el) el.disabled = isView; });
+
+  if (isView) {
+    [els.taskEditStartDateClearBtn, els.taskEditDueDateClearBtn,
+      els.taskEditStartTimeClearBtn, els.taskEditDueTimeClearBtn]
+      .forEach((el) => { if (el) el.hidden = true; });
+  } else {
+    if (els.taskEditStartDateClearBtn) els.taskEditStartDateClearBtn.hidden = !els.taskEditStartDateBtn?.dataset.date;
+    if (els.taskEditDueDateClearBtn) els.taskEditDueDateClearBtn.hidden = !els.taskEditDueDateBtn?.dataset.date;
+    if (els.taskEditStartTimeClearBtn) els.taskEditStartTimeClearBtn.hidden = !els.taskEditStartTimeInput?.value;
+    if (els.taskEditDueTimeClearBtn) els.taskEditDueTimeClearBtn.hidden = !els.taskEditDueTimeInput?.value;
+  }
+
+  const startTimeRow = els.taskEditStartTimeInput?.closest(".date-picker-row");
+  const dueTimeRow = els.taskEditDueTimeInput?.closest(".date-picker-row");
+  if (startTimeRow) startTimeRow.classList.toggle("time-empty", isView && !els.taskEditStartTimeInput?.value);
+  if (dueTimeRow) dueTimeRow.classList.toggle("time-empty", isView && !els.taskEditDueTimeInput?.value);
 
   if (els.taskEditDialogTitle) els.taskEditDialogTitle.readOnly = isView;
   if (els.taskViewEditBtn) els.taskViewEditBtn.hidden = !isView;

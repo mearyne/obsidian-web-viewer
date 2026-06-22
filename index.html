@@ -404,11 +404,12 @@
                 <label>시작일 <span class="task-date-optional">(선택)</span></label>
                 <div class="date-time-row">
                   <div class="date-picker-row">
-                    <button type="button" id="taskEditStartDateBtn" class="date-picker-btn" data-date="">날짜 없음</button>
+                    <button type="button" id="taskEditStartDateBtn" class="date-picker-btn" data-date="">----</button>
                     <button type="button" id="taskEditStartDateClearBtn" class="date-clear-btn" hidden aria-label="날짜 삭제">✕</button>
                   </div>
                   <div class="date-picker-row">
                     <input type="time" id="taskEditStartTimeInput" class="time-input" value="" step="300">
+                    <span class="time-empty-label">----</span>
                     <button type="button" id="taskEditStartTimeClearBtn" class="date-clear-btn" hidden aria-label="시간 삭제">✕</button>
                   </div>
                 </div>
@@ -417,11 +418,12 @@
                 <label>종료일</label>
                 <div class="date-time-row">
                   <div class="date-picker-row">
-                    <button type="button" id="taskEditDueDateBtn" class="date-picker-btn" data-date="">날짜 선택</button>
+                    <button type="button" id="taskEditDueDateBtn" class="date-picker-btn" data-date="">----</button>
                     <button type="button" id="taskEditDueDateClearBtn" class="date-clear-btn" hidden aria-label="날짜 삭제">✕</button>
                   </div>
                   <div class="date-picker-row">
                     <input type="time" id="taskEditDueTimeInput" class="time-input" value="" step="300">
+                    <span class="time-empty-label">----</span>
                     <button type="button" id="taskEditDueTimeClearBtn" class="date-clear-btn" hidden aria-label="시간 삭제">✕</button>
                   </div>
                 </div>

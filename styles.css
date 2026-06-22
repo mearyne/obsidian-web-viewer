@@ -2069,6 +2069,20 @@ button:disabled {
   color: var(--text);
 }
 
+.time-empty-label {
+  color: var(--muted);
+  display: none;
+  font-size: 13px;
+}
+
+.date-picker-row.time-empty .time-input {
+  display: none;
+}
+
+.date-picker-row.time-empty .time-empty-label {
+  display: block;
+}
+
 .time-input {
   background: var(--surface-2);
   border: 1px solid var(--line);
