@@ -1869,11 +1869,6 @@ button:disabled {
     width: min(420px, calc(100vw - 20px));
   }
 
-  .task-mode-view .date-picker-btn:disabled,
-  .task-mode-view .time-input:disabled {
-    background: var(--surface-2);
-    border-color: var(--line);
-  }
 }
 
 .task-create-form {
@@ -2395,6 +2390,14 @@ button:disabled {
   color: var(--text);
   cursor: default;
   opacity: 1;
+}
+
+@media (max-width: 768px) {
+  .task-mode-view .date-picker-btn:disabled,
+  .task-mode-view .time-input:disabled {
+    background: var(--surface-2);
+    border-color: var(--line);
+  }
 }
 
 /* Depth controls invisible in view mode — visibility keeps row height */
