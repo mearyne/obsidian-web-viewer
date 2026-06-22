@@ -1159,8 +1159,14 @@ async function fetchUrlMeta(targetUrl, res) {
     clearTimeout(mlTimeout);
     if (mlRes.ok) {
       const mlData = await mlRes.json();
-      if (mlData?.status === "success" && mlData?.data?.title) {
-        sendJsonCors(res, 200, { title: mlData.data.title.replace(/\[|\]/g, "").trim() });
+      if (mlData?.status === "success" && mlData?.data) {
+        const d = mlData.data;
+        sendJsonCors(res, 200, {
+          title: (d.title || "").replace(/\[|\]/g, "").trim(),
+          description: d.description || "",
+          image: d.image?.url || "",
+          favicon: d.logo?.url || "",
+        });
         return;
       }
     }
@@ -1193,9 +1199,9 @@ async function fetchUrlMeta(targetUrl, res) {
       || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i)?.[1];
     const titleTag = html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1];
     const title = (ogTitle || titleTag || "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim();
-    sendJsonCors(res, 200, { title });
+    sendJsonCors(res, 200, { title, description: "", image: "", favicon: "" });
   } catch {
-    sendJsonCors(res, 200, { title: "" });
+    sendJsonCors(res, 200, { title: "", description: "", image: "", favicon: "" });
   }
 }
 

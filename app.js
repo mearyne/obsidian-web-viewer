@@ -3045,15 +3045,29 @@ async function uploadImageToEditor(blob, mimeType) {
   }
 }
 
-async function fetchLinkTitle(url) {
+async function fetchLinkMeta(url) {
   try {
     const res = await fetch(`/api/url-meta?url=${encodeURIComponent(url)}`);
-    if (!res.ok) return "";
+    if (!res.ok) return { title: "", description: "", image: "", favicon: "" };
     const data = await res.json();
-    return (data.title || "").replace(/\[|\]/g, "").trim();
+    return {
+      title: (data.title || "").replace(/\[|\]/g, "").trim(),
+      description: data.description || "",
+      image: data.image || "",
+      favicon: data.favicon || "",
+    };
   } catch {
-    return "";
+    return { title: "", description: "", image: "", favicon: "" };
   }
+}
+
+async function fetchLinkTitle(url) {
+  return (await fetchLinkMeta(url)).title;
+}
+
+function buildEmbedBlock(meta, url) {
+  const esc = (s) => (s || "").replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  return "```embed\ntitle: \"" + esc(meta.title) + "\"\ndescription: \"" + esc(meta.description) + "\"\nimage: \"" + esc(meta.image) + "\"\nurl: \"" + esc(url) + "\"\nfavicon: \"" + esc(meta.favicon) + "\"\n```";
 }
 
 async function handleEditorPaste(event) {
@@ -3074,16 +3088,16 @@ async function handleEditorPaste(event) {
     if (isImage) {
       insertEditorText(els.markdownEditor, `![](${text})`);
     } else {
-      const placeholder = `[](${text})`;
       const ta = els.markdownEditor;
       const insertAt = ta.selectionStart;
-      insertEditorText(ta, placeholder, 1);
-      fetchLinkTitle(text).then((title) => {
-        if (!title) return;
+      const embedPlaceholder = "```embed\nurl: \"" + text + "\"\n```";
+      insertEditorText(ta, embedPlaceholder);
+      fetchLinkMeta(text).then((meta) => {
+        const fullBlock = buildEmbedBlock(meta, text);
         const cur = ta.value;
-        const idx = cur.indexOf(placeholder, Math.max(0, insertAt - 1));
+        const idx = cur.indexOf(embedPlaceholder, Math.max(0, insertAt - 1));
         if (idx === -1) return;
-        ta.value = cur.slice(0, idx) + `[${title}](${text})` + cur.slice(idx + placeholder.length);
+        ta.value = cur.slice(0, idx) + fullBlock + cur.slice(idx + embedPlaceholder.length);
         resizeEditorToContent();
         markEditorDirty();
       });
@@ -7360,7 +7374,30 @@ function bindRenderedTaskCheckboxes(root) {
   });
 }
 
+function renderEmbedBlock(code) {
+  const get = (key) => {
+    const m = code.match(new RegExp(`^${key}:\\s*"((?:[^"\\\\]|\\\\.)*)"`, "m"));
+    return m ? m[1].replace(/\\"/g, '"').replace(/\\\\/g, "\\") : "";
+  };
+  const title = get("title");
+  const description = get("description");
+  const image = get("image");
+  const url = get("url");
+  const favicon = get("favicon");
+  if (!url) return `<pre class="code-block language-text"><code>${escapeHtml(code)}</code></pre>`;
+  return `<a href="${escapeAttribute(url)}" target="_blank" rel="noopener" class="link-embed-card">` +
+    (image ? `<div class="link-embed-image" style="background-image:url('${escapeAttribute(image)}')"></div>` : "") +
+    `<div class="link-embed-body">` +
+    `<div class="link-embed-title">${escapeHtml(title || url)}</div>` +
+    (description ? `<div class="link-embed-description">${escapeHtml(description)}</div>` : "") +
+    `<div class="link-embed-url">` +
+    (favicon ? `<img src="${escapeAttribute(favicon)}" alt="" class="link-embed-favicon" loading="lazy">` : "") +
+    `<span>${escapeHtml(url)}</span></div>` +
+    `</div></a>`;
+}
+
 function renderCodeBlock(code, language, depth) {
+  if (language === "embed") return renderEmbedBlock(code);
   const normalizedLanguage = codeLanguageAlias(language);
   const depthClassName = depthClass(depth);
   const classes = ["code-block", `language-${normalizedLanguage}`, depthClassName].filter(Boolean).join(" ");

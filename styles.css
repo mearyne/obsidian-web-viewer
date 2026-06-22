@@ -1375,6 +1375,78 @@ button:disabled {
   tab-size: 2;
 }
 
+.link-embed-card {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  display: flex;
+  margin: 10px 0;
+  max-width: 560px;
+  min-height: 90px;
+  overflow: hidden;
+  text-decoration: none;
+  transition: background 0.15s;
+}
+
+.link-embed-card:hover {
+  background: var(--surface-3, color-mix(in srgb, var(--surface-2) 80%, var(--text) 20%));
+}
+
+.link-embed-image {
+  background-position: center;
+  background-size: cover;
+  flex: 0 0 120px;
+}
+
+.link-embed-body {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 12px 14px;
+}
+
+.link-embed-title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.link-embed-description {
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: var(--muted);
+  display: -webkit-box;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow: hidden;
+}
+
+.link-embed-url {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  font-size: 11px;
+  gap: 4px;
+  margin-top: auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.link-embed-favicon {
+  flex: 0 0 auto;
+  height: 14px;
+  object-fit: contain;
+  width: 14px;
+}
+
 .markdown-body .code-block {
   background: var(--code);
   border: 1px solid var(--line);
