@@ -4322,13 +4322,9 @@ button.calendar-more {
   }
 
   .calendar-month-nav {
-    flex: 0 0 auto;
+    flex: 1 1 auto;
     min-width: 0;
     order: 2;
-  }
-
-  .calendar-month-nav strong {
-    font-size: 18px;
   }
 
   .calendar-nav-group {
