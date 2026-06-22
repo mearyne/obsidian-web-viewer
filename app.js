@@ -3027,6 +3027,17 @@ async function uploadImageToEditor(blob, mimeType) {
   }
 }
 
+async function fetchLinkTitle(url) {
+  try {
+    const res = await fetch(`/api/url-meta?url=${encodeURIComponent(url)}`);
+    if (!res.ok) return "";
+    const data = await res.json();
+    return (data.title || "").replace(/\[|\]/g, "").trim();
+  } catch {
+    return "";
+  }
+}
+
 async function handleEditorPaste(event) {
   if (!state.serverVaultWritable) return;
   const items = event.clipboardData?.items;
@@ -3042,7 +3053,23 @@ async function handleEditorPaste(event) {
   if (/^https?:\/\/\S+$/.test(text)) {
     event.preventDefault();
     const isImage = /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)(\?.*)?$/i.test(text);
-    insertEditorText(els.markdownEditor, isImage ? `![](${text})` : `[](${text})`);
+    if (isImage) {
+      insertEditorText(els.markdownEditor, `![](${text})`);
+    } else {
+      const placeholder = `[](${text})`;
+      const ta = els.markdownEditor;
+      const insertAt = ta.selectionStart;
+      insertEditorText(ta, placeholder, 1);
+      fetchLinkTitle(text).then((title) => {
+        if (!title) return;
+        const cur = ta.value;
+        const idx = cur.indexOf(placeholder, Math.max(0, insertAt - 1));
+        if (idx === -1) return;
+        ta.value = cur.slice(0, idx) + `[${title}](${text})` + cur.slice(idx + placeholder.length);
+        resizeEditorToContent();
+        markEditorDirty();
+      });
+    }
   }
 }
 
@@ -3088,9 +3115,22 @@ async function handleSubItemsPaste(event) {
   const ta = event.target;
   const { selectionStart, selectionEnd, value } = ta;
   const isImage = /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)(\?.*)?$/i.test(text);
-  const insertion = isImage ? `![](${text})` : `[](${text})`;
-  ta.value = value.slice(0, selectionStart) + insertion + value.slice(selectionEnd);
-  ta.setSelectionRange(selectionStart + insertion.length, selectionStart + insertion.length);
+  if (isImage) {
+    const insertion = `![](${text})`;
+    ta.value = value.slice(0, selectionStart) + insertion + value.slice(selectionEnd);
+    ta.setSelectionRange(selectionStart + insertion.length, selectionStart + insertion.length);
+  } else {
+    const placeholder = `[](${text})`;
+    ta.value = value.slice(0, selectionStart) + placeholder + value.slice(selectionEnd);
+    ta.setSelectionRange(selectionStart + 1, selectionStart + 1);
+    fetchLinkTitle(text).then((title) => {
+      if (!title) return;
+      const cur = ta.value;
+      const idx = cur.indexOf(placeholder, Math.max(0, selectionStart - 1));
+      if (idx === -1) return;
+      ta.value = cur.slice(0, idx) + `[${title}](${text})` + cur.slice(idx + placeholder.length);
+    });
+  }
 }
 
 function registerUploadedFileInVault(filePath, size = 0) {

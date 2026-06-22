@@ -232,6 +232,11 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (requestPath === "/api/url-meta") {
+    fetchUrlMeta(url.searchParams.get("url") || "", res);
+    return;
+  }
+
   if (requestPath === "/api/fetch-clip") {
     const targetUrl = url.searchParams.get("url") || "";
     fetchAndParseUrl(targetUrl, res);
@@ -1132,6 +1137,48 @@ function sendJsonNoStore(res, status, value) {
     "Cache-Control": "no-store",
   });
   res.end(JSON.stringify(value));
+}
+
+async function fetchUrlMeta(targetUrl, res) {
+  if (!targetUrl) { sendJsonCors(res, 400, { error: "url required" }); return; }
+  let parsed;
+  try { parsed = new URL(targetUrl); } catch {
+    sendJsonCors(res, 400, { error: "Invalid URL" }); return;
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    sendJsonCors(res, 200, { title: "" }); return;
+  }
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6000);
+    const response = await fetch(targetUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
+      },
+      redirect: "follow",
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    if (!response.ok) { sendJsonCors(res, 200, { title: "" }); return; }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let html = "";
+    while (html.length < 16384) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      html += decoder.decode(value, { stream: true });
+      if (/<\/head>/i.test(html)) break;
+    }
+    reader.cancel().catch(() => {});
+    const ogTitle = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)?.[1]
+      || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i)?.[1];
+    const titleTag = html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1];
+    const title = (ogTitle || titleTag || "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim();
+    sendJsonCors(res, 200, { title });
+  } catch {
+    sendJsonCors(res, 200, { title: "" });
+  }
 }
 
 async function fetchAndParseUrl(targetUrl, res) {
