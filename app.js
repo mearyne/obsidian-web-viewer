@@ -3041,7 +3041,8 @@ async function handleEditorPaste(event) {
   const text = event.clipboardData.getData("text/plain")?.trim() || "";
   if (/^https?:\/\/\S+$/.test(text)) {
     event.preventDefault();
-    insertEditorText(els.markdownEditor, `![](${text})`);
+    const isImage = /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)(\?.*)?$/i.test(text);
+    insertEditorText(els.markdownEditor, isImage ? `![](${text})` : `[](${text})`);
   }
 }
 
@@ -3086,7 +3087,8 @@ async function handleSubItemsPaste(event) {
   event.preventDefault();
   const ta = event.target;
   const { selectionStart, selectionEnd, value } = ta;
-  const insertion = `![](${text})`;
+  const isImage = /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)(\?.*)?$/i.test(text);
+  const insertion = isImage ? `![](${text})` : `[](${text})`;
   ta.value = value.slice(0, selectionStart) + insertion + value.slice(selectionEnd);
   ta.setSelectionRange(selectionStart + insertion.length, selectionStart + insertion.length);
 }
