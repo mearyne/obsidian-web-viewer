@@ -117,6 +117,8 @@ const state = {
   randomSeenByTab: new Map(),
   randomOldFirst: false,
   customConfirmResolve: null,
+  lastGPressAt: 0,
+  taskCreateSourceDate: "",
 };
 
 const EXCALIDRAW_PREVIEW_ENABLED = false;
@@ -580,6 +582,22 @@ function handleGlobalKeydown(event) {
         const tab = state.tabs[idx];
         if (tab) { event.preventDefault(); event.stopPropagation(); void switchTab(tab.id); return; }
       }
+    }
+    if (event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey && event.key.toLowerCase() === "g") {
+      event.preventDefault();
+      event.stopPropagation();
+      scrollViewerBottom();
+      return;
+    }
+    if (!event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey && event.key.toLowerCase() === "g") {
+      const now = performance.now();
+      const isDoubleG = state.lastGPressAt > 0 && now - state.lastGPressAt <= 420;
+      state.lastGPressAt = isDoubleG ? 0 : now;
+      if (!isDoubleG) return;
+      event.preventDefault();
+      event.stopPropagation();
+      scrollViewerTop();
+      return;
     }
     if (event.key.toLowerCase() === "e") {
       event.preventDefault();
@@ -1168,18 +1186,18 @@ async function readFileMetadata(handle, path = "") {
 async function loadSampleVault() {
   try {
     const response = await fetch("/api/vault", { cache: "no-store" });
-    if (!response.ok) {
-      const payload = await response.json().catch(() => ({}));
-      hydrateUnavailableVault(payload.error || "Vault API failed");
-      return;
-    }
+    if (!response.ok) throw new Error("vault api error");
     const vault = await response.json();
+    if (!vault || !Array.isArray(vault.files)) {
+      throw new Error("vault payload invalid");
+    }
     hydrateServerVault(vault.name || "vault", vault.files || [], Boolean(vault.writable));
   } catch {
     try {
       const response = await fetch("/api/sample-vault", { cache: "no-store" });
       if (!response.ok) throw new Error("Sample vault API failed");
       const vault = await response.json();
+      if (!vault || !Array.isArray(vault.files)) throw new Error("sample vault payload invalid");
       hydrateServerVault(vault.name || "sample-vault", vault.files || [], Boolean(vault.writable));
     } catch {
       const files = Object.entries(SAMPLE_FILES).map(([path, content]) => ({ path, content }));
@@ -1915,6 +1933,10 @@ function updateHistoryButtons() {
 
 function scrollViewerTop() {
   els.viewerWrap.scrollTo({ top: 0, behavior: "auto" });
+}
+
+function scrollViewerBottom() {
+  els.viewerWrap.scrollTo({ top: els.viewerWrap.scrollHeight, behavior: "auto" });
 }
 
 function scrollViewerByPageFraction(direction) {
@@ -3955,8 +3977,10 @@ function setCalendarMode(mode) {
 }
 
 async function openCalendarFromShortcut() {
+  const active = activeTab();
+  const isMobileNewTab = isTouchPrimaryDevice() && active && !active.path && !active.view;
   const calTab = state.tabs.find((t) => t.view === "calendar");
-  if (calTab && calTab.id !== state.activeTabId) {
+  if (calTab && calTab.id !== state.activeTabId && !isMobileNewTab) {
     await switchTab(calTab.id);
     return;
   }
@@ -5055,7 +5079,8 @@ function scheduleHolidayRender() {
 }
 
 function renderSubItemContent(content) {
-  const wikiEmbed = content.match(/^!\[\[([^\]]+)\]\]$/);
+  const text = String(content || "").trim();
+  const wikiEmbed = text.match(/^!\[\[([^\]]+)\]\]$/);
   if (wikiEmbed) {
     const target = wikiEmbed[1].split("|")[0].trim();
     const filePath = resolveVaultPath(target);
@@ -5065,11 +5090,11 @@ function renderSubItemContent(content) {
     }
     return `<span>${escapeHtml(content)}</span>`;
   }
-  const mdImg = content.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
+  const mdImg = text.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
   if (mdImg) {
     return `<img class="task-sub-img" src="${escapeAttribute(mdImg[2])}" alt="${escapeAttribute(mdImg[1])}" loading="lazy">`;
   }
-  return `<span>${renderInlineMarkdown(content)}</span>`;
+  return `<span>${renderInline(text)}</span>`;
 }
 
 function renderInlineMarkdown(text) {
@@ -6077,6 +6102,7 @@ async function showTaskCreateDialog(dueDate, startDate = "") {
   // reset state
   state.taskDialogActiveField = null;
   state.taskDialogMeta = { kind: "할일", category: null, priority: null, tags: [] };
+  state.taskCreateSourceDate = startDate || dueDate;
   if (els.taskTitleInput) els.taskTitleInput.value = "";
   if (els.taskCreateSubItemsInput) els.taskCreateSubItemsInput.value = "";
   if (els.taskStartTimeInput) els.taskStartTimeInput.value = "";
@@ -6141,6 +6167,13 @@ function setTaskDialogDate(field, value) {
   btn.dataset.date = value || "";
   btn.textContent = value ? formatDateKorean(value) : (field === "start" ? "날짜 없음" : "날짜 선택");
   btn.classList.toggle("has-date", Boolean(value));
+}
+
+function applyTaskCreateStartDateHint() {
+  if (!state.taskCreateSourceDate) return;
+  if (!els.taskStartTimeInput?.value) return;
+  if (!els.taskStartDateBtn || els.taskStartDateBtn.dataset.date) return;
+  setTaskDialogDate("start", state.taskCreateSourceDate);
 }
 
 function normalizeTaskTimeInput(input) {
@@ -6263,11 +6296,15 @@ function bindTaskCreateDialog() {
   els.taskTitleInput?.addEventListener("keydown", (e) => {
     handleTaskTitleEnter(e, els.taskCreateConfirmBtn);
   });
+  els.taskStartTimeInput?.addEventListener("input", applyTaskCreateStartDateHint);
+  els.taskStartTimeInput?.addEventListener("change", applyTaskCreateStartDateHint);
 
   els.taskCreateConfirmBtn?.addEventListener("click", async () => {
     const title = els.taskTitleInput?.value.trim() || "";
     const dueDate = els.taskDueDateBtn?.dataset.date || "";
     const startDate = els.taskStartDateBtn?.dataset.date || "";
+
+    applyTaskCreateStartDateHint();
 
     if (!dueDate) {
       els.taskDueDateBtn?.focus();
@@ -7930,9 +7967,28 @@ function loadOpenTabs() {
     const stored = localStorage.getItem(OPEN_TABS_KEY);
     if (!stored) return false;
     const data = JSON.parse(stored);
-    if (!data?.tabs?.length) return false;
-    state.tabs = data.tabs.map((t) => ({ id: t.id || generateTabId(), path: t.path || null, title: t.title || "새 탭", pinned: !!t.pinned, scrollTop: t.scrollTop || 0, view: t.view || null, calendarKind: t.calendarKind || null }));
-    state.activeTabId = data.activeTabId || state.tabs[0].id;
+    if (!data || !Array.isArray(data.tabs)) return false;
+
+    const seen = new Set();
+    state.tabs = [];
+    data.tabs.forEach((t) => {
+      const path = t?.path || null;
+      const view = t?.view || null;
+      const tabKey = view === "calendar" ? "view:calendar" : path || "empty";
+      if (seen.has(tabKey)) return;
+      seen.add(tabKey);
+      state.tabs.push({
+        id: t?.id || generateTabId(),
+        path,
+        title: t?.title || "새 탭",
+        pinned: Boolean(t?.pinned),
+        scrollTop: Number(t?.scrollTop) || 0,
+        view,
+        calendarKind: t?.calendarKind || null,
+      });
+    });
+    if (!state.tabs.length) return false;
+    state.activeTabId = data.activeTabId && state.tabs.some((tab) => tab.id === data.activeTabId) ? data.activeTabId : state.tabs[0].id;
     return true;
   } catch { return false; }
 }
@@ -8273,12 +8329,36 @@ function tabStateSignature() {
   return state.tabs.map((tab) => `${tab.id}:${tab.path || ""}:${tab.view || ""}:${tab.calendarKind || ""}:${tab.title || ""}:${tab.pinned ? 1 : 0}`).join("|");
 }
 
+function findTabForPath(path) {
+  return state.tabs.find((tab) => tab.path === path);
+}
+
+function findReusableNewTab() {
+  return state.tabs.find((tab) => tab.path === null && !tab.view);
+}
+
 async function openFileInNewTab(path) {
+  const normalizedPath = normalizeVaultPath(path || "");
+  if (!normalizedPath) return;
+
+  const existingTab = findTabForPath(normalizedPath);
+  if (existingTab) {
+    if (existingTab.id !== state.activeTabId) await switchTab(existingTab.id);
+    return;
+  }
+
+  const reusableTab = findReusableNewTab();
+  if (reusableTab) {
+    if (reusableTab.id !== state.activeTabId) await switchTab(reusableTab.id);
+    await openFile(normalizedPath);
+    return;
+  }
+
   const id = generateTabId();
   state.tabs.push({ id, path: null, title: "새 탭", pinned: false, scrollTop: 0 });
   state.activeTabId = id;
   renderTabStrip();
-  await openFile(path);
+  await openFile(normalizedPath);
 }
 
 function showAllTabsOverlay() {
