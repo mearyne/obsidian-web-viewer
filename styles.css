@@ -4301,24 +4301,28 @@ button.calendar-more {
     overflow-x: auto;
   }
 
-  .calendar-month-nav {
-    flex: 0 0 auto;
-    min-width: 0;
-    order: 1;
-  }
-
   .calendar-toolbar-filter-btn {
     align-items: center;
     display: inline-flex;
     flex: 0 0 auto;
     justify-content: center;
     min-height: 30px;
-    order: 2;
+    order: 1;
     padding: 0 8px;
   }
 
   .calendar-toolbar-filter-btn span {
     display: inline;
+  }
+
+  .calendar-month-nav {
+    flex: 0 0 auto;
+    min-width: 0;
+    order: 2;
+  }
+
+  .calendar-month-nav strong {
+    font-size: 18px;
   }
 
   .calendar-nav-group {
