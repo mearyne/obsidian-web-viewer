@@ -8558,7 +8558,7 @@ const RECENTLY_OPENED_VAULT_PATH = ".viewer-recently-opened.json";
 const RECENTLY_OPENED_MAX = 5000;
 const DEVICE_TABS_VAULT_PATH = ".viewer-open-tabs.json";
 const DEVICE_ID_KEY = "obsidian-web-viewer-device-id";
-const DEVICE_TABS_STALE_MS = 2 * 60 * 60 * 1000;
+const DEVICE_TABS_STALE_MS = 24 * 60 * 60 * 1000;
 const PINNED_TABS_VAULT_PATH = ".viewer-pinned-tabs.json";
 
 function getDeviceId() {
