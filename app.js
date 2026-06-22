@@ -6700,6 +6700,14 @@ function setTaskDialogMode(mode) {
     els.taskSubItemsPreview.hidden = true;
   }
 
+  const subItemsHeader = els.taskEditSubItems?.querySelector(".task-edit-sub-items-header");
+  if (subItemsHeader) {
+    const hasContent = isView
+      ? (state.taskEditTask?.subItems || []).some((item) => String(item || "").trim())
+      : true;
+    subItemsHeader.hidden = isView && !hasContent;
+  }
+
   [
     els.taskEditStartDateBtn,
     els.taskEditStartDateClearBtn,
