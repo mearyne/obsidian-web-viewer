@@ -1625,7 +1625,7 @@ function renderDirChildren(dir, parent, matcher, folderPaths, excludePaths = [])
     if (node.kind === "directory") {
       const count = document.createElement("span");
       count.className = "tree-count";
-      count.textContent = String(node.fileCount || 0);
+      count.textContent = String(matcher ? countDirMatches(node, matcher, folderPaths, excludePaths) : (node.fileCount || 0));
       row.append(count);
     }
     row.addEventListener("click", async (event) => {
@@ -1671,6 +1671,20 @@ function dirHasMatch(dir, matcher, folderPaths, excludePaths = []) {
     if (node.kind === "file") return matcher(node.path) || state.contentSearchMatches?.has(node.path);
     return dirHasMatch(node, matcher, folderPaths, excludePaths);
   });
+}
+
+function countDirMatches(dir, matcher, folderPaths, excludePaths = []) {
+  let count = 0;
+  for (const node of dir.children.values()) {
+    if (folderPaths.length && !nodeInAnyPath(node, folderPaths)) continue;
+    if (excludePaths.length && nodeIsExcluded(node, excludePaths)) continue;
+    if (node.kind === "file") {
+      if (matcher(node.path) || state.contentSearchMatches?.has(node.path)) count++;
+    } else {
+      count += countDirMatches(node, matcher, folderPaths, excludePaths);
+    }
+  }
+  return count;
 }
 
 function nodeIsExcluded(node, excludePaths) {
