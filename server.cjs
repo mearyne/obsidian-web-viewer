@@ -1148,6 +1148,24 @@ async function fetchUrlMeta(targetUrl, res) {
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
     sendJsonCors(res, 200, { title: "" }); return;
   }
+  // 1차: MicroLink API (obsidian-link-embed 플러그인과 동일한 방식)
+  try {
+    const mlController = new AbortController();
+    const mlTimeout = setTimeout(() => mlController.abort(), 6000);
+    const mlRes = await fetch(`https://api.microlink.io?url=${encodeURIComponent(targetUrl)}&palette=true&audio=true&video=true&iframe=true`, {
+      headers: { "Accept": "application/json" },
+      signal: mlController.signal,
+    });
+    clearTimeout(mlTimeout);
+    if (mlRes.ok) {
+      const mlData = await mlRes.json();
+      if (mlData?.status === "success" && mlData?.data?.title) {
+        sendJsonCors(res, 200, { title: mlData.data.title.replace(/\[|\]/g, "").trim() });
+        return;
+      }
+    }
+  } catch {}
+  // 2차: HTML 직접 스크래핑 (fallback)
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 6000);
