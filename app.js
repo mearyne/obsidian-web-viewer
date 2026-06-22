@@ -173,7 +173,9 @@ const els = {
   taskEditDueDateClearBtn: document.querySelector("#taskEditDueDateClearBtn"),
   taskEditDatePickerCal: document.querySelector("#taskEditDatePickerCal"),
   taskEditStartTimeInput: document.querySelector("#taskEditStartTimeInput"),
+  taskEditStartTimeClearBtn: document.querySelector("#taskEditStartTimeClearBtn"),
   taskEditDueTimeInput: document.querySelector("#taskEditDueTimeInput"),
+  taskEditDueTimeClearBtn: document.querySelector("#taskEditDueTimeClearBtn"),
   taskEditCancelBtn: document.querySelector("#taskEditCancelBtn"),
   taskEditConfirmBtn: document.querySelector("#taskEditConfirmBtn"),
   taskEditOpenFileBtn: document.querySelector("#taskEditOpenFileBtn"),
@@ -6434,6 +6436,24 @@ function bindTaskEditDialog() {
     renderTaskEditDatePicker(null);
   });
 
+  els.taskEditStartTimeInput?.addEventListener("input", () => {
+    if (els.taskEditStartTimeClearBtn) els.taskEditStartTimeClearBtn.hidden = !els.taskEditStartTimeInput.value;
+  });
+
+  els.taskEditStartTimeClearBtn?.addEventListener("click", () => {
+    if (els.taskEditStartTimeInput) els.taskEditStartTimeInput.value = "";
+    els.taskEditStartTimeClearBtn.hidden = true;
+  });
+
+  els.taskEditDueTimeInput?.addEventListener("input", () => {
+    if (els.taskEditDueTimeClearBtn) els.taskEditDueTimeClearBtn.hidden = !els.taskEditDueTimeInput.value;
+  });
+
+  els.taskEditDueTimeClearBtn?.addEventListener("click", () => {
+    if (els.taskEditDueTimeInput) els.taskEditDueTimeInput.value = "";
+    els.taskEditDueTimeClearBtn.hidden = true;
+  });
+
   els.taskEditChecked?.addEventListener("change", () => {
     if (els.taskEditChecked.checked && els.taskEditDeferred) els.taskEditDeferred.checked = false;
   });
@@ -6686,7 +6706,9 @@ function setTaskDialogMode(mode) {
     els.taskEditDueDateBtn,
     els.taskEditDueDateClearBtn,
     els.taskEditStartTimeInput,
+    els.taskEditStartTimeClearBtn,
     els.taskEditDueTimeInput,
+    els.taskEditDueTimeClearBtn,
     els.taskEditIndentButton,
     els.taskEditOutdentButton,
   ].forEach((el) => { if (el) el.disabled = isView; });
@@ -6731,7 +6753,9 @@ async function showTaskEditDialog(task) {
   if (els.taskEditChecked) els.taskEditChecked.checked = task.checked || false;
   if (els.taskEditDeferred) els.taskEditDeferred.checked = task.deferred || false;
   if (els.taskEditStartTimeInput) els.taskEditStartTimeInput.value = task.startTime || "";
+  if (els.taskEditStartTimeClearBtn) els.taskEditStartTimeClearBtn.hidden = !task.startTime;
   if (els.taskEditDueTimeInput) els.taskEditDueTimeInput.value = task.dueTime || "";
+  if (els.taskEditDueTimeClearBtn) els.taskEditDueTimeClearBtn.hidden = !task.dueTime;
   syncMobileTaskTimePlaceholders();
   renderTaskEditSubItems(task.subItems);
   setTaskEditDate("start", task.dates?.start || "");
