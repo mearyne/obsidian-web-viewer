@@ -2069,18 +2069,18 @@ button:disabled {
   color: var(--text);
 }
 
-.time-empty-label {
-  color: var(--muted);
-  display: none;
-  font-size: 13px;
+.time-clock-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  font-size: 15px;
+  line-height: 1;
+  padding: 2px 4px;
 }
 
-.date-picker-row.time-empty .time-input {
+.time-clock-btn:disabled {
   display: none;
-}
-
-.date-picker-row.time-empty .time-empty-label {
-  display: block;
 }
 
 .time-input {

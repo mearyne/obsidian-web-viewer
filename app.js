@@ -174,8 +174,10 @@ const els = {
   taskEditDatePickerCal: document.querySelector("#taskEditDatePickerCal"),
   taskEditStartTimeInput: document.querySelector("#taskEditStartTimeInput"),
   taskEditStartTimeClearBtn: document.querySelector("#taskEditStartTimeClearBtn"),
+  taskEditStartClockBtn: document.querySelector("#taskEditStartClockBtn"),
   taskEditDueTimeInput: document.querySelector("#taskEditDueTimeInput"),
   taskEditDueTimeClearBtn: document.querySelector("#taskEditDueTimeClearBtn"),
+  taskEditDueClockBtn: document.querySelector("#taskEditDueClockBtn"),
   taskEditCancelBtn: document.querySelector("#taskEditCancelBtn"),
   taskEditConfirmBtn: document.querySelector("#taskEditConfirmBtn"),
   taskEditOpenFileBtn: document.querySelector("#taskEditOpenFileBtn"),
@@ -6434,6 +6436,14 @@ function bindTaskEditDialog() {
     renderTaskEditDatePicker(null);
   });
 
+  els.taskEditStartClockBtn?.addEventListener("click", () => {
+    try { els.taskEditStartTimeInput?.showPicker(); } catch { els.taskEditStartTimeInput?.focus(); }
+  });
+
+  els.taskEditDueClockBtn?.addEventListener("click", () => {
+    try { els.taskEditDueTimeInput?.showPicker(); } catch { els.taskEditDueTimeInput?.focus(); }
+  });
+
   els.taskEditStartTimeInput?.addEventListener("input", () => {
     if (els.taskEditStartTimeClearBtn) els.taskEditStartTimeClearBtn.hidden = !els.taskEditStartTimeInput.value;
   });
@@ -6626,7 +6636,7 @@ function setTaskEditDate(field, value) {
   const clearBtn = field === "start" ? els.taskEditStartDateClearBtn : els.taskEditDueDateClearBtn;
   if (!btn) return;
   btn.dataset.date = value || "";
-  btn.textContent = value ? formatDateKorean(value) : "----";
+  btn.textContent = value ? formatDateKorean(value) : "";
   btn.classList.toggle("has-date", Boolean(value));
   if (clearBtn) clearBtn.hidden = !value;
 }
@@ -6708,7 +6718,9 @@ function setTaskDialogMode(mode) {
     els.taskEditStartDateBtn,
     els.taskEditDueDateBtn,
     els.taskEditStartTimeInput,
+    els.taskEditStartClockBtn,
     els.taskEditDueTimeInput,
+    els.taskEditDueClockBtn,
     els.taskEditIndentButton,
     els.taskEditOutdentButton,
   ].forEach((el) => { if (el) el.disabled = isView; });
@@ -6723,11 +6735,6 @@ function setTaskDialogMode(mode) {
     if (els.taskEditStartTimeClearBtn) els.taskEditStartTimeClearBtn.hidden = !els.taskEditStartTimeInput?.value;
     if (els.taskEditDueTimeClearBtn) els.taskEditDueTimeClearBtn.hidden = !els.taskEditDueTimeInput?.value;
   }
-
-  const startTimeRow = els.taskEditStartTimeInput?.closest(".date-picker-row");
-  const dueTimeRow = els.taskEditDueTimeInput?.closest(".date-picker-row");
-  if (startTimeRow) startTimeRow.classList.toggle("time-empty", isView && !els.taskEditStartTimeInput?.value);
-  if (dueTimeRow) dueTimeRow.classList.toggle("time-empty", isView && !els.taskEditDueTimeInput?.value);
 
   if (els.taskEditDialogTitle) els.taskEditDialogTitle.readOnly = isView;
   if (els.taskViewEditBtn) els.taskViewEditBtn.hidden = !isView;
