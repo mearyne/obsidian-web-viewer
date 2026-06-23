@@ -93,19 +93,26 @@ async function fetchMetaWithCachedCookies(targetUrl) {
   } catch { return null; }
 }
 
-// Puppeteer로 페이지 로드 후 cf_clearance 쿠키 저장
+// Puppeteer로 페이지 로드 후 쿠키 저장
 async function fetchMetaWithBrowser(url) {
   const page = await getPuppeteerPage();
   if (!page) return null;
   try {
     await page.setUserAgent(STEALTH_UA);
+    // 이미지·미디어·폰트 차단 — 메타 추출에 불필요한 리소스로 속도 저하 방지
+    await page.setRequestInterception(true);
+    const BLOCK_TYPES = new Set(["image", "media", "font", "stylesheet"]);
+    page.on("request", req => {
+      if (BLOCK_TYPES.has(req.resourceType())) req.abort();
+      else req.continue();
+    });
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 25000 });
-    // Cloudflare 챌린지가 있으면 해결될 때까지 폴링 (최대 15초)
-    const deadline = Date.now() + 15000;
+    // Cloudflare 챌린지가 있으면 해결될 때까지 폴링 (최대 12초)
+    const deadline = Date.now() + 12000;
     while (Date.now() < deadline) {
       const title = await page.title();
       if (!CF_CHALLENGE_TITLES.has(title)) break;
-      await new Promise(r => setTimeout(r, 500));
+      await new Promise(r => setTimeout(r, 300));
     }
     const title = await page.title();
     if (CF_CHALLENGE_TITLES.has(title)) return null;
