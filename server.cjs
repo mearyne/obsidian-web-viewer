@@ -15,6 +15,55 @@ global.DOMParser = _DOMParser;
 const { createMarkdownContent } = require("defuddle/full");
 
 const root = __dirname;
+
+// Puppeteer browser singleton — lazy-initialized on first use
+let _puppeteerBrowser = null;
+async function getPuppeteerPage() {
+  if (!_puppeteerBrowser) {
+    let puppeteer;
+    try {
+      const puppeteerExtra = require("puppeteer-extra");
+      const StealthPlugin = require("puppeteer-extra-plugin-stealth");
+      puppeteerExtra.use(StealthPlugin());
+      puppeteer = puppeteerExtra;
+    } catch {
+      try { puppeteer = require("puppeteer-core"); } catch { return null; }
+    }
+    const executablePath = process.env.CHROMIUM_PATH || "/usr/bin/chromium-browser";
+    try {
+      _puppeteerBrowser = await puppeteer.launch({
+        executablePath,
+        headless: true,
+        args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
+      });
+    } catch (e) {
+      console.warn("[puppeteer] launch failed:", e.message);
+      return null;
+    }
+  }
+  try { return await _puppeteerBrowser.newPage(); } catch { _puppeteerBrowser = null; return null; }
+}
+
+async function fetchMetaWithBrowser(url) {
+  const page = await getPuppeteerPage();
+  if (!page) return null;
+  try {
+    await page.goto(url, { waitUntil: "networkidle2", timeout: 25000 });
+    const title = await page.title();
+    if (title === "Just a moment..." || title === "Attention Required!") return null;
+    return await page.evaluate(() => ({
+      title: (document.querySelector('meta[property="og:title"]')?.content || document.querySelector("title")?.textContent || "").trim(),
+      description: (document.querySelector('meta[property="og:description"]')?.content || document.querySelector('meta[name="description"]')?.content || "").trim(),
+      image: document.querySelector('meta[property="og:image"]')?.content || "",
+      favicon: document.querySelector('link[rel="icon"]')?.href || document.querySelector('link[rel="shortcut icon"]')?.href || "",
+    }));
+  } catch (e) {
+    console.warn("[puppeteer] fetch failed:", e.message);
+    return null;
+  } finally {
+    await page.close().catch(() => {});
+  }
+}
 const bundledSampleRoot = path.join(root, "sample-vault");
 const configuredVaultRoot = process.env.VAULT_PATH || process.env.OBSIDIAN_VAULT_PATH || process.env.OBSIDIAN_VALUT_PATH;
 const resolvedVaultRoot = configuredVaultRoot ? path.resolve(configuredVaultRoot) : "";
@@ -1171,7 +1220,20 @@ async function fetchUrlMeta(targetUrl, res) {
       }
     }
   } catch {}
-  // 2차: HTML 직접 스크래핑 (fallback)
+  // 2차: Puppeteer headless browser (Cloudflare 등 봇 차단 우회)
+  try {
+    const meta = await fetchMetaWithBrowser(targetUrl);
+    if (meta && meta.title) {
+      sendJsonCors(res, 200, {
+        title: meta.title.replace(/\[|\]/g, "").trim(),
+        description: meta.description || "",
+        image: meta.image || "",
+        favicon: meta.favicon || "",
+      });
+      return;
+    }
+  } catch {}
+  // 3차: HTML 직접 스크래핑 (fallback)
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 6000);
