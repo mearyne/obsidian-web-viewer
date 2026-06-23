@@ -8285,7 +8285,7 @@ function renderTabStrip() {
     ? `<button class="tab-sidebar-toggle icon-button" type="button" aria-expanded="${sidebarOpen}" aria-label="${sidebarOpen ? "문서 목록 닫기" : "문서 목록 열기"}" title="문서 목록">☰</button>`
     : "";
 
-  strip.innerHTML = sidebarToggleHtml + state.tabs.map((tab) => {
+  const newStripHtml = sidebarToggleHtml + state.tabs.map((tab) => {
     const isActive = tab.id === state.activeTabId;
     const title = escapeHtml(tab.title || "새 탭");
     const pinMark = tab.pinned ? '<span class="tab-pin">📌</span>' : "";
@@ -8295,6 +8295,11 @@ function renderTabStrip() {
       <button class="tab-close" data-tab-id="${escapeAttribute(tab.id)}" title="${tab.pinned ? "핀 해제" : "탭 닫기"}" type="button">×</button>
     </div>`;
   }).join("") + `<button class="tab-new" type="button" title="새 탭 (T)">+</button>`;
+
+  const needsRebuild = strip.dataset.renderedHtml !== newStripHtml;
+  if (!needsRebuild) return;
+  strip.dataset.renderedHtml = newStripHtml;
+  strip.innerHTML = newStripHtml;
 
   if (!isMobile && els.viewControlsOverlay && els.viewControlsOverlay.parentElement !== strip) {
     strip.appendChild(els.viewControlsOverlay);
