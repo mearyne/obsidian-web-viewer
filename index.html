@@ -301,10 +301,14 @@
             <input id="discordWebhookInput" type="url" placeholder="https://discord.com/api/webhooks/..." />
           </label>
           <label class="option-field">
-            <span>마감 N시간 전 알림</span>
-            <input id="discordNotifyHoursInput" type="number" min="0" max="72" step="1" placeholder="1" style="width:80px" />
+            <span>할 일 알림 (마감 N시간 전)</span>
+            <input id="discordNotifyHoursTodoInput" type="number" min="0" max="72" step="1" placeholder="1" style="width:80px" />
           </label>
-          <p class="option-help">마감일(📅)이 있는 미완료 task를 서버가 주기적으로 확인해 Discord로 알림을 보냅니다. Webhook URL은 Discord 채널 설정 → 연동 → 웹후크에서 발급하세요.</p>
+          <label class="option-field">
+            <span>일정 알림 (시작 N시간 전)</span>
+            <input id="discordNotifyHoursEventInput" type="number" min="0" max="72" step="1" placeholder="1" style="width:80px" />
+          </label>
+          <p class="option-help">마감일(📅)이 있는 미완료 task를 서버가 주기적으로 확인해 Discord로 알림을 보냅니다. 일정(🛫 시작일 있음)과 할 일을 구분해 각각 다른 시간 전에 알립니다. task 편집 다이얼로그에서 개별 알림을 끌 수 있습니다. Webhook URL은 Discord 채널 설정 → 연동 → 웹후크에서 발급하세요.</p>
           <button id="discordTestBtn" type="button" class="option-test-btn">테스트 전송</button>
         </div>
       </details>
@@ -344,6 +348,12 @@
           <div class="task-meta-row">
             <span class="task-meta-label">태그</span>
             <div class="task-meta-chips" id="taskTagChips"></div>
+          </div>
+          <div class="task-meta-row">
+            <span class="task-meta-label">Discord 알림</span>
+            <div class="task-meta-chips">
+              <button type="button" class="task-meta-chip task-notify-chip active" id="taskNotifyChip" data-notify="true">🔔 켜짐</button>
+            </div>
           </div>
         </div>
         <div class="task-create-dates">
@@ -414,6 +424,12 @@
               <div class="task-meta-row">
                 <span class="task-meta-label">태그</span>
                 <div class="task-meta-chips" id="taskEditTagChips"></div>
+              </div>
+              <div class="task-meta-row">
+                <span class="task-meta-label">Discord 알림</span>
+                <div class="task-meta-chips">
+                  <button type="button" class="task-meta-chip task-notify-chip active" id="taskEditNotifyChip" data-notify="true">🔔 켜짐</button>
+                </div>
               </div>
             </div>
             <div class="task-create-dates">

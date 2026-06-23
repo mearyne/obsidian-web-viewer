@@ -977,7 +977,8 @@ function normalizeSettings(settings) {
     imagePath: typeof settings?.imagePath === "string" ? settings.imagePath.slice(0, 512) : "",
     searchExclude: typeof settings?.searchExclude === "string" ? settings.searchExclude.slice(0, 4096) : "",
     discordWebhookUrl: typeof settings?.discordWebhookUrl === "string" ? settings.discordWebhookUrl.slice(0, 512) : "",
-    discordNotifyHours: Number.isFinite(Number(settings?.discordNotifyHours)) ? Math.max(0, Math.min(72, Number(settings.discordNotifyHours))) : 1,
+    discordNotifyHoursTodo: Number.isFinite(Number(settings?.discordNotifyHoursTodo)) ? Math.max(0, Math.min(72, Number(settings.discordNotifyHoursTodo))) : 1,
+    discordNotifyHoursEvent: Number.isFinite(Number(settings?.discordNotifyHoursEvent)) ? Math.max(0, Math.min(72, Number(settings.discordNotifyHoursEvent))) : 1,
   };
 }
 
@@ -1541,15 +1542,23 @@ function scanVaultTasks(calendarPaths) {
       let content;
       try { content = fs.readFileSync(abs, "utf8"); } catch { continue; }
       for (const line of content.split("\n")) {
-        const taskMatch = line.match(/^(\s*)-\s+\[( |x|X|-)\]\s+(.+)$/);
+        const taskMatch = line.match(/^(\s*)-\s+\[( |x|X|-|>)\]\s+(.+)$/);
         if (!taskMatch) continue;
-        if (taskMatch[2].toLowerCase() === "x") continue; // 완료된 task 제외
+        const status = taskMatch[2].toLowerCase();
+        if (status === "x") continue; // 완료된 task 제외
         const text = taskMatch[3];
+        if (/🔕/.test(text)) continue; // 알림 꺼짐
         const dueMatch = text.match(/📅\s*(\d{4}-\d{2}-\d{2})(?:\s+(\d{2}:\d{2}))?/);
         if (!dueMatch) continue;
+        const startMatch = text.match(/🛫\s*(\d{4}-\d{2}-\d{2})(?:\s+(\d{2}:\d{2}))?/);
+        const isEvent = Boolean(startMatch);
         const dateStr = dueMatch[1];
         const timeStr = dueMatch[2] || null;
-        tasks.push({ path: rel, text: text.replace(/[📅⏳🛫✅❌]\s*\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2})?/gu, "").trim(), dateStr, timeStr });
+        // 일정은 시작일 기준 알림
+        const notifyDateStr = isEvent ? startMatch[1] : dateStr;
+        const notifyTimeStr = isEvent ? (startMatch[2] || null) : timeStr;
+        const cleanText = text.replace(/[📅⏳🛫✅❌🔕]\s*\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2})?/gu, "").replace(/🔕/g, "").trim();
+        tasks.push({ path: rel, text: cleanText, dateStr, timeStr, notifyDateStr, notifyTimeStr, isEvent });
       }
     }
   }
@@ -1579,9 +1588,9 @@ async function runDiscordNotificationCheck() {
   const webhookUrl = process.env.DISCORD_WEBHOOK_URL || settings.discordWebhookUrl;
   if (!webhookUrl) return;
 
-  const notifyHours = Number(process.env.DISCORD_NOTIFY_HOURS) || settings.discordNotifyHours || 1;
+  const hoursTodo = Number(process.env.DISCORD_NOTIFY_HOURS_TODO) || settings.discordNotifyHoursTodo || 1;
+  const hoursEvent = Number(process.env.DISCORD_NOTIFY_HOURS_EVENT) || settings.discordNotifyHoursEvent || 1;
   const now = Date.now();
-  const windowMs = notifyHours * 60 * 60 * 1000;
 
   const tasks = scanVaultTasks(settings.calendarPaths);
   const notified = readDiscordNotified();
@@ -1593,18 +1602,21 @@ async function runDiscordNotificationCheck() {
 
   let changed = false;
   for (const task of tasks) {
-    const dueMs = task.timeStr
-      ? new Date(`${task.dateStr}T${task.timeStr}:00`).getTime()
-      : new Date(`${task.dateStr}T23:59:00`).getTime();
-    if (isNaN(dueMs)) continue;
-    const diff = dueMs - now;
+    const notifyHours = task.isEvent ? hoursEvent : hoursTodo;
+    const windowMs = notifyHours * 60 * 60 * 1000;
+    const notifyMs = task.notifyTimeStr
+      ? new Date(`${task.notifyDateStr}T${task.notifyTimeStr}:00`).getTime()
+      : new Date(`${task.notifyDateStr}T09:00:00`).getTime(); // 시간 미지정 시 당일 9시
+    if (isNaN(notifyMs)) continue;
+    const diff = notifyMs - now;
     if (diff < 0 || diff > windowMs) continue;
 
     const key = `${task.path}::${task.dateStr}::${task.text.slice(0, 80)}`;
     if (notified[key]) continue;
 
-    const timeLabel = task.timeStr ? ` ${task.timeStr}` : "";
-    const msg = `⏰ **Task 마감 ${notifyHours}시간 전**\n📄 \`${task.path}\`\n✅ ${task.text}\n📅 ${task.dateStr}${timeLabel}`;
+    const label = task.isEvent ? `일정 시작 ${hoursEvent}시간 전` : `할 일 마감 ${hoursTodo}시간 전`;
+    const timeLabel = task.notifyTimeStr ? ` ${task.notifyTimeStr}` : "";
+    const msg = `⏰ **${label}**\n📄 \`${task.path}\`\n${task.isEvent ? "🗓" : "✅"} ${task.text}\n📅 ${task.notifyDateStr}${timeLabel}`;
     const ok = await sendDiscordNotification(webhookUrl, msg);
     if (ok) {
       notified[key] = now;

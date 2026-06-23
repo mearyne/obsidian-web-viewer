@@ -148,8 +148,11 @@ const els = {
   clipperFolderInput: document.querySelector("#clipperFolderInput"),
   searchExcludeInput: document.querySelector("#searchExcludeInput"),
   discordWebhookInput: document.querySelector("#discordWebhookInput"),
-  discordNotifyHoursInput: document.querySelector("#discordNotifyHoursInput"),
+  discordNotifyHoursTodoInput: document.querySelector("#discordNotifyHoursTodoInput"),
+  discordNotifyHoursEventInput: document.querySelector("#discordNotifyHoursEventInput"),
   discordTestBtn: document.querySelector("#discordTestBtn"),
+  taskNotifyChip: document.querySelector("#taskNotifyChip"),
+  taskEditNotifyChip: document.querySelector("#taskEditNotifyChip"),
   searchStatus: document.querySelector("#searchStatus"),
   contentSearchToggleButton: document.querySelector("#contentSearchToggleButton"),
   taskCreateDialog: document.querySelector("#taskCreateDialog"),
@@ -402,7 +405,8 @@ els.clipperFolderInput?.addEventListener("input", () => {
 });
 els.searchExcludeInput?.addEventListener("input", handleSearchExcludeInput);
 els.discordWebhookInput?.addEventListener("input", scheduleSettingsSave);
-els.discordNotifyHoursInput?.addEventListener("input", scheduleSettingsSave);
+els.discordNotifyHoursTodoInput?.addEventListener("input", scheduleSettingsSave);
+els.discordNotifyHoursEventInput?.addEventListener("input", scheduleSettingsSave);
 els.discordTestBtn?.addEventListener("click", async () => {
   const url = els.discordWebhookInput?.value.trim();
   if (!url) { showAppToast("Webhook URL을 입력하세요", "error"); return; }
@@ -2318,8 +2322,11 @@ async function loadServerSettings() {
     if (typeof settings.discordWebhookUrl === "string" && els.discordWebhookInput) {
       els.discordWebhookInput.value = settings.discordWebhookUrl;
     }
-    if (settings.discordNotifyHours != null && els.discordNotifyHoursInput) {
-      els.discordNotifyHoursInput.value = String(settings.discordNotifyHours);
+    if (settings.discordNotifyHoursTodo != null && els.discordNotifyHoursTodoInput) {
+      els.discordNotifyHoursTodoInput.value = String(settings.discordNotifyHoursTodo);
+    }
+    if (settings.discordNotifyHoursEvent != null && els.discordNotifyHoursEventInput) {
+      els.discordNotifyHoursEventInput.value = String(settings.discordNotifyHoursEvent);
     }
   } catch {
     // Local storage remains the fallback for file:// or unavailable server settings.
@@ -2836,7 +2843,8 @@ async function saveServerSettings() {
         imagePath: state.imageSavePath || "",
         searchExclude: els.searchExcludeInput?.value || "",
         discordWebhookUrl: els.discordWebhookInput?.value || "",
-        discordNotifyHours: Number(els.discordNotifyHoursInput?.value) || 1,
+        discordNotifyHoursTodo: Number(els.discordNotifyHoursTodoInput?.value) || 1,
+        discordNotifyHoursEvent: Number(els.discordNotifyHoursEventInput?.value) || 1,
       }),
     });
   } catch {
@@ -4468,6 +4476,7 @@ function parseTasks(content, path) {
           category: meta.category,
           priority: meta.priority,
           tags: meta.tags,
+          notify: !/🔕/.test(rawText),
         },
       ];
     });
@@ -4501,6 +4510,7 @@ function findTaskDate(text, marker) {
 function cleanTaskText(text) {
   return text
     .replace(/[📅⏳🛫✅❌]\s*\d{4}-\d{2}-\d{2}/gu, "")
+    .replace(/🔕/gu, "")
     .replace(/#[\p{L}\p{N}_/-]+/gu, "")
     .trim();
 }
@@ -4524,6 +4534,7 @@ function findBareTaskDate(text) {
 function cleanTaskText(text) {
   return text
     .replace(/[📅⏳🛫✅❌]?\s*\b\d{4}-\d{2}-\d{2}\b/gu, "")
+    .replace(/🔕/gu, "")
     .replace(/#[\p{L}\p{N}_/-]+/gu, "")
     .trim();
 }
@@ -4560,6 +4571,7 @@ function findTaskDateByMarkers(text, markers) {
 function cleanTaskText(text) {
   return text
     .replace(/(?:\u{1F4C5}|\u{1F6EB}|\u{23F3}|\u{2705}|\u{274C}|due|start|end|scheduled|done|cancelled|canceled)\s*\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2})?/giu, "")
+    .replace(/🔕/gu, "")
     .replace(/#[\p{L}\p{N}_/-]+/gu, "")
     .trim();
 }
@@ -6362,6 +6374,20 @@ async function openDateEditor(date, startDate = "") {
   await showTaskCreateDialog(taskDueDate, taskStartDate);
 }
 
+function toggleNotifyChip(btn) {
+  const on = btn.dataset.notify !== "true";
+  btn.dataset.notify = String(on);
+  btn.textContent = on ? "🔔 켜짐" : "🔕 꺼짐";
+  btn.classList.toggle("active", on);
+}
+
+function setNotifyChip(btn, on) {
+  if (!btn) return;
+  btn.dataset.notify = String(on);
+  btn.textContent = on ? "🔔 켜짐" : "🔕 꺼짐";
+  btn.classList.toggle("active", on);
+}
+
 async function showTaskCreateDialog(dueDate, startDate = "") {
   if (!els.taskCreateDialog) return;
 
@@ -6379,6 +6405,7 @@ async function showTaskCreateDialog(dueDate, startDate = "") {
   renderTaskDatePicker(null);
   renderDialogTagChips();
   updateTaskDialogMetaUI();
+  setNotifyChip(els.taskNotifyChip, true);
 
   els.taskCreateDialog.showModal();
   positionTaskCreateDialog();
@@ -6565,6 +6592,9 @@ function bindTaskCreateDialog() {
     }
   });
 
+  els.taskNotifyChip?.addEventListener("click", () => toggleNotifyChip(els.taskNotifyChip));
+  els.taskEditNotifyChip?.addEventListener("click", () => toggleNotifyChip(els.taskEditNotifyChip));
+
   els.taskCreateCancelBtn?.addEventListener("click", () => {
     els.taskCreateDialog.close("cancel");
   });
@@ -6599,9 +6629,11 @@ function bindTaskCreateDialog() {
     const dueTime = normalizeTaskTimeInput(els.taskDueTimeInput);
     const startPart = startDate ? ` 🛫 ${startDate}${startTime ? " " + startTime : ""}` : "";
     const duePart = ` 📅 ${dueDate}${dueTime ? " " + dueTime : ""}`;
+    const notifyOff = els.taskNotifyChip?.dataset.notify === "false";
+    const notifyPart = notifyOff ? " 🔕" : "";
     const subItemsText = els.taskCreateSubItemsInput?.value || "";
     const subItemLines = normalizeTaskSubItemsInput(subItemsText).map((line) => `  ${line}`);
-    const taskLine = `${prefix}- [ ] ${title}${metaStr}${startPart}${duePart}`;
+    const taskLine = `${prefix}- [ ] ${title}${metaStr}${startPart}${duePart}${notifyPart}`;
     const subItemsStr = subItemLines.length ? "\n" + subItemLines.join("\n") : "";
     const nextContent = content + taskLine + subItemsStr + "\n";
     await writeNodeContent(node, nextContent, { backup: false, previousContent: content });
@@ -7002,6 +7034,7 @@ async function showTaskEditDialog(task) {
   renderEditTagChips();
   updateTaskEditMetaUI();
   renderTaskEditDatePicker(null);
+  setNotifyChip(els.taskEditNotifyChip, task.notify !== false);
   setTaskDialogMode("view");
   els.taskEditDialog.showModal();
   positionTaskEditDialog();
@@ -7064,8 +7097,10 @@ async function saveTaskEdit(task, title, meta, dueDate, startDate, checked, dueT
     const metaStr = hashParts.length ? ` ${hashParts.join(" ")}` : "";
     const startPart = startDate ? ` 🛫 ${startDate}${startTime ? " " + startTime : ""}` : "";
     const duePart = ` 📅 ${dueDate}${dueTime ? " " + dueTime : ""}`;
+    const notifyOff = els.taskEditNotifyChip?.dataset.notify === "false";
+    const notifyPart = notifyOff ? " 🔕" : "";
     const statusChar = checked ? "x" : deferred ? ">" : " ";
-    lines[idx] = `${indentStr}- [${statusChar}] ${title}${metaStr}${startPart}${duePart}`;
+    lines[idx] = `${indentStr}- [${statusChar}] ${title}${metaStr}${startPart}${duePart}${notifyPart}`;
     let childEnd = idx + 1;
     while (childEnd < lines.length) {
       if (lines[childEnd].trim() === "") break;
