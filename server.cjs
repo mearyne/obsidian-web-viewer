@@ -1181,36 +1181,26 @@ async function fetchUrlMeta(targetUrl, res) {
   // 0차: 결과 캐시
   const cached = urlMetaCache.get(targetUrl);
   if (cached && cached.expires > Date.now()) { sendJsonCors(res, 200, cached.data); return; }
-  // 1차: MicroLink API (obsidian-link-embed 플러그인과 동일한 방식)
-  try {
-    const mlController = new AbortController();
-    const mlTimeout = setTimeout(() => mlController.abort(), 6000);
+  // 1차: MicroLink + Jina AI 병렬 실행, 먼저 성공한 결과 사용
+  const tryMicrolink = async () => {
     const mlRes = await fetch(`https://api.microlink.io?url=${encodeURIComponent(targetUrl)}&palette=true&audio=true&video=true&iframe=true`, {
       headers: { "Accept": "application/json" },
-      signal: mlController.signal,
+      signal: AbortSignal.timeout(5000),
     });
-    clearTimeout(mlTimeout);
-    if (mlRes.ok) {
-      const mlData = await mlRes.json();
-      if (mlData?.status === "success" && mlData?.data) {
-        const d = mlData.data;
-        sendUrlMeta(res, {
-          title: (d.title || "").replace(/\[|\]/g, "").trim(),
-          description: d.description || "",
-          image: d.image?.url || "",
-          favicon: d.logo?.url || "",
-        }, targetUrl);
-        return;
-      }
-    }
-  } catch {}
-  // 2차: Jina AI Reader (Cloudflare 등 봇 차단 우회)
+    if (!mlRes.ok) throw new Error("microlink failed");
+    const mlData = await mlRes.json();
+    if (mlData?.status !== "success" || !mlData?.data?.title) throw new Error("microlink no data");
+    const d = mlData.data;
+    return {
+      title: (d.title || "").replace(/\[|\]/g, "").trim(),
+      description: d.description || "",
+      image: d.image?.url || "",
+      favicon: d.logo?.url || "",
+    };
+  };
   try {
-    const meta = await fetchMetaWithJina(targetUrl);
-    if (meta && meta.title) {
-      sendUrlMeta(res, meta, targetUrl);
-      return;
-    }
+    const meta = await Promise.any([tryMicrolink(), fetchMetaWithJina(targetUrl)]);
+    if (meta?.title) { sendUrlMeta(res, meta, targetUrl); return; }
   } catch {}
   // 3차: HTML 직접 스크래핑 (fallback)
   try {
