@@ -1272,16 +1272,24 @@ async function fetchUrlMeta(targetUrl, res) {
     return { title, description: d.description || "", image: d.image?.url || "", favicon: d.logo?.url || "" };
   };
   try {
-    const results = await Promise.allSettled([tryMicrolink(), fetchMetaWithJina(targetUrl)]);
-    const metas = results.filter(r => r.status === "fulfilled" && r.value?.title).map(r => r.value);
-    if (metas.length > 0) {
-      const merged = { ...metas[0] };
-      for (const m of metas.slice(1)) {
-        if (!merged.favicon && m.favicon) merged.favicon = m.favicon;
-        if (!merged.image && m.image) merged.image = m.image;
-        if (!merged.description && m.description) merged.description = m.description;
-      }
-      sendUrlMeta(res, merged, targetUrl);
+    const microlinkPromise = tryMicrolink();
+    const jinaPromise = fetchMetaWithJina(targetUrl);
+    const meta = await Promise.any([microlinkPromise, jinaPromise]);
+    if (meta?.title) {
+      sendUrlMeta(res, meta, targetUrl);
+      // 나중에 도착하는 결과에서 favicon/image가 있으면 캐시 보완
+      Promise.any([
+        microlinkPromise.then(m => m === meta ? Promise.reject() : m),
+        jinaPromise.then(m => m === meta ? Promise.reject() : m),
+      ]).then((other) => {
+        if (!other?.title) return;
+        const cached = urlMetaCache.get(targetUrl);
+        if (!cached) return;
+        let updated = false;
+        if (other.favicon && !cached.data.favicon) { cached.data.favicon = other.favicon; updated = true; }
+        if (other.image && !cached.data.image) { cached.data.image = other.image; updated = true; }
+        if (updated) urlMetaCache.set(targetUrl, cached);
+      }).catch(() => {});
       return;
     }
   } catch {}
