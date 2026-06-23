@@ -1187,6 +1187,9 @@ function sendJsonNoStore(res, status, value) {
 }
 
 function sendUrlMeta(res, data, targetUrl) {
+  if (!data.favicon && targetUrl) {
+    try { data.favicon = new URL(targetUrl).origin + "/favicon.ico"; } catch {}
+  }
   if (targetUrl) {
     urlMetaCache.set(targetUrl, { data, expires: Date.now() + URL_META_TTL });
   }
