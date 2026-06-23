@@ -1305,7 +1305,8 @@ async function fetchUrlMeta(targetUrl, res) {
     const unescape = (s) => (s || "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim();
     const titleTag = html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1];
     const title = unescape(ogTitle || titleTag || "");
-    const rawImage = unescape(ogImage || "");
+    const firstImgSrc = html.match(/<img[^>]+src=["']([^"']+)["']/i)?.[1];
+    const rawImage = unescape(ogImage || firstImgSrc || "");
     const image = rawImage && /^https?:\/\//i.test(rawImage) ? rawImage
       : rawImage ? new URL(rawImage, targetUrl).href
       : "";
