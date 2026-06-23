@@ -3334,10 +3334,9 @@ button:disabled {
   color: #d94848;
 }
 
-.calendar-cell .calendar-day > span.has-daily-note,
-.calendar-agenda-date strong.has-daily-note {
+.calendar-cell .calendar-day > span:first-child {
   align-items: center;
-  border: 1px solid var(--accent);
+  border: 1px solid transparent;
   border-radius: 999px;
   display: inline-flex;
   height: 1.55em;
@@ -3345,20 +3344,16 @@ button:disabled {
   line-height: 1;
   min-width: 1.55em;
   padding: 0 0.35em;
+}
+
+.calendar-cell .calendar-day > span.has-daily-note,
+.calendar-agenda-date strong.has-daily-note {
   border-color: var(--accent);
 }
 
 .calendar-cell.holiday .calendar-day > span:first-child,
 .calendar-agenda-day.holiday .calendar-agenda-date strong {
-  align-items: center;
   border-color: #d94848;
-  border-radius: 999px;
-  display: inline-flex;
-  height: 1.55em;
-  justify-content: center;
-  line-height: 1;
-  min-width: 1.55em;
-  padding: 0 0.35em;
   color: #d94848;
 }
 
