@@ -8388,9 +8388,10 @@ function showTabContextMenu(x, y, tabId) {
   if (!tab) return;
   const menu = document.createElement("div");
   menu.className = "tab-context-menu";
-  menu.innerHTML = `<button type="button">${tab.pinned ? "고정 해제" : "고정하기"}</button>`;
+  menu.innerHTML = `<button type="button" data-action="pin">${tab.pinned ? "고정 해제" : "고정하기"}</button><button type="button" data-action="close">삭제하기</button>`;
   menu.style.cssText = `position:fixed;left:${x}px;top:${y}px;z-index:9999;`;
-  menu.querySelector("button").addEventListener("click", () => { menu.remove(); pinTab(tabId); });
+  menu.querySelector("[data-action='pin']").addEventListener("click", () => { menu.remove(); pinTab(tabId); });
+  menu.querySelector("[data-action='close']").addEventListener("click", () => { menu.remove(); void closeTab(tabId); });
   const dismiss = (e) => { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener("mousedown", dismiss, true); document.removeEventListener("touchstart", dismiss, true); } };
   document.addEventListener("mousedown", dismiss, true);
   document.addEventListener("touchstart", dismiss, true);
