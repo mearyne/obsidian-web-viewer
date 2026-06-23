@@ -7523,19 +7523,26 @@ function renderEmbedBlock(code) {
       `<div class="link-embed-url"><span>${escapeHtml(url)}</span></div>` +
       `</div></div></div>`;
   }
-  const noVisual = !image && !get("favicon");
+  const favicon = get("favicon");
+  const noVisual = !image && !favicon;
   const collapsed = noVisual ? " collapsed" : "";
   const toggleLabel = noVisual ? "펼치기" : "접기";
   const toggleIcon = noVisual ? "▸" : "▾";
   const toggleExpanded = noVisual ? "false" : "true";
+  let visualHtml = "";
+  if (image) {
+    visualHtml = `<div class="link-embed-image" style="background-image:url('${escapeAttribute(image)}')"></div>`;
+  } else if (favicon) {
+    visualHtml = `<div class="link-embed-favicon-image"><img src="${escapeAttribute(favicon)}" alt="" aria-hidden="true" onerror="this.parentElement.style.display='none'"></div>`;
+  }
   return `<div class="link-embed-wrap${collapsed}">` +
     `<button class="link-embed-toggle" type="button" title="${toggleLabel}" aria-expanded="${toggleExpanded}">${toggleIcon}</button>` +
     `<a href="${escapeAttribute(url)}" target="_blank" rel="noopener" class="link-embed-card">` +
-    (image ? `<div class="link-embed-image" style="background-image:url('${escapeAttribute(image)}')"></div>` : "") +
+    visualHtml +
     `<div class="link-embed-body">` +
     `<div class="link-embed-title">${escapeHtml(title || url)}</div>` +
     (description ? `<div class="link-embed-description">${escapeHtml(description)}</div>` : "") +
-    `<div class="link-embed-url">${get("favicon") ? `<img class="link-embed-favicon" src="${escapeAttribute(get("favicon"))}" alt="" aria-hidden="true" onerror="this.style.display='none'">` : ""}<span>${escapeHtml(url)}</span></div>` +
+    `<div class="link-embed-url"><span>${escapeHtml(url)}</span></div>` +
     `</div></a></div>`;
 }
 
