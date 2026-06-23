@@ -8111,6 +8111,9 @@ function arrangeEmbedGroups(root) {
     }
     flushEmbedGroup(group);
     group = [];
+    if (child.tagName === "DETAILS" || child.tagName === "BLOCKQUOTE") {
+      arrangeEmbedGroups(child);
+    }
   });
   flushEmbedGroup(group);
 }
