@@ -3155,6 +3155,25 @@ async function handleEditorPaste(event) {
       insertEditorText(els.markdownEditor, `![](${text})`);
     } else {
       const ta = els.markdownEditor;
+      // 현재 줄이 불릿/체크박스 항목이면 embed 블록 대신 링크로 삽입
+      const lineStart = ta.value.lastIndexOf("\n", ta.selectionStart - 1) + 1;
+      const currentLine = ta.value.slice(lineStart, ta.selectionStart);
+      const isBulletLine = /^\s*[-*+]\s/.test(currentLine);
+      if (isBulletLine) {
+        const insertAt = ta.selectionStart;
+        insertEditorText(ta, `[](${text})`);
+        fetchLinkTitle(text).then((title) => {
+          if (!title) return;
+          const cur = ta.value;
+          const placeholder = `[](${text})`;
+          const pos = cur.indexOf(placeholder, Math.max(0, insertAt - 1));
+          if (pos === -1) return;
+          ta.value = cur.slice(0, pos) + `[${title}](${text})` + cur.slice(pos + placeholder.length);
+          resizeEditorToContent();
+          markEditorDirty();
+        });
+        return;
+      }
       const insertAt = ta.selectionStart;
       const embedPlaceholder = "```embed\nstatus: \"loading\"\nurl: \"" + text + "\"\n```";
       insertEditorText(ta, embedPlaceholder);
@@ -5498,7 +5517,15 @@ async function deleteCalendarTaskLine(filePath, lineNumber) {
     const lines = text.split("\n");
     const idx = lineNumber - 1;
     if (idx < 0 || idx >= lines.length) return;
-    lines.splice(idx, 1);
+    const taskIndentLen = normalizeLineIndent(lines[idx]).length;
+    // sub-items: 뒤따르는 더 깊은 들여쓰기의 줄들도 함께 삭제
+    let deleteEnd = idx + 1;
+    while (deleteEnd < lines.length) {
+      if (lines[deleteEnd].trim() === "") break;
+      if (normalizeLineIndent(lines[deleteEnd]).length <= taskIndentLen) break;
+      deleteEnd += 1;
+    }
+    lines.splice(idx, deleteEnd - idx);
     const updated = lines.join("\n");
     await fetch(`/api/vault-file?path=${encodeURIComponent(filePath)}`, {
       method: "PUT",

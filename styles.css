@@ -746,7 +746,7 @@ button:disabled {
   position: fixed;
   transform: translateX(-50%);
   width: max-content;
-  z-index: 70;
+  z-index: 310;
 }
 
 .app-toast {
@@ -781,7 +781,7 @@ button:disabled {
   position: fixed;
   right: 0;
   top: 0;
-  z-index: 75;
+  z-index: 300;
 }
 
 .app-confirm-backdrop[hidden] {
