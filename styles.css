@@ -4160,15 +4160,11 @@ button.calendar-more {
     border-left-width: 2px;
     border-radius: 3px;
     font-size: var(--calendar-row-font-size);
-    gap: 0;
-    grid-template-columns: minmax(0, 1fr);
+    gap: 1px;
+    grid-template-columns: 1em minmax(0, 1fr);
     line-height: 0.92;
     min-height: 0;
     padding: 0 1px;
-  }
-
-  .calendar-task span:first-child {
-    display: none;
   }
 
   .calendar-agenda-day {

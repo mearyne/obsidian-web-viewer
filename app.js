@@ -5339,6 +5339,7 @@ function renderSubItemsHtml(subItems) {
   }).join("");
 }
 
+
 function renderCalendarTask(task, dateKey = task.date, showDelete = false) {
   const title = `${task.path}: ${task.text}`;
   const range = taskRangePosition(task, dateKey);
