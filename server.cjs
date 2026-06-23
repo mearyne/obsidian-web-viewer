@@ -1169,24 +1169,51 @@ function sendUrlMeta(res, data, targetUrl) {
   sendJsonCors(res, 200, data);
 }
 
-// YouTube oEmbed API — Shorts/일반 영상 모두 정확한 제목 반환
-async function fetchMetaWithYouTubeOEmbed(targetUrl) {
-  const u = new URL(targetUrl);
-  const isYouTube = /^(www\.)?(youtube\.com|youtu\.be)$/.test(u.hostname);
-  if (!isYouTube) return null;
-  const oEmbedRes = await fetch(
-    `https://www.youtube.com/oembed?url=${encodeURIComponent(targetUrl)}&format=json`,
+// oEmbed 프로바이더 목록 (URL 패턴 → oEmbed 엔드포인트)
+const OEMBED_PROVIDERS = [
+  { pattern: /^(www\.)?(youtube\.com|youtu\.be)$/, endpoint: "https://www.youtube.com/oembed", favicon: "https://www.youtube.com/favicon.ico" },
+  { pattern: /^(www\.)?vimeo\.com$/, endpoint: "https://vimeo.com/api/oembed.json", favicon: "https://vimeo.com/favicon.ico" },
+  { pattern: /^(www\.)?tiktok\.com$/, endpoint: "https://www.tiktok.com/oembed", favicon: "https://www.tiktok.com/favicon.ico" },
+  { pattern: /^(www\.)?(twitter\.com|x\.com)$/, endpoint: "https://publish.twitter.com/oembed", favicon: "https://abs.twimg.com/favicons/twitter.2.ico" },
+  { pattern: /^open\.spotify\.com$/, endpoint: "https://open.spotify.com/oembed", favicon: "https://open.spotify.com/favicon.ico" },
+  { pattern: /^(www\.)?soundcloud\.com$/, endpoint: "https://soundcloud.com/oembed", favicon: "https://soundcloud.com/favicon.ico" },
+  { pattern: /^(www\.)?twitch\.tv$/, endpoint: "https://api.twitch.tv/helix/...", favicon: "https://www.twitch.tv/favicon.ico" },
+];
+
+async function fetchMetaWithOEmbed(targetUrl) {
+  const host = new URL(targetUrl).hostname;
+  const provider = OEMBED_PROVIDERS.find(p => p.pattern.test(host));
+  if (!provider || !provider.endpoint.startsWith("http")) return null;
+  const res = await fetch(
+    `${provider.endpoint}?url=${encodeURIComponent(targetUrl)}&format=json`,
     { signal: AbortSignal.timeout(5000) }
   );
-  if (!oEmbedRes.ok) return null;
-  const d = await oEmbedRes.json();
+  if (!res.ok) return null;
+  const d = await res.json();
   if (!d?.title) return null;
   return {
     title: d.title,
-    description: "",
+    description: d.description || "",
     image: d.thumbnail_url || "",
-    favicon: "https://www.youtube.com/favicon.ico",
+    favicon: provider.favicon,
   };
+}
+
+// microlink 결과가 홈페이지 수준의 제네릭 타이틀인지 확인
+const GENERIC_TITLES = new Set([
+  "youtube", "twitter", "x", "instagram", "tiktok", "facebook", "reddit",
+  "naver", "kakao", "daum", "nate", "google", "bing", "yahoo",
+  "github", "gitlab", "linkedin", "pinterest", "snapchat", "telegram",
+]);
+function isGenericTitle(title, targetUrl) {
+  if (!title) return true;
+  const t = title.toLowerCase().trim();
+  if (GENERIC_TITLES.has(t)) return true;
+  try {
+    const hostname = new URL(targetUrl).hostname.replace(/^www\./, "").split(".")[0].toLowerCase();
+    if (t === hostname) return true;
+  } catch {}
+  return false;
 }
 
 async function fetchUrlMeta(targetUrl, res) {
@@ -1201,12 +1228,12 @@ async function fetchUrlMeta(targetUrl, res) {
   // 0차: 결과 캐시
   const cached = urlMetaCache.get(targetUrl);
   if (cached && cached.expires > Date.now()) { sendJsonCors(res, 200, cached.data); return; }
-  // YouTube: oEmbed API로 정확한 제목 우선 취득 (microlink는 Shorts 제목을 못 읽음)
+  // 1차: oEmbed 지원 플랫폼은 공식 API로 바로 처리
   try {
-    const meta = await fetchMetaWithYouTubeOEmbed(targetUrl);
+    const meta = await fetchMetaWithOEmbed(targetUrl);
     if (meta?.title) { sendUrlMeta(res, meta, targetUrl); return; }
   } catch {}
-  // 1차: MicroLink + Jina AI 병렬 실행, 먼저 성공한 결과 사용
+  // 2차: MicroLink + Jina AI 병렬 실행, 먼저 성공한 결과 사용
   const tryMicrolink = async () => {
     const mlRes = await fetch(`https://api.microlink.io?url=${encodeURIComponent(targetUrl)}&palette=true&audio=true&video=true&iframe=true`, {
       headers: { "Accept": "application/json" },
@@ -1216,12 +1243,9 @@ async function fetchUrlMeta(targetUrl, res) {
     const mlData = await mlRes.json();
     if (mlData?.status !== "success" || !mlData?.data?.title) throw new Error("microlink no data");
     const d = mlData.data;
-    return {
-      title: (d.title || "").replace(/\[|\]/g, "").trim(),
-      description: d.description || "",
-      image: d.image?.url || "",
-      favicon: d.logo?.url || "",
-    };
+    const title = (d.title || "").replace(/\[|\]/g, "").trim();
+    if (isGenericTitle(title, targetUrl)) throw new Error("microlink generic title");
+    return { title, description: d.description || "", image: d.image?.url || "", favicon: d.logo?.url || "" };
   };
   try {
     const meta = await Promise.any([tryMicrolink(), fetchMetaWithJina(targetUrl)]);
