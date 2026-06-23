@@ -1169,6 +1169,26 @@ function sendUrlMeta(res, data, targetUrl) {
   sendJsonCors(res, 200, data);
 }
 
+// YouTube oEmbed API — Shorts/일반 영상 모두 정확한 제목 반환
+async function fetchMetaWithYouTubeOEmbed(targetUrl) {
+  const u = new URL(targetUrl);
+  const isYouTube = /^(www\.)?(youtube\.com|youtu\.be)$/.test(u.hostname);
+  if (!isYouTube) return null;
+  const oEmbedRes = await fetch(
+    `https://www.youtube.com/oembed?url=${encodeURIComponent(targetUrl)}&format=json`,
+    { signal: AbortSignal.timeout(5000) }
+  );
+  if (!oEmbedRes.ok) return null;
+  const d = await oEmbedRes.json();
+  if (!d?.title) return null;
+  return {
+    title: d.title,
+    description: "",
+    image: d.thumbnail_url || "",
+    favicon: "https://www.youtube.com/favicon.ico",
+  };
+}
+
 async function fetchUrlMeta(targetUrl, res) {
   if (!targetUrl) { sendJsonCors(res, 400, { error: "url required" }); return; }
   let parsed;
@@ -1181,6 +1201,11 @@ async function fetchUrlMeta(targetUrl, res) {
   // 0차: 결과 캐시
   const cached = urlMetaCache.get(targetUrl);
   if (cached && cached.expires > Date.now()) { sendJsonCors(res, 200, cached.data); return; }
+  // YouTube: oEmbed API로 정확한 제목 우선 취득 (microlink는 Shorts 제목을 못 읽음)
+  try {
+    const meta = await fetchMetaWithYouTubeOEmbed(targetUrl);
+    if (meta?.title) { sendUrlMeta(res, meta, targetUrl); return; }
+  } catch {}
   // 1차: MicroLink + Jina AI 병렬 실행, 먼저 성공한 결과 사용
   const tryMicrolink = async () => {
     const mlRes = await fetch(`https://api.microlink.io?url=${encodeURIComponent(targetUrl)}&palette=true&audio=true&video=true&iframe=true`, {
