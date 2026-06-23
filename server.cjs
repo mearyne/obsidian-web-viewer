@@ -31,11 +31,16 @@ async function fetchMetaWithJina(targetUrl) {
   const json = await response.json();
   const d = json?.data;
   if (!d?.title) return null;
+  const rawImage = d.images?.[0] || d.image || d.metadata?.["og:image"] || "";
+  const image = rawImage.startsWith("//") ? `https:${rawImage}` : rawImage;
+  const favicon = d.metadata?.["og:site_name"]
+    ? (() => { try { return new URL(targetUrl).origin + "/favicon.ico"; } catch { return ""; } })()
+    : "";
   return {
     title: (d.title || "").replace(/\[|\]/g, "").trim(),
     description: (d.description || "").trim(),
-    image: d.images?.[0] || d.image || "",
-    favicon: "",
+    image,
+    favicon,
   };
 }
 const bundledSampleRoot = path.join(root, "sample-vault");
