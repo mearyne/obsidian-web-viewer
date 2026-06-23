@@ -7527,7 +7527,7 @@ function renderEmbedBlock(code) {
     `<div class="link-embed-body">` +
     `<div class="link-embed-title">${escapeHtml(title || url)}</div>` +
     (description ? `<div class="link-embed-description">${escapeHtml(description)}</div>` : "") +
-    `<div class="link-embed-url"><span>${escapeHtml(url)}</span></div>` +
+    `<div class="link-embed-url">${get("favicon") ? `<img class="link-embed-favicon" src="${escapeAttribute(get("favicon"))}" alt="" aria-hidden="true" onerror="this.style.display='none'">` : ""}<span>${escapeHtml(url)}</span></div>` +
     `</div></a></div>`;
 }
 
