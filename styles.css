@@ -1107,6 +1107,27 @@ button:disabled {
   margin: 0;
 }
 
+.option-test-btn {
+  align-self: flex-start;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+  margin-top: 2px;
+  padding: 6px 14px;
+}
+
+.option-test-btn:hover {
+  background: var(--surface-3);
+}
+
+.option-test-btn:disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
 .saved-vaults {
   display: grid;
   gap: 7px;

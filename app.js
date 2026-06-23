@@ -147,6 +147,9 @@ const els = {
   imagePathInput: document.querySelector("#imagePathInput"),
   clipperFolderInput: document.querySelector("#clipperFolderInput"),
   searchExcludeInput: document.querySelector("#searchExcludeInput"),
+  discordWebhookInput: document.querySelector("#discordWebhookInput"),
+  discordNotifyHoursInput: document.querySelector("#discordNotifyHoursInput"),
+  discordTestBtn: document.querySelector("#discordTestBtn"),
   searchStatus: document.querySelector("#searchStatus"),
   contentSearchToggleButton: document.querySelector("#contentSearchToggleButton"),
   taskCreateDialog: document.querySelector("#taskCreateDialog"),
@@ -398,6 +401,30 @@ els.clipperFolderInput?.addEventListener("input", () => {
   localStorage.setItem("obsidian-web-viewer-clipper-folder", folder);
 });
 els.searchExcludeInput?.addEventListener("input", handleSearchExcludeInput);
+els.discordWebhookInput?.addEventListener("input", scheduleSettingsSave);
+els.discordNotifyHoursInput?.addEventListener("input", scheduleSettingsSave);
+els.discordTestBtn?.addEventListener("click", async () => {
+  const url = els.discordWebhookInput?.value.trim();
+  if (!url) { showAppToast("Webhook URL을 입력하세요", "error"); return; }
+  els.discordTestBtn.disabled = true;
+  showAppToast("테스트 메시지 전송 중...", "info");
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: "✅ **Obsidian Web Viewer** Discord 알림 연결 테스트 성공!" }),
+    });
+    if (res.ok) {
+      showAppToast("Discord 전송 성공!", "success");
+    } else {
+      showAppToast(`전송 실패 (HTTP ${res.status})`, "error");
+    }
+  } catch {
+    showAppToast("전송 중 오류 발생", "error");
+  } finally {
+    els.discordTestBtn.disabled = false;
+  }
+});
 els.newNoteButton?.addEventListener("click", openNewNote);
 els.randomFileButton.addEventListener("click", () => {
   void triggerRandomAction();
@@ -2288,6 +2315,12 @@ async function loadServerSettings() {
         localStorage.setItem("obsidian-web-viewer-search-exclude", settings.searchExclude);
       }
     }
+    if (typeof settings.discordWebhookUrl === "string" && els.discordWebhookInput) {
+      els.discordWebhookInput.value = settings.discordWebhookUrl;
+    }
+    if (settings.discordNotifyHours != null && els.discordNotifyHoursInput) {
+      els.discordNotifyHoursInput.value = String(settings.discordNotifyHours);
+    }
   } catch {
     // Local storage remains the fallback for file:// or unavailable server settings.
   }
@@ -2802,6 +2835,8 @@ async function saveServerSettings() {
         newNotePath: state.newNotePath || "",
         imagePath: state.imageSavePath || "",
         searchExclude: els.searchExcludeInput?.value || "",
+        discordWebhookUrl: els.discordWebhookInput?.value || "",
+        discordNotifyHours: Number(els.discordNotifyHoursInput?.value) || 1,
       }),
     });
   } catch {

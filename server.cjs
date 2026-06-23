@@ -976,6 +976,8 @@ function normalizeSettings(settings) {
     newNotePath: typeof settings?.newNotePath === "string" ? settings.newNotePath.slice(0, 512) : "",
     imagePath: typeof settings?.imagePath === "string" ? settings.imagePath.slice(0, 512) : "",
     searchExclude: typeof settings?.searchExclude === "string" ? settings.searchExclude.slice(0, 4096) : "",
+    discordWebhookUrl: typeof settings?.discordWebhookUrl === "string" ? settings.discordWebhookUrl.slice(0, 512) : "",
+    discordNotifyHours: Number.isFinite(Number(settings?.discordNotifyHours)) ? Math.max(0, Math.min(72, Number(settings.discordNotifyHours))) : 1,
   };
 }
 
@@ -1502,3 +1504,118 @@ function clipWebPage(body, res) {
     sendJsonCors(res, 500, { error: error.message || "Write failed" });
   }
 }
+
+// ── Discord task notification ──────────────────────────────────────────────
+
+function readDiscordNotified() {
+  try {
+    const raw = fs.readFileSync(path.join(calendarCacheRoot, "discord-notified.json"), "utf8");
+    const val = JSON.parse(raw);
+    return val && typeof val === "object" ? val : {};
+  } catch { return {}; }
+}
+
+function writeDiscordNotified(data) {
+  try {
+    fs.mkdirSync(calendarCacheRoot, { recursive: true });
+    fs.writeFileSync(path.join(calendarCacheRoot, "discord-notified.json"), JSON.stringify(data), "utf8");
+  } catch {}
+}
+
+function scanVaultTasks(calendarPaths) {
+  const tasks = [];
+  const allowedPrefixes = calendarPaths
+    ? calendarPaths.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean)
+    : [];
+
+  function walkDir(dir, prefix) {
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const entry of entries) {
+      if (entry.name.startsWith(".")) continue;
+      const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+      const abs = path.join(dir, entry.name);
+      if (entry.isDirectory()) { walkDir(abs, rel); continue; }
+      if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
+      if (allowedPrefixes.length && !allowedPrefixes.some((p) => rel === p || rel.startsWith(p + "/"))) continue;
+      let content;
+      try { content = fs.readFileSync(abs, "utf8"); } catch { continue; }
+      for (const line of content.split("\n")) {
+        const taskMatch = line.match(/^(\s*)-\s+\[( |x|X|-)\]\s+(.+)$/);
+        if (!taskMatch) continue;
+        if (taskMatch[2].toLowerCase() === "x") continue; // 완료된 task 제외
+        const text = taskMatch[3];
+        const dueMatch = text.match(/📅\s*(\d{4}-\d{2}-\d{2})(?:\s+(\d{2}:\d{2}))?/);
+        if (!dueMatch) continue;
+        const dateStr = dueMatch[1];
+        const timeStr = dueMatch[2] || null;
+        tasks.push({ path: rel, text: text.replace(/[📅⏳🛫✅❌]\s*\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2})?/gu, "").trim(), dateStr, timeStr });
+      }
+    }
+  }
+
+  walkDir(vaultRoot, "");
+  return tasks;
+}
+
+async function sendDiscordNotification(webhookUrl, message) {
+  try {
+    const res = await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: message }),
+      signal: AbortSignal.timeout(8000),
+    });
+    return res.ok;
+  } catch { return false; }
+}
+
+async function runDiscordNotificationCheck() {
+  let settings;
+  try {
+    settings = normalizeSettings(JSON.parse(fs.readFileSync(settingsFilePath(), "utf8")));
+  } catch { return; }
+
+  const webhookUrl = process.env.DISCORD_WEBHOOK_URL || settings.discordWebhookUrl;
+  if (!webhookUrl) return;
+
+  const notifyHours = Number(process.env.DISCORD_NOTIFY_HOURS) || settings.discordNotifyHours || 1;
+  const now = Date.now();
+  const windowMs = notifyHours * 60 * 60 * 1000;
+
+  const tasks = scanVaultTasks(settings.calendarPaths);
+  const notified = readDiscordNotified();
+  // 오래된 기록 정리 (7일 초과)
+  const cutoff = now - 7 * 24 * 60 * 60 * 1000;
+  for (const key of Object.keys(notified)) {
+    if (notified[key] < cutoff) delete notified[key];
+  }
+
+  let changed = false;
+  for (const task of tasks) {
+    const dueMs = task.timeStr
+      ? new Date(`${task.dateStr}T${task.timeStr}:00`).getTime()
+      : new Date(`${task.dateStr}T23:59:00`).getTime();
+    if (isNaN(dueMs)) continue;
+    const diff = dueMs - now;
+    if (diff < 0 || diff > windowMs) continue;
+
+    const key = `${task.path}::${task.dateStr}::${task.text.slice(0, 80)}`;
+    if (notified[key]) continue;
+
+    const timeLabel = task.timeStr ? ` ${task.timeStr}` : "";
+    const msg = `⏰ **Task 마감 ${notifyHours}시간 전**\n📄 \`${task.path}\`\n✅ ${task.text}\n📅 ${task.dateStr}${timeLabel}`;
+    const ok = await sendDiscordNotification(webhookUrl, msg);
+    if (ok) {
+      notified[key] = now;
+      changed = true;
+    }
+  }
+
+  if (changed) writeDiscordNotified(notified);
+}
+
+// 1분마다 체크
+setInterval(() => { runDiscordNotificationCheck().catch(() => {}); }, 60 * 1000);
+// 서버 시작 후 10초 뒤 첫 실행
+setTimeout(() => { runDiscordNotificationCheck().catch(() => {}); }, 10 * 1000);

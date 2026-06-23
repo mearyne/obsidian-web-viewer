@@ -292,6 +292,22 @@
           <p class="option-help">공유 시트(PWA)로 내보낸 페이지가 저장될 폴더입니다.</p>
         </div>
       </details>
+
+      <details class="option-node">
+        <summary>Discord 알림</summary>
+        <div class="option-node-body">
+          <label class="option-field">
+            <span>Webhook URL</span>
+            <input id="discordWebhookInput" type="url" placeholder="https://discord.com/api/webhooks/..." />
+          </label>
+          <label class="option-field">
+            <span>마감 N시간 전 알림</span>
+            <input id="discordNotifyHoursInput" type="number" min="0" max="72" step="1" placeholder="1" style="width:80px" />
+          </label>
+          <p class="option-help">마감일(📅)이 있는 미완료 task를 서버가 주기적으로 확인해 Discord로 알림을 보냅니다. Webhook URL은 Discord 채널 설정 → 연동 → 웹후크에서 발급하세요.</p>
+          <button id="discordTestBtn" type="button" class="option-test-btn">테스트 전송</button>
+        </div>
+      </details>
     </section>
 
     <dialog id="taskCreateDialog" class="task-create-dialog">
