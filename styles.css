@@ -1208,7 +1208,8 @@ button:disabled {
   width: 100%;
 }
 
-.note-title-area:not([hidden]) + .markdown-body {
+.note-title-area:not([hidden]) + .markdown-body,
+.note-title-area:not([hidden]) + .editor-shell {
   padding-top: 0;
 }
 

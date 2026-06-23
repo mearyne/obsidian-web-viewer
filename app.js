@@ -2974,6 +2974,7 @@ async function enterEditMode() {
   els.markdownView.hidden = true;
   els.calendarView.hidden = true;
   els.editorShell.hidden = false;
+  if (els.noteTitleArea) els.noteTitleArea.hidden = false;
   requestAnimationFrame(() => {
     resizeEditorToContent();
     const len = els.markdownEditor.value.length;
@@ -4293,6 +4294,7 @@ function showNoteView() {
   els.markdownView.hidden = false;
   els.editorShell.hidden = true;
   els.calendarView.hidden = true;
+  if (els.noteTitleArea) els.noteTitleArea.hidden = true;
   if (els.headingControlsOverlay) els.headingControlsOverlay.hidden = false;
   if (els.viewControlsOverlay) els.viewControlsOverlay.hidden = false;
   els.calendarButton.classList.remove("active");
