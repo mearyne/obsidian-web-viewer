@@ -1272,8 +1272,18 @@ async function fetchUrlMeta(targetUrl, res) {
     return { title, description: d.description || "", image: d.image?.url || "", favicon: d.logo?.url || "" };
   };
   try {
-    const meta = await Promise.any([tryMicrolink(), fetchMetaWithJina(targetUrl)]);
-    if (meta?.title) { sendUrlMeta(res, meta, targetUrl); return; }
+    const results = await Promise.allSettled([tryMicrolink(), fetchMetaWithJina(targetUrl)]);
+    const metas = results.filter(r => r.status === "fulfilled" && r.value?.title).map(r => r.value);
+    if (metas.length > 0) {
+      const merged = { ...metas[0] };
+      for (const m of metas.slice(1)) {
+        if (!merged.favicon && m.favicon) merged.favicon = m.favicon;
+        if (!merged.image && m.image) merged.image = m.image;
+        if (!merged.description && m.description) merged.description = m.description;
+      }
+      sendUrlMeta(res, merged, targetUrl);
+      return;
+    }
   } catch {}
   // 3차: HTML 직접 스크래핑 (fallback)
   try {
