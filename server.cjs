@@ -1296,9 +1296,21 @@ async function fetchUrlMeta(targetUrl, res) {
     reader.cancel().catch(() => {});
     const ogTitle = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)?.[1]
       || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i)?.[1];
+    const ogImage = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)?.[1]
+      || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)?.[1];
+    const ogDescription = html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i)?.[1]
+      || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:description["']/i)?.[1]
+      || html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i)?.[1]
+      || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']description["']/i)?.[1];
+    const unescape = (s) => (s || "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim();
     const titleTag = html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1];
-    const title = (ogTitle || titleTag || "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim();
-    sendUrlMeta(res, { title, description: "", image: "", favicon: "" }, title ? targetUrl : null);
+    const title = unescape(ogTitle || titleTag || "");
+    const rawImage = unescape(ogImage || "");
+    const image = rawImage && /^https?:\/\//i.test(rawImage) ? rawImage
+      : rawImage ? new URL(rawImage, targetUrl).href
+      : "";
+    const description = unescape(ogDescription || "");
+    sendUrlMeta(res, { title, description, image, favicon: "" }, title ? targetUrl : null);
   } catch {
     sendJsonCors(res, 200, { title: "", description: "", image: "", favicon: "" });
   }
