@@ -3178,6 +3178,7 @@ async function handleEditorPaste(event) {
       const insertAt = ta.selectionStart;
       const embedPlaceholder = "```embed\nstatus: \"loading\"\nurl: \"" + text + "\"\n```";
       insertEditorText(ta, embedPlaceholder);
+      showAppToast("링크 불러오는 중...", "info");
       fetchLinkMeta(text).then((meta) => {
         const fullBlock = buildEmbedBlock(meta, text);
         const cur = ta.value;
@@ -3186,6 +3187,13 @@ async function handleEditorPaste(event) {
         ta.value = cur.slice(0, idx) + fullBlock + cur.slice(idx + embedPlaceholder.length);
         resizeEditorToContent();
         markEditorDirty();
+        if (meta && meta.title) {
+          showAppToast("링크 임베드 완료", "success");
+        } else {
+          showAppToast("링크 정보를 불러오지 못했습니다", "error");
+        }
+      }).catch(() => {
+        showAppToast("링크 정보를 불러오지 못했습니다", "error");
       });
     }
   }
