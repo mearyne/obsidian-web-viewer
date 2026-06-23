@@ -2029,7 +2029,39 @@ function scrollViewerByPageFraction(direction) {
 function showFullCurrentTitle() {
   if (Date.now() < state.noteTitleDeleteSuppressedUntil) return;
   if (!state.currentPath) return;
+  // PC(마우스)에서는 인라인 편집, 모바일에서는 기존 alert
+  const isPointerFine = window.matchMedia("(pointer: fine)").matches;
+  if (isPointerFine && state.currentNode?.serverBacked) {
+    startInlineTitleEdit();
+    return;
+  }
   alert(`${displayDocumentTitle(state.currentNode?.name || state.currentPath)}\n${state.currentPath}`);
+}
+
+function startInlineTitleEdit() {
+  const h2 = els.noteTitle;
+  if (!h2 || h2.querySelector("input")) return;
+  const currentTitle = displayDocumentTitle(state.currentNode?.name || state.currentPath);
+  const input = document.createElement("input");
+  input.type = "text";
+  input.value = currentTitle;
+  input.className = "note-title-edit-input";
+  input.setAttribute("aria-label", "제목 편집");
+  h2.textContent = "";
+  h2.appendChild(input);
+  input.focus();
+  input.select();
+  const commit = async () => {
+    const newTitle = input.value.trim();
+    h2.textContent = currentTitle;
+    if (newTitle && newTitle !== currentTitle) await renameCurrentFile(newTitle);
+  };
+  const cancel = () => { h2.textContent = currentTitle; };
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); input.blur(); }
+    if (e.key === "Escape") { input.removeEventListener("blur", commit); h2.textContent = currentTitle; }
+  });
+  input.addEventListener("blur", commit, { once: true });
 }
 
 function startNoteTitleLongPress() {

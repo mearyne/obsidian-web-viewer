@@ -1188,6 +1188,26 @@ button:disabled {
   word-break: break-word;
 }
 
+@media (pointer: fine) {
+  .note-title-area h2 {
+    cursor: text;
+  }
+}
+
+.note-title-edit-input {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid var(--accent);
+  color: inherit;
+  font: inherit;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.3;
+  outline: none;
+  padding: 0;
+  width: 100%;
+}
+
 .note-title-area:not([hidden]) + .markdown-body {
   padding-top: 0;
 }
