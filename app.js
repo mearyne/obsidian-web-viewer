@@ -3134,7 +3134,7 @@ async function fetchLinkTitle(url) {
 
 function buildEmbedBlock(meta, url) {
   const esc = (s) => (s || "").replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-  return "```embed\ntitle: \"" + esc(meta.title) + "\"\ndescription: \"" + esc(meta.description) + "\"\nimage: \"" + esc(meta.image) + "\"\nurl: \"" + esc(url) + "\"\n```";
+  return "```embed\ntitle: \"" + esc(meta.title) + "\"\ndescription: \"" + esc(meta.description) + "\"\nimage: \"" + esc(meta.image) + "\"\nfavicon: \"" + esc(meta.favicon || "") + "\"\nurl: \"" + esc(url) + "\"\n```";
 }
 
 async function handleEditorPaste(event) {
@@ -7515,8 +7515,13 @@ function renderEmbedBlock(code) {
       `<div class="link-embed-url"><span>${escapeHtml(url)}</span></div>` +
       `</div></div></div>`;
   }
-  return `<div class="link-embed-wrap">` +
-    `<button class="link-embed-toggle" type="button" title="접기" aria-expanded="true">▾</button>` +
+  const noVisual = !image && !get("favicon");
+  const collapsed = noVisual ? " collapsed" : "";
+  const toggleLabel = noVisual ? "펼치기" : "접기";
+  const toggleIcon = noVisual ? "▸" : "▾";
+  const toggleExpanded = noVisual ? "false" : "true";
+  return `<div class="link-embed-wrap${collapsed}">` +
+    `<button class="link-embed-toggle" type="button" title="${toggleLabel}" aria-expanded="${toggleExpanded}">${toggleIcon}</button>` +
     `<a href="${escapeAttribute(url)}" target="_blank" rel="noopener" class="link-embed-card">` +
     (image ? `<div class="link-embed-image" style="background-image:url('${escapeAttribute(image)}')"></div>` : "") +
     `<div class="link-embed-body">` +
