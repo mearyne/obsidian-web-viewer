@@ -497,7 +497,25 @@ function updateDeviceTabs(body, res) {
   const allDeviceTabs = pruneDeviceTabs(readDeviceTabs());
   const now = Date.now();
   const deviceName = typeof payload.deviceName === "string" ? payload.deviceName.slice(0, 120) : "";
-  allDeviceTabs[deviceId] = { tabs, updatedAt: now, deviceName };
+
+  // Full tab state for self-restoration (tabs + activeTabId)
+  let openTabs = null;
+  if (payload.openTabs && Array.isArray(payload.openTabs.tabs)) {
+    openTabs = {
+      tabs: payload.openTabs.tabs.slice(0, 100).map((t) => ({
+        id: typeof t.id === "string" ? t.id.slice(0, 40) : "",
+        path: typeof t.path === "string" ? normalizeVaultPath(t.path).slice(0, 1024) : null,
+        title: typeof t.title === "string" ? t.title.slice(0, 300) : "",
+        pinned: Boolean(t.pinned),
+        scrollTop: Number(t.scrollTop) || 0,
+        view: t.view === "calendar" ? "calendar" : null,
+        calendarKind: typeof t.calendarKind === "string" ? t.calendarKind : null,
+      })),
+      activeTabId: typeof payload.openTabs.activeTabId === "string" ? payload.openTabs.activeTabId : null,
+    };
+  }
+
+  allDeviceTabs[deviceId] = { tabs, updatedAt: now, deviceName, openTabs };
 
   try {
     const filePath = resolveVaultFilePath(DEVICE_TABS_VAULT_PATH);
@@ -532,6 +550,7 @@ function pruneDeviceTabs(allDeviceTabs) {
       tabs: Array.isArray(entry?.tabs) ? entry.tabs : [],
       updatedAt,
       deviceName: typeof entry?.deviceName === "string" ? entry.deviceName : "",
+      openTabs: entry?.openTabs || null,
     };
   }
   return pruned;

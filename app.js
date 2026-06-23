@@ -1338,9 +1338,12 @@ function hydrateServerVault(vaultName, files, writable = false) {
   if (firstLoad) {
     state.calendarDate = new Date();
     connectSSE();
-    // Wait for calendar cache before restoring the active tab so the calendar
-    // renders with cached tasks on first paint instead of showing empty first.
-    calendarCachePromise.then(restoreActiveTab, restoreActiveTab);
+    // localStorage가 비어있으면 vault에서 이 기기의 탭 상태 복원 시도
+    const vaultTabsPromise = !localStorage.getItem(OPEN_TABS_KEY)
+      ? loadOpenTabsFromVault()
+      : Promise.resolve();
+    // 캘린더 캐시와 탭 복원이 모두 완료된 후 active tab 복원
+    Promise.all([calendarCachePromise, vaultTabsPromise]).then(restoreActiveTab, restoreActiveTab);
   }
   calendarCachePromise.finally(scheduleCalendarRefresh);
   loadRecentFilesCache().finally(refreshRecentFilesCache);
@@ -2864,6 +2867,7 @@ function renderCurrentDocument(showOpenStep = null, diagnostics = null) {
     bindWikiLinks(els.markdownView);
     markRenderStep("이미지 그룹 정리 중");
     arrangeImageGroups(els.markdownView);
+    arrangeEmbedGroups(els.markdownView);
     bindImageLightbox(els.markdownView);
     markRenderStep("이미지 준비 중");
     hydrateVaultImages(els.markdownView);
@@ -3303,6 +3307,7 @@ function renderEditorPreview() {
   els.editorPreview.innerHTML = renderMarkdown(value);
   bindWikiLinks(els.editorPreview);
   arrangeImageGroups(els.editorPreview);
+  arrangeEmbedGroups(els.editorPreview);
   bindImageLightbox(els.editorPreview);
   hydrateVaultImages(els.editorPreview);
   hydrateEmbeddedDocuments(els.editorPreview);
@@ -4501,6 +4506,16 @@ function findTaskTime(text, marker) {
   return match ? match[1] : null;
 }
 
+function taskTimeForDate(task, dateKey) {
+  const range = taskRangePosition(task, dateKey);
+  if (range === "middle") return "";
+  if (range === "start") return task.startTime || "";
+  if (range === "end") return task.dueTime || "";
+  // 범위 없음 (단일 날짜 또는 start=due 동일 날짜)
+  if (task.startTime && task.dueTime) return `${task.startTime}~${task.dueTime}`;
+  return task.dueTime || task.startTime || "";
+}
+
 function extractTaskMeta(text) {
   const KIND_SET = new Set(["일정", "할일"]);
   const CAT_SET = new Set(["회사", "개인", "기타"]);
@@ -5328,7 +5343,7 @@ function renderCalendarTask(task, dateKey = task.date, showDelete = false) {
     <div class="calendar-task-wrap${showDelete ? " has-delete" : ""}${hasSubItems ? " has-sub" : ""} ${wrapMetaClasses}"${wrapIndentStyle}>
       <button class="calendar-task ${task.checked ? "done" : task.deferred ? "deferred" : ""} ${task.type} ${range ? `range-task ${colorClass}` : ""} ${task.draggingPreview ? "drag-preview" : ""}" type="button" data-path="${escapeAttribute(task.path)}" data-line="${task.line}" data-date="${escapeAttribute(dateKey)}" title="${escapeAttribute(title)}">
         <span>${icon}</span>
-        <span>${escapeHtml(task.text)}${task.dueTime ? `<span class="task-time-badge">${escapeHtml(task.dueTime)}</span>` : task.startTime ? `<span class="task-time-badge">${escapeHtml(task.startTime)}</span>` : ""}</span>
+        <span>${escapeHtml(task.text)}${taskTimeForDate(task, dateKey) ? `<span class="task-time-badge">${escapeHtml(taskTimeForDate(task, dateKey))}</span>` : ""}</span>
       </button>
       ${deleteBtn}
       ${inlineSubItems}
@@ -8036,6 +8051,28 @@ function flushImageGroup(images) {
   images.forEach((image) => gallery.append(image));
 }
 
+function arrangeEmbedGroups(root) {
+  const children = [...root.children];
+  let group = [];
+  children.forEach((child) => {
+    if (child.classList.contains("link-embed-wrap")) {
+      group.push(child);
+      return;
+    }
+    flushEmbedGroup(group);
+    group = [];
+  });
+  flushEmbedGroup(group);
+}
+
+function flushEmbedGroup(wraps) {
+  if (wraps.length < 2) return;
+  const grid = document.createElement("div");
+  grid.className = "embed-grid";
+  wraps[0].before(grid);
+  wraps.forEach((wrap) => grid.append(wrap));
+}
+
 function getFileUrl(path) {
   const node = state.files.get(path);
   if (!node || typeof node.content === "string") return "";
@@ -8712,13 +8749,31 @@ async function saveOpenTabsToVault() {
   const deviceId = getDeviceId();
   const deviceName = getDeviceName();
   const tabs = state.tabs.filter((t) => t.path).map((t) => ({ path: t.path, title: t.title }));
+  const openTabs = {
+    tabs: state.tabs.map((t) => ({ id: t.id, path: t.path, title: t.title, pinned: t.pinned, scrollTop: t.scrollTop, view: t.view || null, calendarKind: t.calendarKind || null })),
+    activeTabId: state.activeTabId,
+  };
   try {
     await fetch("/api/device-tabs", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ deviceId, deviceName, tabs }),
+      body: JSON.stringify({ deviceId, deviceName, tabs, openTabs }),
       cache: "no-store",
     });
+  } catch {}
+}
+
+async function loadOpenTabsFromVault() {
+  if (!state.serverVaultWritable) return;
+  try {
+    const res = await fetch("/api/device-tabs", { cache: "no-store" });
+    if (!res.ok) return;
+    const allDeviceTabs = await res.json();
+    const deviceId = getDeviceId();
+    const myEntry = allDeviceTabs[deviceId];
+    if (!myEntry?.openTabs?.tabs?.length) return;
+    localStorage.setItem(OPEN_TABS_KEY, JSON.stringify(myEntry.openTabs));
+    loadOpenTabs();
   } catch {}
 }
 
@@ -8982,6 +9037,7 @@ async function openInSplitPane(path) {
       void hydrateVaultImages(els.splitMarkdownView);
       void hydrateEmbeddedDocuments(els.splitMarkdownView);
       arrangeImageGroups(els.splitMarkdownView);
+      arrangeEmbedGroups(els.splitMarkdownView);
       bindImageLightbox(els.splitMarkdownView);
     } else {
       const pre = document.createElement("pre");
