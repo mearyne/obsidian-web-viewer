@@ -16,136 +16,28 @@ const { createMarkdownContent } = require("defuddle/full");
 
 const root = __dirname;
 
-// 도메인별 세션 쿠키 캐시
-const domainCookieCache = new Map();
 // URL 메타데이터 결과 캐시 (url → { data, expires })
 const urlMetaCache = new Map();
 const URL_META_TTL = 60 * 60 * 1000; // 1시간
-const CF_CHALLENGE_TITLES = new Set(["Just a moment...", "Attention Required!", "Access denied"]);
-const STEALTH_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
 
-// Puppeteer 브라우저 싱글턴
-let _puppeteerBrowser = null;
-let _puppeteerLaunchPromise = null;
-
-function launchPuppeteer() {
-  if (_puppeteerLaunchPromise) return _puppeteerLaunchPromise;
-  _puppeteerLaunchPromise = (async () => {
-    let puppeteer;
-    try {
-      const puppeteerExtra = require("puppeteer-extra");
-      const StealthPlugin = require("puppeteer-extra-plugin-stealth");
-      puppeteerExtra.use(StealthPlugin());
-      puppeteer = puppeteerExtra;
-    } catch {
-      try { puppeteer = require("puppeteer-core"); } catch { return null; }
-    }
-    const executablePath = process.env.CHROMIUM_PATH || "/usr/bin/chromium-browser";
-    try {
-      _puppeteerBrowser = await puppeteer.launch({
-        executablePath,
-        headless: true,
-        args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
-      });
-      console.log("[puppeteer] browser ready");
-      return _puppeteerBrowser;
-    } catch (e) {
-      console.warn("[puppeteer] launch failed:", e.message);
-      _puppeteerLaunchPromise = null;
-      return null;
-    }
-  })();
-  return _puppeteerLaunchPromise;
+// Jina AI Reader로 메타 추출 (Cloudflare 우회)
+async function fetchMetaWithJina(targetUrl) {
+  const jinaUrl = `https://r.jina.ai/${targetUrl}`;
+  const response = await fetch(jinaUrl, {
+    headers: { "Accept": "application/json", "X-Return-Format": "metadata" },
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!response.ok) return null;
+  const json = await response.json();
+  const d = json?.data;
+  if (!d?.title) return null;
+  return {
+    title: (d.title || "").replace(/\[|\]/g, "").trim(),
+    description: (d.description || "").trim(),
+    image: d.images?.[0] || d.image || "",
+    favicon: "",
+  };
 }
-
-async function getPuppeteerPage() {
-  const browser = _puppeteerBrowser || await launchPuppeteer();
-  if (!browser) return null;
-  try { return await browser.newPage(); } catch { _puppeteerBrowser = null; _puppeteerLaunchPromise = null; return null; }
-}
-
-// 캐시된 세션 쿠키로 빠른 fetch 시도
-async function fetchMetaWithCachedCookies(targetUrl) {
-  const domain = new URL(targetUrl).hostname;
-  const cached = domainCookieCache.get(domain);
-  if (!cached || cached.expires < Date.now()) return null;
-  try {
-    const response = await fetch(targetUrl, {
-      headers: {
-        "User-Agent": cached.ua,
-        "Cookie": cached.cookieHeader,
-        "Accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "ko-KR,ko;q=0.9",
-      },
-      redirect: "follow",
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!response.ok) return null;
-    const html = await response.text();
-    if (CF_CHALLENGE_TITLES.has(html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]?.trim())) return null;
-    const title = (html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)?.[1]
-      || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i)?.[1]
-      || html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1] || "").trim();
-    const description = (html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i)?.[1]
-      || html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i)?.[1] || "").trim();
-    const image = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)?.[1] || "";
-    return { title, description, image, favicon: "" };
-  } catch { return null; }
-}
-
-// Puppeteer로 페이지 로드 후 쿠키 저장
-async function fetchMetaWithBrowser(url) {
-  const page = await getPuppeteerPage();
-  if (!page) return null;
-  try {
-    await page.setUserAgent(STEALTH_UA);
-    // 이미지·미디어·폰트 차단 — 메타 추출에 불필요한 리소스로 속도 저하 방지
-    await page.setRequestInterception(true);
-    const BLOCK_TYPES = new Set(["image", "media", "font", "stylesheet"]);
-    page.on("request", req => {
-      if (BLOCK_TYPES.has(req.resourceType())) req.abort();
-      else req.continue();
-    });
-    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 25000 });
-    // Cloudflare 챌린지가 있으면 해결될 때까지 폴링 (최대 12초)
-    const deadline = Date.now() + 12000;
-    while (Date.now() < deadline) {
-      const title = await page.title();
-      if (!CF_CHALLENGE_TITLES.has(title)) break;
-      await new Promise(r => setTimeout(r, 300));
-    }
-    const title = await page.title();
-    if (CF_CHALLENGE_TITLES.has(title)) return null;
-
-    // 세션 쿠키 전체 캐싱 (다음 요청에서 빠른 HTTP fetch에 재사용)
-    const cookies = await page.cookies();
-    if (cookies.length > 0) {
-      const domain = new URL(url).hostname;
-      const persistCookies = cookies.filter(c => c.expires > 0);
-      const minExpires = persistCookies.length > 0
-        ? Math.min(...persistCookies.map(c => c.expires)) * 1000
-        : Date.now() + 30 * 60 * 1000;
-      const cookieHeader = cookies.map(c => `${c.name}=${c.value}`).join("; ");
-      domainCookieCache.set(domain, { cookieHeader, ua: STEALTH_UA, expires: minExpires });
-      console.log(`[puppeteer] cached ${cookies.length} cookies for ${domain}`);
-    }
-
-    return await page.evaluate(() => ({
-      title: (document.querySelector('meta[property="og:title"]')?.content || document.querySelector("title")?.textContent || "").trim(),
-      description: (document.querySelector('meta[property="og:description"]')?.content || document.querySelector('meta[name="description"]')?.content || "").trim(),
-      image: document.querySelector('meta[property="og:image"]')?.content || "",
-      favicon: document.querySelector('link[rel="icon"]')?.href || document.querySelector('link[rel="shortcut icon"]')?.href || "",
-    }));
-  } catch (e) {
-    console.warn("[puppeteer] fetch failed:", e.message);
-    return null;
-  } finally {
-    await page.close().catch(() => {});
-  }
-}
-
-// 서버 시작 시 브라우저 pre-warm (첫 요청 지연 방지)
-launchPuppeteer().catch(() => {});
 const bundledSampleRoot = path.join(root, "sample-vault");
 const configuredVaultRoot = process.env.VAULT_PATH || process.env.OBSIDIAN_VAULT_PATH || process.env.OBSIDIAN_VALUT_PATH;
 const resolvedVaultRoot = configuredVaultRoot ? path.resolve(configuredVaultRoot) : "";
@@ -1312,33 +1204,15 @@ async function fetchUrlMeta(targetUrl, res) {
       }
     }
   } catch {}
-  // 2차: 캐시된 세션 쿠키로 빠른 재시도 (이전에 Puppeteer가 해결한 도메인)
+  // 2차: Jina AI Reader (Cloudflare 등 봇 차단 우회)
   try {
-    const meta = await fetchMetaWithCachedCookies(targetUrl);
+    const meta = await fetchMetaWithJina(targetUrl);
     if (meta && meta.title) {
-      sendUrlMeta(res, {
-        title: meta.title.replace(/\[|\]/g, "").trim(),
-        description: meta.description || "",
-        image: meta.image || "",
-        favicon: meta.favicon || "",
-      }, targetUrl);
+      sendUrlMeta(res, meta, targetUrl);
       return;
     }
   } catch {}
-  // 3차: Puppeteer headless browser (Cloudflare 등 봇 차단 우회)
-  try {
-    const meta = await fetchMetaWithBrowser(targetUrl);
-    if (meta && meta.title) {
-      sendUrlMeta(res, {
-        title: meta.title.replace(/\[|\]/g, "").trim(),
-        description: meta.description || "",
-        image: meta.image || "",
-        favicon: meta.favicon || "",
-      }, targetUrl);
-      return;
-    }
-  } catch {}
-  // 4차: HTML 직접 스크래핑 (fallback)
+  // 3차: HTML 직접 스크래핑 (fallback)
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 6000);
