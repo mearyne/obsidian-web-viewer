@@ -1301,28 +1301,44 @@ async function fetchUrlMeta(targetUrl, res) {
   } catch {}
   // 3차: HTML 직접 스크래핑 (fallback)
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 6000);
-    const response = await fetch(targetUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
-      },
-      redirect: "follow",
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
-    if (!response.ok) { sendJsonCors(res, 200, { title: "" }); return; }
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let html = "";
-    while (html.length < 16384) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      html += decoder.decode(value, { stream: true });
-      if (/<\/head>/i.test(html)) break;
+    const DESKTOP_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+    const scrapeHtml = async (fetchUrl) => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 6000);
+      const response = await fetch(fetchUrl, {
+        headers: {
+          "User-Agent": DESKTOP_UA,
+          "Accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
+          "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8",
+        },
+        redirect: "follow",
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      if (!response.ok) return null;
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let html = "";
+      while (html.length < 16384) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        html += decoder.decode(value, { stream: true });
+        if (/<\/head>/i.test(html)) break;
+      }
+      reader.cancel().catch(() => {});
+      return html;
+    };
+    let html = await scrapeHtml(targetUrl);
+    if (!html) { sendJsonCors(res, 200, { title: "" }); return; }
+    // JS redirect 감지 (DCInside 등 모바일 UA 분기 처리 사이트)
+    const jsRedirect = html.match(/location\.href\s*=\s*['"]([^'"]+)['"]/)?.[1];
+    if (jsRedirect && !/<title/i.test(html)) {
+      try {
+        const redirectUrl = /^https?:\/\//i.test(jsRedirect) ? jsRedirect : new URL(jsRedirect, targetUrl).href;
+        const retried = await scrapeHtml(redirectUrl);
+        if (retried) html = retried;
+      } catch {}
     }
-    reader.cancel().catch(() => {});
     const ogTitle = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)?.[1]
       || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i)?.[1];
     const ogImage = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)?.[1]
@@ -1359,17 +1375,28 @@ async function fetchAndParseUrl(targetUrl, res) {
 
   let html;
   try {
-    const response = await fetch(targetUrl, {
+    const DESKTOP_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+    const doFetch = async (url) => fetch(url, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
+        "User-Agent": DESKTOP_UA,
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
       },
       redirect: "follow",
       signal: AbortSignal.timeout(15000),
     });
+    const response = await doFetch(targetUrl);
     if (!response.ok) { sendJsonCors(res, 502, { error: `HTTP ${response.status} from target` }); return; }
     html = await response.text();
+    // JS redirect 감지 (DCInside 등 모바일 UA 분기 처리 사이트)
+    const jsRedirect = html.match(/location\.href\s*=\s*['"]([^'"]+)['"]/)?.[1];
+    if (jsRedirect && !/<title/i.test(html)) {
+      try {
+        const redirectUrl = /^https?:\/\//i.test(jsRedirect) ? jsRedirect : new URL(jsRedirect, targetUrl).href;
+        const r2 = await doFetch(redirectUrl);
+        if (r2.ok) html = await r2.text();
+      } catch {}
+    }
   } catch (e) {
     sendJsonCors(res, 502, { error: "Failed to fetch URL: " + (e.message || String(e)) }); return;
   }
