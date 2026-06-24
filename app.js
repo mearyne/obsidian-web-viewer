@@ -402,6 +402,7 @@ els.imagePathInput?.addEventListener("input", handleImagePathInput);
 els.clipperFolderInput?.addEventListener("input", () => {
   const folder = normalizeVaultPath(els.clipperFolderInput.value || "") || "Clippings";
   localStorage.setItem("obsidian-web-viewer-clipper-folder", folder);
+  updateBookmarkletHref(folder);
 });
 els.searchExcludeInput?.addEventListener("input", handleSearchExcludeInput);
 els.discordWebhookInput?.addEventListener("input", scheduleSettingsSave);
@@ -2255,6 +2256,7 @@ function initOptions() {
   if (els.imagePathInput) els.imagePathInput.value = savedImagePath;
   const savedClipperFolder = localStorage.getItem("obsidian-web-viewer-clipper-folder") || "Clippings";
   if (els.clipperFolderInput) els.clipperFolderInput.value = savedClipperFolder;
+  updateBookmarkletHref(savedClipperFolder);
   const savedSearchExclude = localStorage.getItem("obsidian-web-viewer-search-exclude") || "";
   state.searchExcludePaths = parsePathList(savedSearchExclude);
   if (els.searchExcludeInput) els.searchExcludeInput.value = savedSearchExclude;
@@ -2345,6 +2347,12 @@ function handleNewNotePathInput() {
   state.newNotePath = value;
   localStorage.setItem("obsidian-web-viewer-new-note-path", value);
   scheduleSettingsSave();
+}
+
+function updateBookmarkletHref(folder) {
+  const link = document.getElementById("bookmarkletLink");
+  if (!link) return;
+  link.href = `/api/clip-bookmarklet?folder=${encodeURIComponent(folder || "Clippings")}`;
 }
 
 function handleImagePathInput() {
