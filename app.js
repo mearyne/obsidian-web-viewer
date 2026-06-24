@@ -3221,6 +3221,54 @@ async function uploadImageToEditor(blob, mimeType) {
   }
 }
 
+async function downloadRemoteImageToEditor(remoteUrl) {
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  const dateStr = formatDate(now);
+  const timeStr = `${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
+  const rand = Math.random().toString(36).slice(2, 7);
+  const extMatch = remoteUrl.match(/\.(gif|webp|svg|bmp|png|jpe?g|avif|ico)(\?|$)/i);
+  const ext = extMatch ? extMatch[1].toLowerCase().replace("jpeg", "jpg") : "jpg";
+  const filename = `${dateStr} ${timeStr} ${rand}.${ext}`;
+  const dir = normalizeVaultPath(state.imageSavePath || els.imagePathInput?.value || "");
+  const savePath = dir ? `${dir}/${filename}` : filename;
+
+  const btn = els.editorImageButton;
+  if (btn) btn.classList.add("uploading");
+  const prevStatus = els.editorStatus?.textContent || "";
+  updateEditorStatus("이미지 다운로드 중…");
+
+  try {
+    const res = await fetch("/api/download-remote-image", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ remoteUrl, savePath }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || "download failed");
+    }
+    const data = await res.json();
+    const wikiLink = `![[${data.path}]]`;
+    const textarea = els.markdownEditor;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    textarea.value = textarea.value.slice(0, start) + wikiLink + textarea.value.slice(end);
+    textarea.selectionStart = textarea.selectionEnd = start + wikiLink.length;
+    resizeEditorToContent();
+    markEditorDirty();
+    registerUploadedFileInVault(data.path, data.size || 0);
+    showAppToast("이미지 다운로드 완료", "success");
+  } catch (e) {
+    showAppToast("이미지 다운로드 실패: " + e.message, "error");
+    // 다운로드 실패 시 외부 링크로 폴백
+    insertEditorText(els.markdownEditor, `![](${remoteUrl})`);
+  } finally {
+    if (btn) btn.classList.remove("uploading");
+    updateEditorStatus(prevStatus);
+  }
+}
+
 async function fetchLinkMeta(url) {
   try {
     const res = await fetch(`/api/url-meta?url=${encodeURIComponent(url)}`);
@@ -3261,7 +3309,9 @@ async function handleEditorPaste(event) {
   if (/^https?:\/\/\S+$/.test(text)) {
     event.preventDefault();
     const isImage = /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)(\?.*)?$/i.test(text);
-    if (isImage) {
+    if (isImage && state.serverVaultWritable) {
+      await downloadRemoteImageToEditor(text);
+    } else if (isImage) {
       insertEditorText(els.markdownEditor, `![](${text})`);
     } else {
       const ta = els.markdownEditor;

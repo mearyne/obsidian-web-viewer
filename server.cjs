@@ -213,6 +213,41 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (requestPath === "/api/download-remote-image" && req.method === "POST") {
+    receiveBody(req, async (error, body) => {
+      if (error) { sendJsonCors(res, 400, { error: "Invalid request body" }); return; }
+      let parsed;
+      try { parsed = JSON.parse(body); } catch { sendJsonCors(res, 400, { error: "Invalid JSON" }); return; }
+      const { remoteUrl, savePath } = parsed;
+      if (!remoteUrl || typeof remoteUrl !== "string") { sendJsonCors(res, 400, { error: "remoteUrl required" }); return; }
+      if (!savePath || typeof savePath !== "string") { sendJsonCors(res, 400, { error: "savePath required" }); return; }
+      const safePath = normalizeVaultPath(savePath);
+      if (!safePath || !/\.(png|jpe?g|gif|webp|bmp|svg|avif)$/i.test(safePath)) {
+        sendJsonCors(res, 400, { error: "Invalid image path" }); return;
+      }
+      const filePath = resolveVaultFilePath(safePath);
+      if (!filePath) { sendJsonCors(res, 403, { error: "Forbidden path" }); return; }
+      try {
+        const fetchRes = await fetch(remoteUrl, {
+          headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" },
+          redirect: "follow",
+          signal: AbortSignal.timeout(15000),
+        });
+        if (!fetchRes.ok) { sendJsonCors(res, 502, { error: `Remote returned ${fetchRes.status}` }); return; }
+        const contentType = fetchRes.headers.get("content-type") || "";
+        if (!contentType.startsWith("image/")) { sendJsonCors(res, 400, { error: "Remote URL is not an image" }); return; }
+        const arrayBuf = await fetchRes.arrayBuffer();
+        const buffer = Buffer.from(arrayBuf);
+        fs.mkdirSync(path.dirname(filePath), { recursive: true });
+        fs.writeFileSync(filePath, buffer);
+        sendJsonCors(res, 200, { path: safePath, size: buffer.length });
+      } catch (e) {
+        sendJsonCors(res, 502, { error: "Failed to fetch remote image: " + (e.message || String(e)) });
+      }
+    });
+    return;
+  }
+
   if (requestPath === "/api/vault-image-thumb") {
     sendVaultImageThumbnail(url.searchParams.get("path"), url.searchParams.get("width"), res);
     return;
