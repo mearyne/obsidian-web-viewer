@@ -3829,14 +3829,16 @@ button:disabled {
 }
 
 .calendar-task.deferred {
-  opacity: 0.7;
-  font-style: italic;
   border-style: dashed;
+  color: #666;
+  font-style: italic;
+  opacity: 0.7;
 }
 
 .matrix-task.deferred {
-  opacity: 0.7;
+  color: #666;
   font-style: italic;
+  opacity: 0.7;
 }
 
 .calendar-task.dragging {
