@@ -2491,7 +2491,7 @@ button:disabled {
   display: flex;
   gap: 4px;
 }
-.task-title-row input[type="text"] { flex: 1; min-width: 0; }
+.task-title-row input[type="text"] { flex: 1; min-width: 0; width: auto; }
 
 .task-notify-emoji {
   background: none;
@@ -2620,7 +2620,6 @@ button:disabled {
   text-overflow: ellipsis;
   transition: border-color 0.15s;
   white-space: nowrap;
-  width: 100%;
 }
 
 .task-dialog-title-input:not(:read-only):focus {

@@ -385,6 +385,7 @@
       <div class="task-create-form task-edit-form">
         <div class="task-edit-header">
           <input id="taskEditDialogTitle" type="text" class="task-dialog-title-input" placeholder="태스크 제목" autocomplete="off" />
+          <button type="button" id="taskEditNotifyChip" class="task-notify-emoji" data-notify="true" title="Discord 알림">🔔</button>
           <label class="task-edit-done-label"><input type="checkbox" id="taskEditChecked" /> 완료</label>
           <label class="task-edit-done-label"><input type="checkbox" id="taskEditDeferred" /> 미루기</label>
         </div>
@@ -392,10 +393,7 @@
           <div class="task-edit-main">
             <div class="task-create-field">
               <label>제목</label>
-              <div class="task-title-row">
-                <input id="taskEditTitleInput" type="text" placeholder="할 일을 입력하세요" autocomplete="off" />
-                <button type="button" id="taskEditNotifyChip" class="task-notify-emoji active" data-notify="true" title="Discord 알림">🔔</button>
-              </div>
+              <input id="taskEditTitleInput" type="text" placeholder="할 일을 입력하세요" autocomplete="off" />
             </div>
             <div class="task-create-meta">
               <div class="task-meta-row">
