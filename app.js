@@ -152,6 +152,10 @@ const els = {
   discordNotifyListEvent: document.querySelector("#discordNotifyListEvent"),
   discordNotifyAddTodoBtn: document.querySelector("#discordNotifyAddTodoBtn"),
   discordNotifyAddEventBtn: document.querySelector("#discordNotifyAddEventBtn"),
+  discordFixedListTodo: document.querySelector("#discordFixedListTodo"),
+  discordFixedListEvent: document.querySelector("#discordFixedListEvent"),
+  discordFixedAddTodoBtn: document.querySelector("#discordFixedAddTodoBtn"),
+  discordFixedAddEventBtn: document.querySelector("#discordFixedAddEventBtn"),
   discordTestBtn: document.querySelector("#discordTestBtn"),
   taskNotifyChip: document.querySelector("#taskNotifyChip"),
   taskEditNotifyChip: document.querySelector("#taskEditNotifyChip"),
@@ -414,6 +418,8 @@ els.searchExcludeInput?.addEventListener("input", handleSearchExcludeInput);
 els.discordWebhookInput?.addEventListener("input", scheduleSettingsSave);
 els.discordNotifyAddTodoBtn?.addEventListener("click", () => { addDiscordNotifyRow("todo", 60); scheduleSettingsSave(); });
 els.discordNotifyAddEventBtn?.addEventListener("click", () => { addDiscordNotifyRow("event", 60); scheduleSettingsSave(); });
+els.discordFixedAddTodoBtn?.addEventListener("click", () => { addDiscordFixedRow("todo", "09:00"); scheduleSettingsSave(); });
+els.discordFixedAddEventBtn?.addEventListener("click", () => { addDiscordFixedRow("event", "09:00"); scheduleSettingsSave(); });
 els.discordTestBtn?.addEventListener("click", async () => {
   const url = els.discordWebhookInput?.value.trim();
   if (!url) { showAppToast("Webhook URL을 입력하세요", "error"); return; }
@@ -2277,6 +2283,8 @@ function initOptions() {
   // Discord 알림 목록 기본 렌더링 (서버 설정 로드 전 기본값)
   renderDiscordNotifyList("todo", [60]);
   renderDiscordNotifyList("event", [60]);
+  renderDiscordFixedList("todo", []);
+  renderDiscordFixedList("event", []);
   const savedFont = localStorage.getItem("obsidian-web-viewer-font") || "default";
   const appliedFont = setAppFont(savedFont);
   if (els.fontSelect) els.fontSelect.value = appliedFont;
@@ -2355,6 +2363,8 @@ async function loadServerSettings() {
         : [Math.round((Number(settings.discordNotifyHoursEvent) || 1) * 60)];
       renderDiscordNotifyList("event", eventOffsets);
     }
+    renderDiscordFixedList("todo", Array.isArray(settings.discordFixedTimesTodo) ? settings.discordFixedTimesTodo : []);
+    renderDiscordFixedList("event", Array.isArray(settings.discordFixedTimesEvent) ? settings.discordFixedTimesEvent : []);
   } catch {
     // Local storage remains the fallback for file:// or unavailable server settings.
   }
@@ -2881,6 +2891,8 @@ async function saveServerSettings() {
         discordWebhookUrl: els.discordWebhookInput?.value || "",
         discordNotifyOffsetsTodo: getDiscordNotifyOffsets("todo"),
         discordNotifyOffsetsEvent: getDiscordNotifyOffsets("event"),
+        discordFixedTimesTodo: getDiscordFixedTimes("todo"),
+        discordFixedTimesEvent: getDiscordFixedTimes("event"),
       }),
     });
   } catch {
@@ -9289,6 +9301,48 @@ function getDiscordNotifyOffsets(kind) {
     if (Number.isFinite(v) && v > 0) result.push(Math.round(v));
   });
   return result.length ? result : [60];
+}
+
+// ── Discord Fixed Time List ─────────────────────────────────────────────────
+
+function renderDiscordFixedList(kind, times) {
+  const container = kind === "todo" ? els.discordFixedListTodo : els.discordFixedListEvent;
+  if (!container) return;
+  container.innerHTML = "";
+  times.forEach((t) => addDiscordFixedRow(kind, t));
+}
+
+function addDiscordFixedRow(kind, time = "09:00") {
+  const container = kind === "todo" ? els.discordFixedListTodo : els.discordFixedListEvent;
+  if (!container) return;
+  const row = document.createElement("div");
+  row.className = "discord-notify-row";
+  const input = document.createElement("input");
+  input.type = "time";
+  input.value = time;
+  input.className = "discord-fixed-time-input";
+  input.addEventListener("input", scheduleSettingsSave);
+  const label = document.createElement("span");
+  label.className = "discord-notify-unit";
+  label.textContent = "당일";
+  const delBtn = document.createElement("button");
+  delBtn.type = "button";
+  delBtn.className = "discord-notify-del-btn";
+  delBtn.textContent = "×";
+  delBtn.addEventListener("click", () => { row.remove(); scheduleSettingsSave(); });
+  row.append(input, label, delBtn);
+  container.append(row);
+}
+
+function getDiscordFixedTimes(kind) {
+  const container = kind === "todo" ? els.discordFixedListTodo : els.discordFixedListEvent;
+  if (!container) return [];
+  const result = [];
+  container.querySelectorAll(".discord-fixed-time-input").forEach((inp) => {
+    const v = inp.value.trim();
+    if (/^\d{2}:\d{2}$/.test(v)) result.push(v);
+  });
+  return result;
 }
 
 // ── Clock Picker ────────────────────────────────────────────────────────────

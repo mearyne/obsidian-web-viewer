@@ -976,6 +976,11 @@ function normalizeNotifyOffsets(arr, legacyHours) {
   return [Number.isFinite(h) && h > 0 ? Math.round(h * 60) : 60];
 }
 
+function normalizeNotifyFixedTimes(arr) {
+  if (!Array.isArray(arr)) return [];
+  return arr.filter((t) => typeof t === "string" && /^\d{2}:\d{2}$/.test(t.trim())).map((t) => t.trim());
+}
+
 function normalizeSettings(settings) {
   return {
     version: 1,
@@ -988,6 +993,8 @@ function normalizeSettings(settings) {
     discordWebhookUrl: typeof settings?.discordWebhookUrl === "string" ? settings.discordWebhookUrl.slice(0, 512) : "",
     discordNotifyOffsetsTodo: normalizeNotifyOffsets(settings?.discordNotifyOffsetsTodo, settings?.discordNotifyHoursTodo),
     discordNotifyOffsetsEvent: normalizeNotifyOffsets(settings?.discordNotifyOffsetsEvent, settings?.discordNotifyHoursEvent),
+    discordFixedTimesTodo: normalizeNotifyFixedTimes(settings?.discordFixedTimesTodo),
+    discordFixedTimesEvent: normalizeNotifyFixedTimes(settings?.discordFixedTimesEvent),
   };
 }
 
@@ -1631,7 +1638,12 @@ async function runDiscordNotificationCheck() {
     : (settings.discordNotifyOffsetsTodo?.length ? settings.discordNotifyOffsetsTodo : [60]);
   const offsetsEvent = Number.isFinite(envHoursEvent) ? [Math.round(envHoursEvent * 60)]
     : (settings.discordNotifyOffsetsEvent?.length ? settings.discordNotifyOffsetsEvent : [60]);
+  const fixedTimesTodo = settings.discordFixedTimesTodo || [];
+  const fixedTimesEvent = settings.discordFixedTimesEvent || [];
   const now = Date.now();
+  const nowDate = new Date(now);
+  const todayStr = `${nowDate.getFullYear()}-${String(nowDate.getMonth() + 1).padStart(2, "0")}-${String(nowDate.getDate()).padStart(2, "0")}`;
+  const nowHHMM = `${String(nowDate.getHours()).padStart(2, "0")}:${String(nowDate.getMinutes()).padStart(2, "0")}`;
 
   const tasks = scanVaultTasks(settings.calendarPaths);
   const notified = readDiscordNotified();
@@ -1663,6 +1675,25 @@ async function runDiscordNotificationCheck() {
       const kind = task.isEvent ? `일정 시작 ${offsetLabel} 전` : `할 일 마감 ${offsetLabel} 전`;
       const timeLabel = task.notifyTimeStr ? ` ${task.notifyTimeStr}` : "";
       const msg = `⏰ **${kind}**\n📄 \`${task.path}\`\n${task.isEvent ? "🗓" : "✅"} ${task.text}\n📅 ${task.notifyDateStr}${timeLabel}`;
+      const ok = await sendDiscordNotification(webhookUrl, msg);
+      if (ok) {
+        notified[key] = now;
+        changed = true;
+      }
+    }
+
+    // 고정 시각 알림: 마감/시작 당일 지정된 시각에 알림
+    const fixedTimes = task.isEvent ? fixedTimesEvent : fixedTimesTodo;
+    for (const fixedTime of fixedTimes) {
+      if (nowHHMM !== fixedTime) continue;
+      if (task.notifyDateStr !== todayStr) continue;
+
+      const key = `${task.path}::${task.dateStr}::${task.text.slice(0, 80)}::fixed_${fixedTime}`;
+      if (notified[key]) continue;
+
+      const kind = task.isEvent ? `일정 당일 ${fixedTime}` : `할 일 마감 당일 ${fixedTime}`;
+      const timeLabel = task.notifyTimeStr ? ` ${task.notifyTimeStr}` : "";
+      const msg = `🔔 **${kind}**\n📄 \`${task.path}\`\n${task.isEvent ? "🗓" : "✅"} ${task.text}\n📅 ${task.notifyDateStr}${timeLabel}`;
       const ok = await sendDiscordNotification(webhookUrl, msg);
       if (ok) {
         notified[key] = now;
