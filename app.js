@@ -3147,10 +3147,10 @@ function handleEditorKeydown(event) {
 }
 
 const EMOJI_SHORTCODES = [
-  { code: ";g", emoji: "👍" },
-  { code: ";ㅎ", emoji: "👍" },
-  { code: ";b", emoji: "👎" },
-  { code: ";ㅠ", emoji: "👎" },
+  { code: ";gg", emoji: "👍" },
+  { code: ";ㅎㅎ", emoji: "👍" },
+  { code: ";bb", emoji: "👎" },
+  { code: ";ㅠㅠ", emoji: "👎" },
 ];
 
 function handleEditorInput() {
