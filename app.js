@@ -5352,6 +5352,11 @@ function renderSubItemContent(content) {
       const src = `/api/vault-image-thumb?path=${encodeURIComponent(filePath)}&width=240`;
       return `<img class="task-sub-img" src="${escapeAttribute(src)}" alt="${escapeAttribute(target)}" loading="lazy">`;
     }
+    // resolveVaultPath가 실패해도 파일명으로 직접 API를 시도
+    if (!filePath && /\.(png|jpe?g|gif|webp|svg|avif|bmp)(\|.*)?$/i.test(target)) {
+      const src = `/api/vault-image-thumb?path=${encodeURIComponent(target)}&width=240`;
+      return `<img class="task-sub-img" src="${escapeAttribute(src)}" alt="${escapeAttribute(target)}" loading="lazy">`;
+    }
     return `<span>${escapeHtml(content)}</span>`;
   }
   const mdImg = text.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
@@ -7002,7 +7007,10 @@ function setTaskDialogMode(mode) {
           els.taskEditSubItems.style.maxHeight = leftH + "px";
         }
       }
-      if (els.taskSubItemsPreview) els.taskSubItemsPreview.hidden = false;
+      if (els.taskSubItemsPreview) {
+        els.taskSubItemsPreview.hidden = false;
+        hydrateVaultImages(els.taskSubItemsPreview);
+      }
     });
   }
 }
