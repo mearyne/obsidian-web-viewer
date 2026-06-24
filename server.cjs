@@ -956,7 +956,16 @@ function sendSettings(res) {
 async function sendVaultImageThumbnail(requestedPath, widthValue, res) {
   const safePath = normalizeVaultPath(requestedPath || "");
   const filePath = resolveVaultFilePath(safePath);
-  if (!filePath || !isRasterThumbnailFile(safePath)) {
+  if (!filePath) {
+    sendJson(res, 403, { error: "Invalid image path" });
+    return;
+  }
+  // GIF/SVG: serve raw — sharp strips animation and SVG isn't raster
+  if (/\.(gif|svg)$/i.test(safePath)) {
+    sendVaultFile(safePath, res);
+    return;
+  }
+  if (!isRasterThumbnailFile(safePath)) {
     sendJson(res, 403, { error: "Invalid image path" });
     return;
   }
