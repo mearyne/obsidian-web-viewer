@@ -181,6 +181,29 @@
     <div id="syncStatus" class="sync-status sync-status-bar" hidden></div>
     <div id="connectionBanner" class="connection-banner" hidden></div>
 
+    <!-- Clock Picker -->
+    <div id="clockPickerOverlay" class="clock-picker-overlay" hidden>
+      <div class="clock-picker-backdrop" id="clockPickerBackdrop"></div>
+      <div class="clock-picker" role="dialog" aria-label="시간 선택">
+        <div class="clock-picker-header">
+          <button class="clock-display-part" id="clockPickerHourBtn">12</button>
+          <span class="clock-sep">:</span>
+          <button class="clock-display-part" id="clockPickerMinuteBtn">00</button>
+          <div class="clock-picker-ampm">
+            <button class="ampm-btn" id="clockPickerAM">AM</button>
+            <button class="ampm-btn" id="clockPickerPM">PM</button>
+          </div>
+        </div>
+        <div class="clock-face-wrap">
+          <div id="clockFace" class="clock-face"></div>
+        </div>
+        <div class="clock-picker-footer">
+          <button id="clockPickerCancel" type="button" class="clock-picker-action">취소</button>
+          <button id="clockPickerConfirm" type="button" class="clock-picker-action clock-picker-ok">확인</button>
+        </div>
+      </div>
+    </div>
+
 
     <div id="optionsBackdrop" class="options-backdrop" hidden></div>
     <section id="optionsMenu" class="options-modal" role="dialog" aria-modal="true" aria-labelledby="optionsTitle" hidden>
@@ -307,14 +330,16 @@
             <span>Webhook URL</span>
             <input id="discordWebhookInput" type="url" placeholder="https://discord.com/api/webhooks/..." />
           </label>
-          <label class="option-field">
-            <span>할 일 알림 (마감 N시간 전)</span>
-            <input id="discordNotifyHoursTodoInput" type="number" min="0" max="72" step="1" placeholder="1" style="width:80px" />
-          </label>
-          <label class="option-field">
-            <span>일정 알림 (시작 N시간 전)</span>
-            <input id="discordNotifyHoursEventInput" type="number" min="0" max="72" step="1" placeholder="1" style="width:80px" />
-          </label>
+          <div class="option-field">
+            <span>할 일 알림 (마감 N분 전)</span>
+            <div id="discordNotifyListTodo" class="discord-notify-list"></div>
+            <button id="discordNotifyAddTodoBtn" type="button" class="discord-notify-add-btn">+ 알림 추가</button>
+          </div>
+          <div class="option-field">
+            <span>일정 알림 (시작 N분 전)</span>
+            <div id="discordNotifyListEvent" class="discord-notify-list"></div>
+            <button id="discordNotifyAddEventBtn" type="button" class="discord-notify-add-btn">+ 알림 추가</button>
+          </div>
           <p class="option-help">마감일(📅)이 있는 미완료 task를 서버가 주기적으로 확인해 Discord로 알림을 보냅니다. 일정(🛫 시작일 있음)과 할 일을 구분해 각각 다른 시간 전에 알립니다. task 편집 다이얼로그에서 개별 알림을 끌 수 있습니다. Webhook URL은 Discord 채널 설정 → 연동 → 웹후크에서 발급하세요.</p>
           <button id="discordTestBtn" type="button" class="option-test-btn">테스트 전송</button>
         </div>

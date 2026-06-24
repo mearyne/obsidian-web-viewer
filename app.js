@@ -148,8 +148,10 @@ const els = {
   clipperFolderInput: document.querySelector("#clipperFolderInput"),
   searchExcludeInput: document.querySelector("#searchExcludeInput"),
   discordWebhookInput: document.querySelector("#discordWebhookInput"),
-  discordNotifyHoursTodoInput: document.querySelector("#discordNotifyHoursTodoInput"),
-  discordNotifyHoursEventInput: document.querySelector("#discordNotifyHoursEventInput"),
+  discordNotifyListTodo: document.querySelector("#discordNotifyListTodo"),
+  discordNotifyListEvent: document.querySelector("#discordNotifyListEvent"),
+  discordNotifyAddTodoBtn: document.querySelector("#discordNotifyAddTodoBtn"),
+  discordNotifyAddEventBtn: document.querySelector("#discordNotifyAddEventBtn"),
   discordTestBtn: document.querySelector("#discordTestBtn"),
   taskNotifyChip: document.querySelector("#taskNotifyChip"),
   taskEditNotifyChip: document.querySelector("#taskEditNotifyChip"),
@@ -410,8 +412,8 @@ els.clipperFolderInput?.addEventListener("input", () => {
 });
 els.searchExcludeInput?.addEventListener("input", handleSearchExcludeInput);
 els.discordWebhookInput?.addEventListener("input", scheduleSettingsSave);
-els.discordNotifyHoursTodoInput?.addEventListener("input", scheduleSettingsSave);
-els.discordNotifyHoursEventInput?.addEventListener("input", scheduleSettingsSave);
+els.discordNotifyAddTodoBtn?.addEventListener("click", () => { addDiscordNotifyRow("todo", 60); scheduleSettingsSave(); });
+els.discordNotifyAddEventBtn?.addEventListener("click", () => { addDiscordNotifyRow("event", 60); scheduleSettingsSave(); });
 els.discordTestBtn?.addEventListener("click", async () => {
   const url = els.discordWebhookInput?.value.trim();
   if (!url) { showAppToast("Webhook URL을 입력하세요", "error"); return; }
@@ -2271,6 +2273,9 @@ function initOptions() {
   const savedSearchExclude = localStorage.getItem("obsidian-web-viewer-search-exclude") || "";
   state.searchExcludePaths = parsePathList(savedSearchExclude);
   if (els.searchExcludeInput) els.searchExcludeInput.value = savedSearchExclude;
+  // Discord 알림 목록 기본 렌더링 (서버 설정 로드 전 기본값)
+  renderDiscordNotifyList("todo", [60]);
+  renderDiscordNotifyList("event", [60]);
   const savedFont = localStorage.getItem("obsidian-web-viewer-font") || "default";
   const appliedFont = setAppFont(savedFont);
   if (els.fontSelect) els.fontSelect.value = appliedFont;
@@ -2335,11 +2340,19 @@ async function loadServerSettings() {
     if (typeof settings.discordWebhookUrl === "string" && els.discordWebhookInput) {
       els.discordWebhookInput.value = settings.discordWebhookUrl;
     }
-    if (settings.discordNotifyHoursTodo != null && els.discordNotifyHoursTodoInput) {
-      els.discordNotifyHoursTodoInput.value = String(settings.discordNotifyHoursTodo);
+    {
+      const rawTodo = settings.discordNotifyOffsetsTodo;
+      const todoOffsets = Array.isArray(rawTodo) && rawTodo.length
+        ? rawTodo
+        : [Math.round((Number(settings.discordNotifyHoursTodo) || 1) * 60)];
+      renderDiscordNotifyList("todo", todoOffsets);
     }
-    if (settings.discordNotifyHoursEvent != null && els.discordNotifyHoursEventInput) {
-      els.discordNotifyHoursEventInput.value = String(settings.discordNotifyHoursEvent);
+    {
+      const rawEvent = settings.discordNotifyOffsetsEvent;
+      const eventOffsets = Array.isArray(rawEvent) && rawEvent.length
+        ? rawEvent
+        : [Math.round((Number(settings.discordNotifyHoursEvent) || 1) * 60)];
+      renderDiscordNotifyList("event", eventOffsets);
     }
   } catch {
     // Local storage remains the fallback for file:// or unavailable server settings.
@@ -2865,8 +2878,8 @@ async function saveServerSettings() {
         imagePath: state.imageSavePath || "",
         searchExclude: els.searchExcludeInput?.value || "",
         discordWebhookUrl: els.discordWebhookInput?.value || "",
-        discordNotifyHoursTodo: Number(els.discordNotifyHoursTodoInput?.value) || 1,
-        discordNotifyHoursEvent: Number(els.discordNotifyHoursEventInput?.value) || 1,
+        discordNotifyOffsetsTodo: getDiscordNotifyOffsets("todo"),
+        discordNotifyOffsetsEvent: getDiscordNotifyOffsets("event"),
       }),
     });
   } catch {
@@ -6735,11 +6748,11 @@ function bindTaskEditDialog() {
   });
 
   els.taskEditStartClockBtn?.addEventListener("click", () => {
-    try { els.taskEditStartTimeInput?.showPicker(); } catch { els.taskEditStartTimeInput?.focus(); }
+    showClockPicker(els.taskEditStartTimeInput);
   });
 
   els.taskEditDueClockBtn?.addEventListener("click", () => {
-    try { els.taskEditDueTimeInput?.showPicker(); } catch { els.taskEditDueTimeInput?.focus(); }
+    showClockPicker(els.taskEditDueTimeInput);
   });
 
   els.taskEditStartTimeInput?.addEventListener("input", () => {
@@ -9226,3 +9239,192 @@ function closeSplitPane() {
   document.querySelector(".app-shell")?.classList.remove("split-view");
   els.splitMarkdownView.innerHTML = "";
 }
+
+// ── Discord Notify List ────────────────────────────────────────────────────
+
+function renderDiscordNotifyList(kind, offsets) {
+  const container = kind === "todo" ? els.discordNotifyListTodo : els.discordNotifyListEvent;
+  if (!container) return;
+  container.innerHTML = "";
+  const arr = offsets.length ? offsets : [60];
+  arr.forEach((minutes) => addDiscordNotifyRow(kind, minutes));
+}
+
+function addDiscordNotifyRow(kind, minutes = 60) {
+  const container = kind === "todo" ? els.discordNotifyListTodo : els.discordNotifyListEvent;
+  if (!container) return;
+  const row = document.createElement("div");
+  row.className = "discord-notify-row";
+  const input = document.createElement("input");
+  input.type = "number";
+  input.min = "1";
+  input.max = "43200";
+  input.step = "1";
+  input.value = String(Math.max(1, Math.round(minutes)));
+  input.className = "discord-notify-minutes-input";
+  input.addEventListener("input", scheduleSettingsSave);
+  const label = document.createElement("span");
+  label.className = "discord-notify-unit";
+  label.textContent = "분 전";
+  const delBtn = document.createElement("button");
+  delBtn.type = "button";
+  delBtn.className = "discord-notify-del-btn";
+  delBtn.textContent = "×";
+  delBtn.addEventListener("click", () => { row.remove(); scheduleSettingsSave(); });
+  row.append(input, label, delBtn);
+  container.append(row);
+}
+
+function getDiscordNotifyOffsets(kind) {
+  const container = kind === "todo" ? els.discordNotifyListTodo : els.discordNotifyListEvent;
+  if (!container) return [60];
+  const inputs = container.querySelectorAll(".discord-notify-minutes-input");
+  const result = [];
+  inputs.forEach((inp) => {
+    const v = Number(inp.value);
+    if (Number.isFinite(v) && v > 0) result.push(Math.round(v));
+  });
+  return result.length ? result : [60];
+}
+
+// ── Clock Picker ────────────────────────────────────────────────────────────
+
+const clockPicker = {
+  targetInput: null,
+  mode: "hour",   // "hour" | "minute"
+  hour24: 12,
+  minute: 0,
+};
+
+function showClockPicker(inputEl) {
+  if (!inputEl) return;
+  // 터치 기기는 네이티브 피커 사용
+  if (navigator.maxTouchPoints > 0) {
+    try { inputEl.showPicker(); } catch { inputEl.focus(); }
+    return;
+  }
+  clockPicker.targetInput = inputEl;
+  clockPicker.mode = "hour";
+  const val = inputEl.value;
+  if (val) {
+    const [h, m] = val.split(":").map(Number);
+    clockPicker.hour24 = isNaN(h) ? 12 : h;
+    clockPicker.minute = isNaN(m) ? 0 : Math.round(m / 5) * 5 % 60;
+  } else {
+    clockPicker.hour24 = 12;
+    clockPicker.minute = 0;
+  }
+  const overlay = document.getElementById("clockPickerOverlay");
+  if (!overlay) return;
+  overlay.hidden = false;
+  renderClockPickerDisplay();
+  renderClockFace();
+}
+
+function clockHour12() { return clockPicker.hour24 % 12 || 12; }
+function clockIsAM() { return clockPicker.hour24 < 12; }
+
+function renderClockPickerDisplay() {
+  const hBtn = document.getElementById("clockPickerHourBtn");
+  const mBtn = document.getElementById("clockPickerMinuteBtn");
+  const amBtn = document.getElementById("clockPickerAM");
+  const pmBtn = document.getElementById("clockPickerPM");
+  if (hBtn) {
+    hBtn.textContent = String(clockHour12());
+    hBtn.classList.toggle("clock-part-active", clockPicker.mode === "hour");
+  }
+  if (mBtn) {
+    mBtn.textContent = clockPicker.minute.toString().padStart(2, "0");
+    mBtn.classList.toggle("clock-part-active", clockPicker.mode === "minute");
+  }
+  amBtn?.classList.toggle("ampm-active", clockIsAM());
+  pmBtn?.classList.toggle("ampm-active", !clockIsAM());
+}
+
+function renderClockFace() {
+  const face = document.getElementById("clockFace");
+  if (!face) return;
+  const mode = clockPicker.mode;
+  const isHour = mode === "hour";
+  const values = isHour
+    ? [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+    : [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
+  const currentVal = isHour ? clockHour12() : clockPicker.minute;
+  const selIdx = values.indexOf(currentVal);
+  const handAngle = selIdx >= 0 ? (selIdx / 12) * 360 : 0;
+
+  const nums = values.map((val, i) => {
+    const angle = (i / 12) * 2 * Math.PI - Math.PI / 2;
+    const r = 38;
+    const x = (50 + Math.cos(angle) * r).toFixed(2);
+    const y = (50 + Math.sin(angle) * r).toFixed(2);
+    const label = isHour ? String(val) : val.toString().padStart(2, "0");
+    const sel = val === currentVal ? " clock-num-sel" : "";
+    return `<button class="clock-num${sel}" style="left:${x}%;top:${y}%" data-val="${val}">${label}</button>`;
+  }).join("");
+
+  face.innerHTML = `
+    <div class="clock-hand-wrap" style="transform:rotate(${handAngle}deg)">
+      <div class="clock-hand"></div>
+    </div>
+    <div class="clock-center-dot"></div>
+    ${nums}`;
+
+  face.querySelectorAll(".clock-num").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const val = Number(btn.dataset.val);
+      if (isHour) {
+        const pm = !clockIsAM();
+        let h = val === 12 ? 0 : val;
+        if (pm) h += 12;
+        clockPicker.hour24 = h;
+        clockPicker.mode = "minute";
+      } else {
+        clockPicker.minute = val;
+        confirmClockPicker();
+        return;
+      }
+      renderClockPickerDisplay();
+      renderClockFace();
+    });
+  });
+}
+
+function confirmClockPicker() {
+  const { hour24, minute, targetInput } = clockPicker;
+  if (targetInput) {
+    targetInput.value = `${hour24.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`;
+    targetInput.dispatchEvent(new Event("input", { bubbles: true }));
+    targetInput.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+  document.getElementById("clockPickerOverlay").hidden = true;
+}
+
+// 시계 피커 버튼 이벤트 연결
+(function initClockPickerEvents() {
+  document.getElementById("clockPickerCancel")?.addEventListener("click", () => {
+    document.getElementById("clockPickerOverlay").hidden = true;
+  });
+  document.getElementById("clockPickerConfirm")?.addEventListener("click", confirmClockPicker);
+  document.getElementById("clockPickerBackdrop")?.addEventListener("click", () => {
+    document.getElementById("clockPickerOverlay").hidden = true;
+  });
+  document.getElementById("clockPickerHourBtn")?.addEventListener("click", () => {
+    clockPicker.mode = "hour";
+    renderClockPickerDisplay();
+    renderClockFace();
+  });
+  document.getElementById("clockPickerMinuteBtn")?.addEventListener("click", () => {
+    clockPicker.mode = "minute";
+    renderClockPickerDisplay();
+    renderClockFace();
+  });
+  document.getElementById("clockPickerAM")?.addEventListener("click", () => {
+    if (!clockIsAM()) clockPicker.hour24 -= 12;
+    renderClockPickerDisplay();
+  });
+  document.getElementById("clockPickerPM")?.addEventListener("click", () => {
+    if (clockIsAM()) clockPicker.hour24 += 12;
+    renderClockPickerDisplay();
+  });
+})();
