@@ -4565,9 +4565,9 @@ button.calendar-more {
 @media (max-width: 780px) {
   .calendar-toolbar {
     align-items: center;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     gap: 4px;
-    overflow-x: auto;
+    overflow-x: hidden;
   }
 
   .calendar-toolbar-filter-btn {
@@ -4586,12 +4586,12 @@ button.calendar-more {
 
   .calendar-month-nav {
     flex: 1 1 auto;
-    min-width: 0;
+    min-width: 152px;
     order: 2;
   }
 
   .calendar-nav-group {
-    flex: 0 0 auto;
+    flex: 0 0 100%;
     margin-left: 0;
     order: 3;
   }
