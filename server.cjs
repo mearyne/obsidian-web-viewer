@@ -792,7 +792,8 @@ function writeBinaryVaultFile(requestedPath, body, res) {
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
     fs.writeFileSync(filePath, buffer);
     const stat = fs.statSync(filePath);
-    sendJson(res, 200, { path: safePath, size: stat.size });
+    sendJson(res, 200, { path: safePath, size: stat.size, updatedAt: stat.mtimeMs });
+    broadcastVaultEvent("file-changed", { path: safePath, updatedAt: stat.mtimeMs, isNew: true });
   } catch (error) {
     sendJson(res, 500, { error: error.message || "Write failed" });
   }
@@ -1147,7 +1148,8 @@ function writeBinaryVaultFileDirect(requestedPath, buffer, res) {
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
     fs.writeFileSync(filePath, buffer);
     const stat = fs.statSync(filePath);
-    sendJson(res, 200, { path: safePath, size: stat.size });
+    sendJson(res, 200, { path: safePath, size: stat.size, updatedAt: stat.mtimeMs });
+    broadcastVaultEvent("file-changed", { path: safePath, updatedAt: stat.mtimeMs, isNew: true, size: stat.size });
   } catch (error) {
     sendJson(res, 500, { error: error.message || "Write failed" });
   }

@@ -2564,7 +2564,7 @@ function connectSSE() {
   });
 
   es.addEventListener("file-changed", async (e) => {
-    const { path, updatedAt } = JSON.parse(e.data);
+    const { path, updatedAt, isNew, size } = JSON.parse(e.data);
     if (path === DEVICE_TABS_VAULT_PATH) {
       void loadAndRenderDeviceTabs();
       return;
@@ -2577,6 +2577,9 @@ function connectSSE() {
     if (node) {
       node.content = undefined;
       node.updatedAt = updatedAt;
+    } else if (isNew && isIndexedFile(path)) {
+      // 다른 기기에서 새로 추가된 파일을 state.files에 등록
+      registerUploadedFileInVault(path, size || 0);
     }
     if (state.currentPath === path && !state.editMode) {
       const freshNode = state.files.get(path) || state.currentNode;
