@@ -6374,9 +6374,16 @@ async function openDateEditor(date, startDate = "") {
   await showTaskCreateDialog(taskDueDate, taskStartDate);
 }
 
-function setNotifyChip(checkbox, on) {
-  if (!checkbox) return;
-  checkbox.checked = !!on;
+function toggleNotifyChip(btn) {
+  const on = btn.dataset.notify !== "true";
+  btn.dataset.notify = String(on);
+  btn.textContent = on ? "🔔" : "🔕";
+}
+
+function setNotifyChip(btn, on) {
+  if (!btn) return;
+  btn.dataset.notify = String(on);
+  btn.textContent = on ? "🔔" : "🔕";
 }
 
 async function showTaskCreateDialog(dueDate, startDate = "") {
@@ -6584,6 +6591,9 @@ function bindTaskCreateDialog() {
   });
 
 
+  els.taskNotifyChip?.addEventListener("click", () => toggleNotifyChip(els.taskNotifyChip));
+  els.taskEditNotifyChip?.addEventListener("click", () => toggleNotifyChip(els.taskEditNotifyChip));
+
   els.taskCreateCancelBtn?.addEventListener("click", () => {
     els.taskCreateDialog.close("cancel");
   });
@@ -6618,7 +6628,7 @@ function bindTaskCreateDialog() {
     const dueTime = normalizeTaskTimeInput(els.taskDueTimeInput);
     const startPart = startDate ? ` 🛫 ${startDate}${startTime ? " " + startTime : ""}` : "";
     const duePart = ` 📅 ${dueDate}${dueTime ? " " + dueTime : ""}`;
-    const notifyOff = els.taskNotifyChip?.checked === false;
+    const notifyOff = els.taskNotifyChip?.dataset.notify === "false";
     const notifyPart = notifyOff ? " 🔕" : "";
     const subItemsText = els.taskCreateSubItemsInput?.value || "";
     const subItemLines = normalizeTaskSubItemsInput(subItemsText).map((line) => `  ${line}`);
@@ -7086,7 +7096,7 @@ async function saveTaskEdit(task, title, meta, dueDate, startDate, checked, dueT
     const metaStr = hashParts.length ? ` ${hashParts.join(" ")}` : "";
     const startPart = startDate ? ` 🛫 ${startDate}${startTime ? " " + startTime : ""}` : "";
     const duePart = ` 📅 ${dueDate}${dueTime ? " " + dueTime : ""}`;
-    const notifyOff = els.taskEditNotifyChip?.checked === false;
+    const notifyOff = els.taskEditNotifyChip?.dataset.notify === "false";
     const notifyPart = notifyOff ? " 🔕" : "";
     const statusChar = checked ? "x" : deferred ? ">" : " ";
     lines[idx] = `${indentStr}- [${statusChar}] ${title}${metaStr}${startPart}${duePart}${notifyPart}`;

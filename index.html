@@ -319,7 +319,10 @@
         <h3>태스크 추가</h3>
         <div class="task-create-field">
           <label>제목</label>
-          <input id="taskTitleInput" type="text" placeholder="할 일을 입력하세요" autocomplete="off" />
+          <div class="task-title-row">
+            <input id="taskTitleInput" type="text" placeholder="할 일을 입력하세요" autocomplete="off" />
+            <button type="button" id="taskNotifyChip" class="task-notify-emoji active" data-notify="true" title="Discord 알림">🔔</button>
+          </div>
         </div>
         <div class="task-create-meta">
           <div class="task-meta-row">
@@ -348,10 +351,6 @@
           <div class="task-meta-row">
             <span class="task-meta-label">태그</span>
             <div class="task-meta-chips" id="taskTagChips"></div>
-          </div>
-          <div class="task-meta-row">
-            <span class="task-meta-label">알림</span>
-            <label class="task-notify-label"><input type="checkbox" id="taskNotifyChip" checked> Discord</label>
           </div>
         </div>
         <div class="task-create-dates">
@@ -393,7 +392,10 @@
           <div class="task-edit-main">
             <div class="task-create-field">
               <label>제목</label>
-              <input id="taskEditTitleInput" type="text" placeholder="할 일을 입력하세요" autocomplete="off" />
+              <div class="task-title-row">
+                <input id="taskEditTitleInput" type="text" placeholder="할 일을 입력하세요" autocomplete="off" />
+                <button type="button" id="taskEditNotifyChip" class="task-notify-emoji active" data-notify="true" title="Discord 알림">🔔</button>
+              </div>
             </div>
             <div class="task-create-meta">
               <div class="task-meta-row">
@@ -422,10 +424,6 @@
               <div class="task-meta-row">
                 <span class="task-meta-label">태그</span>
                 <div class="task-meta-chips" id="taskEditTagChips"></div>
-              </div>
-              <div class="task-meta-row">
-                <span class="task-meta-label">알림</span>
-                <label class="task-notify-label"><input type="checkbox" id="taskEditNotifyChip" checked> Discord</label>
               </div>
             </div>
             <div class="task-create-dates">
