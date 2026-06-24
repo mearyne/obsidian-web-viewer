@@ -738,6 +738,7 @@ updateTreeSortDirectionButton();
 initSidebarWidth();
 initSidebarPin();
 let _saveDeviceTabsTimer = null;
+let _tabsRestoredFromStorage = false;
 loadSavedVaults();
 loadSampleVault();
 arrangeChromeControls();
@@ -1376,8 +1377,8 @@ function hydrateServerVault(vaultName, files, writable = false) {
   if (firstLoad) {
     state.calendarDate = new Date();
     connectSSE();
-    // localStorage가 비어있으면 vault에서 이 기기의 탭 상태 복원 시도
-    const vaultTabsPromise = !localStorage.getItem(OPEN_TABS_KEY)
+    // 시작 시 localStorage에서 탭을 못 읽었으면 vault에서 복원 시도
+    const vaultTabsPromise = !_tabsRestoredFromStorage
       ? loadOpenTabsFromVault()
       : Promise.resolve();
     // 캘린더 캐시와 탭 복원이 모두 완료된 후 active tab 복원
@@ -8331,6 +8332,7 @@ function activeTab() {
 
 function initTabs() {
   const hasOpenTabs = loadOpenTabs();
+  _tabsRestoredFromStorage = hasOpenTabs;
   if (!hasOpenTabs) {
     loadPinnedTabs();
   }
