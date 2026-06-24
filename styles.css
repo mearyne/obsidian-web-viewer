@@ -2715,24 +2715,24 @@ button:disabled {
   min-height: 40px;
 }
 
+.task-edit-sub-items:has(.task-sub-empty) {
+  display: grid;
+  place-items: center;
+}
+
 .task-sub-empty {
-  align-items: center;
   color: var(--muted);
-  display: flex;
-  flex: 1;
   font-size: 13px;
-  justify-content: center;
-  width: 100%;
+  padding: 20px 0;
+  text-align: center;
 }
 
 @media (max-width: 768px) {
-  .task-sub-items-preview:has(.task-sub-empty) {
+  .task-edit-sub-items:has(.task-sub-empty) {
     flex: 0 0 auto;
-    min-height: 0;
   }
 
   .task-sub-empty {
-    flex: none;
     padding: 12px 0;
   }
 }
