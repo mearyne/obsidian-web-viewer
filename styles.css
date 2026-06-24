@@ -2164,6 +2164,7 @@ button:disabled {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-height: 0;
 }
 
 .task-edit-sub-items-header {
@@ -2708,6 +2709,7 @@ button:disabled {
 .task-sub-items-preview {
   display: flex;
   flex-direction: column;
+  flex: 1;
   gap: 6px;
   line-height: 1.6;
   min-height: 40px;
@@ -2717,10 +2719,22 @@ button:disabled {
   align-items: center;
   color: var(--muted);
   display: flex;
+  flex: 1;
   font-size: 13px;
   justify-content: center;
-  min-height: 60px;
   width: 100%;
+}
+
+@media (max-width: 768px) {
+  .task-sub-items-preview:has(.task-sub-empty) {
+    flex: 0 0 auto;
+    min-height: 0;
+  }
+
+  .task-sub-empty {
+    flex: none;
+    padding: 12px 0;
+  }
 }
 
 .task-sub-items-preview .task-sub-bullet {
