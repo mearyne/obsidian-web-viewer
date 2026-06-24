@@ -2715,25 +2715,22 @@ button:disabled {
   min-height: 40px;
 }
 
-.task-edit-sub-items:has(.task-sub-empty) {
-  display: grid;
-  place-items: center;
+.task-sub-items-preview:has(.task-sub-empty) {
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
 }
 
 .task-sub-empty {
   color: var(--muted);
   font-size: 13px;
-  padding: 20px 0;
   text-align: center;
 }
 
 @media (max-width: 768px) {
-  .task-edit-sub-items:has(.task-sub-empty) {
+  .task-sub-items-preview:has(.task-sub-empty) {
     flex: 0 0 auto;
-  }
-
-  .task-sub-empty {
-    padding: 12px 0;
+    padding: 16px 0;
   }
 }
 
