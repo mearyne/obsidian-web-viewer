@@ -240,6 +240,8 @@ const els = {
   editorImageButton: document.querySelector("#editorImageButton"),
   editorImageInput: document.querySelector("#editorImageInput"),
   editorTaskButton: document.querySelector("#editorTaskButton"),
+  editorGoodEmojiButton: document.querySelector("#editorGoodEmojiButton"),
+  editorBadEmojiButton: document.querySelector("#editorBadEmojiButton"),
   calendarView: document.querySelector("#calendarView"),
   noteTitleArea: document.querySelector("#noteTitleArea"),
   headingControlsOverlay: document.querySelector("#headingControlsOverlay"),
@@ -392,6 +394,8 @@ els.editorBulletButton?.addEventListener("click", () => prefixSelectedEditorLine
 els.editorTableButton?.addEventListener("click", insertEditorTable);
 els.editorImageButton?.addEventListener("click", () => els.editorImageInput?.click());
 els.editorTaskButton?.addEventListener("click", insertTodayTaskTemplate);
+els.editorGoodEmojiButton?.addEventListener("click", () => insertEditorText(els.markdownEditor, "👍"));
+els.editorBadEmojiButton?.addEventListener("click", () => insertEditorText(els.markdownEditor, "👎"));
 els.editorImageInput?.addEventListener("change", async (e) => {
   const file = e.target.files?.[0];
   if (!file || !file.type.startsWith("image/")) return;
@@ -3128,7 +3132,23 @@ function handleEditorKeydown(event) {
   }
 }
 
+const EMOJI_SHORTCODES = [
+  { code: ";go", emoji: "👍" },
+  { code: ";ba", emoji: "👎" },
+];
+
 function handleEditorInput() {
+  const ta = els.markdownEditor;
+  const pos = ta.selectionStart;
+  const text = ta.value;
+  for (const { code, emoji } of EMOJI_SHORTCODES) {
+    if (pos >= code.length && text.slice(pos - code.length, pos) === code) {
+      ta.value = text.slice(0, pos - code.length) + emoji + text.slice(pos);
+      const newPos = pos - code.length + emoji.length;
+      ta.setSelectionRange(newPos, newPos);
+      break;
+    }
+  }
   resizeEditorToContent();
   markEditorDirty();
 }
