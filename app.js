@@ -1871,6 +1871,13 @@ async function openFile(path) {
     els.noteTitle.textContent = displayDocumentTitle(node.name);
     const curTab = activeTab();
     const pinnedTabChanged = curTab?.pinned && (curTab.path !== path || curTab.title !== displayDocumentTitle(node.name));
+    if (curTab && curTab.path === null && !curTab.view) {
+      const tabIdx = state.tabs.indexOf(curTab);
+      if (tabIdx >= 0 && tabIdx < state.tabs.length - 1) {
+        state.tabs.splice(tabIdx, 1);
+        state.tabs.push(curTab);
+      }
+    }
     if (curTab) { curTab.path = path; curTab.title = displayDocumentTitle(node.name); curTab.view = null; }
     if (pinnedTabChanged) {
       savePinnedTabsLocal();
