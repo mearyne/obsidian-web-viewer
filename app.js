@@ -4738,17 +4738,17 @@ function renderCalendar() {
     <div class="calendar-shell calendar-mode-${state.calendarMode} mobile-${state.mobileCalendarMode}" style="--calendar-row-count: ${rowLimit};">
       <div class="calendar-toolbar">
         ${showingTasks ? renderCalendarFilterToggleButton("calendar-toolbar-filter-btn") : ""}
+        <div class="calendar-month-nav">
+          <button type="button" data-calendar-action="prev">&lt;</button>
+          <strong>${calendarTitle()}</strong>
+          <button type="button" data-calendar-action="next">&gt;</button>
+        </div>
         <div class="calendar-nav-group">
           <button class="calendar-today-button" type="button" data-calendar-action="today">Today</button>
           <input class="calendar-date-jump" type="date" value="${formatDate(state.calendarDate)}" aria-label="날짜로 이동" title="날짜로 이동">
           <button type="button" data-calendar-mode="month" class="calendar-mode-btn${state.calendarMode === "month" ? " active" : ""}">30d</button>
           <button type="button" data-calendar-mode="week" class="calendar-mode-btn${state.calendarMode === "week" ? " active" : ""}">7d</button>
           <button type="button" data-calendar-mode="day" class="calendar-mode-btn${state.calendarMode === "day" ? " active" : ""}">1d</button>
-        </div>
-        <div class="calendar-month-nav">
-          <button type="button" data-calendar-action="prev">&lt;</button>
-          <strong>${calendarTitle()}</strong>
-          <button type="button" data-calendar-action="next">&gt;</button>
         </div>
       </div>
       ${showingTasks ? renderCalendarFilterBar() : ""}
