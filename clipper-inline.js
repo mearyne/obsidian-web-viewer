@@ -18,27 +18,31 @@
     return t.replace(/[/\\:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
   }
 
-  function matchLabel(savePath, labels) {
-    for (var i = 0; i < labels.length; i++) {
-      var lp = labels[i].path;
-      var prefix = lp.endsWith('/') ? lp : lp + '/';
-      if (savePath === lp || savePath.startsWith(prefix)) return labels[i].label;
+  function matchRule(pageUrl, rules) {
+    for (var i = 0; i < rules.length; i++) {
+      if (rules[i].urlPattern && pageUrl.includes(rules[i].urlPattern)) return rules[i];
     }
-    return '';
+    return null;
   }
 
-  function applyLabel(baseTitle, label) {
-    return label ? baseTitle + ' (' + label + ')' : baseTitle;
+  function buildEmbedContent(title, url, meta, today) {
+    var esc = function (s) { return (s || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"'); };
+    var fm = '---\ntitle: "' + esc(title) + '"\nurl: ' + url + '\ndate: ' + today + '\n---\n\n';
+    var block = meta
+      ? '```embed\ntitle: "' + esc(meta.title || title) + '"\ndescription: "' + esc(meta.description || '') + '"\nimage: "' + esc(meta.image || '') + '"\nfavicon: "' + esc(meta.favicon || '') + '"\nurl: "' + esc(url) + '"\n```'
+      : '```embed\nstatus: "loading"\nurl: "' + esc(url) + '"\n```';
+    return fm + block;
   }
 
-  function showPopup(clipperLabels) {
+  function showPopup(rules) {
     var rawTitle = document.title.trim() || 'Clipped Page';
     var pageUrl = location.href;
     var today = todayStr();
-    var excerpt = pageUrl;
-    var defaultPath = DEFAULT_FOLDER + '/' + today + ' ' + safeName(rawTitle) + '.md';
-    var initialLabel = matchLabel(defaultPath, clipperLabels);
-    var displayTitle = applyLabel(rawTitle, initialLabel);
+    var rule = matchRule(pageUrl, rules);
+    var folder = (rule && rule.savePath) || DEFAULT_FOLDER;
+    var baseTitle = safeName(rawTitle);
+    var displayTitle = (rule && rule.label) ? baseTitle + ' (' + rule.label + ')' : baseTitle;
+    var defaultPath = folder + '/' + today + ' ' + safeName(displayTitle) + '.md';
 
     var overlay = document.createElement('div');
     overlay.id = 'owv-clip-overlay';
@@ -62,24 +66,10 @@
 
     titleInput.value = displayTitle;
     pathInput.value = defaultPath;
-    preview.textContent = excerpt;
-
-    var activeLabel = initialLabel;
+    preview.textContent = pageUrl;
 
     titleInput.addEventListener('input', function () {
-      var t = safeName(titleInput.value.trim() || rawTitle);
-      pathInput.value = DEFAULT_FOLDER + '/' + today + ' ' + t + '.md';
-      var newLabel = matchLabel(pathInput.value, clipperLabels);
-      activeLabel = newLabel;
-    });
-
-    pathInput.addEventListener('input', function () {
-      var newLabel = matchLabel(pathInput.value, clipperLabels);
-      if (newLabel !== activeLabel) {
-        var base = titleInput.value.replace(/ \([^)]*\)$/, '').trim() || rawTitle;
-        titleInput.value = applyLabel(base, newLabel);
-        activeLabel = newLabel;
-      }
+      pathInput.value = folder + '/' + today + ' ' + safeName(titleInput.value.trim() || displayTitle) + '.md';
     });
 
     function close() { overlay.remove(); }
@@ -91,15 +81,21 @@
     saveBtn.addEventListener('click', function () {
       var saveTitle = titleInput.value.trim() || displayTitle;
       var savePath = pathInput.value.trim() || defaultPath;
-      var content = '---\ntitle: "' + saveTitle.replace(/"/g, '\\"') + '"\nurl: ' + pageUrl + '\ndate: ' + today + '\n---\n\n[' + saveTitle + '](' + pageUrl + ')';
       saveBtn.disabled = true;
       saveBtn.textContent = '저장 중…';
       status.textContent = '';
-      fetch(SERVER + '/api/clip', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: savePath, content: content }),
-      })
+
+      fetch(SERVER + '/api/url-meta?url=' + encodeURIComponent(pageUrl))
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .catch(function () { return null; })
+        .then(function (meta) {
+          var content = buildEmbedContent(saveTitle, pageUrl, meta, today);
+          return fetch(SERVER + '/api/clip', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: savePath, content: content }),
+          });
+        })
         .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
         .then(function (r) {
           if (!r.ok) throw new Error(r.j.error || 'HTTP error');
@@ -119,6 +115,6 @@
 
   fetch(SERVER + '/api/settings', { cache: 'no-store' })
     .then(function (r) { return r.ok ? r.json() : {}; })
-    .then(function (s) { showPopup(Array.isArray(s.clipperLabels) ? s.clipperLabels : []); })
+    .then(function (s) { showPopup(Array.isArray(s.clipperRules) ? s.clipperRules : []); })
     .catch(function () { showPopup([]); });
 })();

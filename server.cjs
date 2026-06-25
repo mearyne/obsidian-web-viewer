@@ -1107,10 +1107,14 @@ function normalizeSettings(settings) {
     discordNotifyOffsetsEvent: normalizeNotifyOffsets(settings?.discordNotifyOffsetsEvent, settings?.discordNotifyHoursEvent),
     discordFixedTimesTodo: normalizeNotifyFixedTimes(settings?.discordFixedTimesTodo),
     discordFixedTimesEvent: normalizeNotifyFixedTimes(settings?.discordFixedTimesEvent),
-    clipperLabels: Array.isArray(settings?.clipperLabels)
-      ? settings.clipperLabels
-          .filter((item) => item && typeof item.path === "string" && typeof item.label === "string")
-          .map((item) => ({ path: item.path.slice(0, 512), label: item.label.slice(0, 128) }))
+    clipperRules: Array.isArray(settings?.clipperRules)
+      ? settings.clipperRules
+          .filter((item) => item && typeof item.urlPattern === "string")
+          .map((item) => ({
+            urlPattern: item.urlPattern.slice(0, 512),
+            label: typeof item.label === "string" ? item.label.slice(0, 128) : "",
+            savePath: typeof item.savePath === "string" ? item.savePath.slice(0, 512) : "",
+          }))
           .slice(0, 50)
       : [],
   };

@@ -5244,32 +5244,32 @@ button.calendar-more {
 }
 
 /* ── Clipper Label List ──────────────────────────────────────────────────── */
-.clipper-label-list {
+.clipper-rule-list {
   display: flex;
   flex-direction: column;
   gap: 6px;
   margin-bottom: 6px;
 }
 
-.clipper-label-row {
+.clipper-rule-header {
+  display: grid;
+  grid-template-columns: 2fr 1fr 2fr;
+  gap: 6px;
+  padding: 0 28px 0 0;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.clipper-rule-row {
   align-items: center;
-  display: flex;
+  display: grid;
+  grid-template-columns: 2fr 1fr 2fr auto;
   gap: 6px;
 }
 
-.clipper-label-path-input {
-  flex: 2;
-  min-width: 0;
-}
-
-.clipper-label-arrow {
-  color: var(--text-muted);
-  flex-shrink: 0;
-  font-size: 13px;
-}
-
-.clipper-label-text-input {
-  flex: 1;
+.clipper-rule-url-input,
+.clipper-rule-label-input,
+.clipper-rule-path-input {
   min-width: 0;
 }
 

@@ -149,8 +149,8 @@ const els = {
   newNotePathInput: document.querySelector("#newNotePathInput"),
   imagePathInput: document.querySelector("#imagePathInput"),
   clipperFolderInput: document.querySelector("#clipperFolderInput"),
-  clipperLabelList: document.querySelector("#clipperLabelList"),
-  clipperLabelAddBtn: document.querySelector("#clipperLabelAddBtn"),
+  clipperRuleList: document.querySelector("#clipperRuleList"),
+  clipperRuleAddBtn: document.querySelector("#clipperRuleAddBtn"),
   searchExcludeInput: document.querySelector("#searchExcludeInput"),
   discordWebhookInput: document.querySelector("#discordWebhookInput"),
   discordNotifyListTodo: document.querySelector("#discordNotifyListTodo"),
@@ -424,7 +424,7 @@ els.clipperFolderInput?.addEventListener("input", () => {
   localStorage.setItem("obsidian-web-viewer-clipper-folder", folder);
   updateBookmarkletHref(folder);
 });
-els.clipperLabelAddBtn?.addEventListener("click", () => { addClipperLabelRow("", ""); scheduleSettingsSave(); });
+els.clipperRuleAddBtn?.addEventListener("click", () => { addClipperRuleRow("", "", ""); scheduleSettingsSave(); });
 els.searchExcludeInput?.addEventListener("input", handleSearchExcludeInput);
 els.discordWebhookInput?.addEventListener("input", scheduleSettingsSave);
 els.discordNotifyAddTodoBtn?.addEventListener("click", () => { addDiscordNotifyRow("todo", 60); scheduleSettingsSave(); });
@@ -784,31 +784,32 @@ function handleSharedUrl(sharedUrl, sharedTitle = "") {
       showAppToast("공유 저장 실패: Vault가 쓰기 불가능합니다.", "error");
       return;
     }
-    const folder = localStorage.getItem("obsidian-web-viewer-clipper-folder") || "Clippings";
+    const defaultFolder = localStorage.getItem("obsidian-web-viewer-clipper-folder") || "Clippings";
+    const rule = matchClipperRule(sharedUrl);
+    const folder = rule?.savePath || defaultFolder;
     const today = new Date().toISOString().slice(0, 10);
-    const safeTitle = (sharedTitle || sharedUrl).replace(/[/\\:*?"<>|]/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
+    const baseTitle = (sharedTitle || sharedUrl).replace(/[/\\:*?"<>|]/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
+    const safeTitle = rule?.label ? `${baseTitle} (${rule.label})` : baseTitle;
     const fileName = `${today} ${safeTitle}.md`;
-    const dirPath = folder;
-    const filePath = dirPath ? `${dirPath}/${fileName}` : fileName;
+    const filePath = folder ? `${folder}/${fileName}` : fileName;
+    const embedLoading = `\`\`\`embed\nstatus: "loading"\nurl: "${sharedUrl}"\n\`\`\``;
     const esc = (s) => (s || "").replace(/"/g, '\\"');
     const makeFrontmatter = (title) => `---\ntitle: "${esc(title)}"\nurl: ${sharedUrl}\ndate: ${today}\n---\n\n`;
-    const embedLoading = "```embed\nstatus: \"loading\"\nurl: \"" + sharedUrl + "\"\n```";
     const initialContent = makeFrontmatter(safeTitle) + embedLoading;
     try {
       const metadata = await writeServerFile(filePath, initialContent, { backup: false });
-      if (dirPath) ensureDirectoryNodePath(dirPath);
+      if (folder) ensureDirectoryNodePath(folder);
       const node = { name: fileName, path: filePath, content: initialContent, serverBacked: true, kind: "file", ...metadata };
       state.files.set(filePath, node);
-      const dir = state.directories.get(dirPath || "");
+      const dir = state.directories.get(folder || "");
       if (dir) dir.children.set(node.name, node);
       refreshDirectoryMetadataFrom(filePath);
       renderTree();
       refreshRecentFilesCache();
       invalidateRandomMarkdownCache();
       await openFile(filePath);
-      // Fetch real metadata and update note
       const meta = await fetchLinkMeta(sharedUrl);
-      const updatedTitle = meta.title || safeTitle;
+      const updatedTitle = (rule?.label ? `${meta.title || baseTitle} (${rule.label})` : meta.title) || safeTitle;
       const fullBlock = buildEmbedBlock(meta, sharedUrl);
       const updatedContent = makeFrontmatter(updatedTitle) + fullBlock;
       await writeServerFile(filePath, updatedContent, { backup: false });
@@ -828,15 +829,30 @@ function handleSharedUrl(sharedUrl, sharedTitle = "") {
   }
 }
 
-function showClipperPopup({ title, url, folder, html = "", excerpt = "", path: initialPath = "" }) {
+function matchClipperRule(pageUrl) {
+  const rules = getClipperRules();
+  return rules.find((r) => r.urlPattern && pageUrl.includes(r.urlPattern)) || null;
+}
+
+function buildClipEmbedContent(title, url, meta) {
+  const today = new Date().toISOString().slice(0, 10);
+  const esc = (s) => (s || "").replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  const frontmatter = `---\ntitle: "${esc(title)}"\nurl: ${url}\ndate: ${today}\n---\n\n`;
+  const embedBlock = meta
+    ? `\`\`\`embed\ntitle: "${esc(meta.title || title)}"\ndescription: "${esc(meta.description || "")}"\nimage: "${esc(meta.image || "")}"\nfavicon: "${esc(meta.favicon || "")}"\nurl: "${esc(url)}"\n\`\`\``
+    : `\`\`\`embed\nstatus: "loading"\nurl: "${esc(url)}"\n\`\`\``;
+  return frontmatter + embedBlock;
+}
+
+function showClipperPopup({ title, url, folder, path: initialPath = "" }) {
   document.getElementById("owv-clip-overlay")?.remove();
 
   const today = new Date().toISOString().slice(0, 10);
+  const rule = url ? matchClipperRule(url) : null;
+  const effectiveFolder = (rule?.savePath) || folder || "Clippings";
   const safeTitle = (title || "Clipped Page").replace(/[/\\:*?"<>|]/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
-  const defaultPath = initialPath || `${folder || "Clippings"}/${today} ${safeTitle}.md`;
-
-  const buildContent = (t) =>
-    `---\ntitle: "${t.replace(/"/g, '\\"')}"\nurl: ${url}\ndate: ${today}\n---\n\n[${t}](${url})`;
+  const labeledTitle = rule?.label ? `${safeTitle} (${rule.label})` : safeTitle;
+  const defaultPath = initialPath || `${effectiveFolder}/${today} ${labeledTitle}.md`;
 
   const overlay = document.createElement("div");
   overlay.id = "owv-clip-overlay";
@@ -858,28 +874,13 @@ function showClipperPopup({ title, url, folder, html = "", excerpt = "", path: i
   const status = document.getElementById("owv-clip-status");
   const saveBtn = document.getElementById("owv-clip-save");
 
-  const matchLabel = (p) => getClipperLabels().find(({ path: lp }) => {
-    const prefix = lp.endsWith("/") ? lp : lp + "/";
-    return p === lp || p.startsWith(prefix);
-  })?.label || "";
-
-  let activeLabel = matchLabel(defaultPath);
-  titleInput.value = activeLabel ? `${title || safeTitle} (${activeLabel})` : (title || "");
+  titleInput.value = labeledTitle;
   pathInput.value = defaultPath;
-  preview.textContent = excerpt.trim() || url || "";
+  preview.textContent = url || "";
 
   titleInput.addEventListener("input", () => {
     const t = titleInput.value.trim() || safeTitle;
-    pathInput.value = `${folder || "Clippings"}/${today} ${t.replace(/[/\\:*?"<>|]/g, " ").trim().slice(0, 80)}.md`;
-  });
-
-  pathInput.addEventListener("input", () => {
-    const newLabel = matchLabel(pathInput.value);
-    if (newLabel !== activeLabel) {
-      const base = titleInput.value.replace(/ \([^)]*\)$/, "").trim() || safeTitle;
-      titleInput.value = newLabel ? `${base} (${newLabel})` : base;
-      activeLabel = newLabel;
-    }
+    pathInput.value = `${effectiveFolder}/${today} ${t.replace(/[/\\:*?"<>|]/g, " ").trim().slice(0, 80)}.md`;
   });
 
   const close = () => overlay.remove();
@@ -888,19 +889,24 @@ function showClipperPopup({ title, url, folder, html = "", excerpt = "", path: i
   overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
 
   saveBtn.addEventListener("click", async () => {
-    const saveTitle = titleInput.value.trim() || safeTitle;
+    const saveTitle = titleInput.value.trim() || labeledTitle;
     const savePath = pathInput.value.trim() || defaultPath;
     saveBtn.disabled = true;
     saveBtn.textContent = "저장 중…";
     status.textContent = "";
     try {
-      const body = html
-        ? { path: savePath, title: saveTitle, url, html }
-        : { path: savePath, content: buildContent(saveTitle) };
+      let meta = null;
+      if (url) {
+        try {
+          const metaRes = await fetch(`/api/url-meta?url=${encodeURIComponent(url)}`);
+          if (metaRes.ok) meta = await metaRes.json();
+        } catch {}
+      }
+      const content = buildClipEmbedContent(saveTitle, url, meta);
       const res = await fetch("/api/clip", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ path: savePath, content }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "HTTP error");
@@ -2429,7 +2435,7 @@ async function loadServerSettings() {
     }
     renderDiscordFixedList("todo", Array.isArray(settings.discordFixedTimesTodo) ? settings.discordFixedTimesTodo : []);
     renderDiscordFixedList("event", Array.isArray(settings.discordFixedTimesEvent) ? settings.discordFixedTimesEvent : []);
-    renderClipperLabelList(Array.isArray(settings.clipperLabels) ? settings.clipperLabels : []);
+    renderClipperRuleList(Array.isArray(settings.clipperRules) ? settings.clipperRules : []);
   } catch {
     // Local storage remains the fallback for file:// or unavailable server settings.
   }
@@ -2964,7 +2970,7 @@ async function saveServerSettings() {
         discordNotifyOffsetsEvent: getDiscordNotifyOffsets("event"),
         discordFixedTimesTodo: getDiscordFixedTimes("todo"),
         discordFixedTimesEvent: getDiscordFixedTimes("event"),
-        clipperLabels: getClipperLabels(),
+        clipperRules: getClipperRules(),
       }),
     });
   } catch {
@@ -9804,53 +9810,61 @@ function getDiscordNotifyOffsets(kind) {
   return result.length ? result : [60];
 }
 
-// ── Clipper Label List ──────────────────────────────────────────────────────
+// ── Clipper Rule List ────────────────────────────────────────────────────────
 
-function renderClipperLabelList(pairs) {
-  const container = els.clipperLabelList;
+function renderClipperRuleList(rules) {
+  const container = els.clipperRuleList;
   if (!container) return;
   container.innerHTML = "";
-  pairs.forEach(({ path, label }) => addClipperLabelRow(path, label));
+  rules.forEach(({ urlPattern, label, savePath }) => addClipperRuleRow(urlPattern, label, savePath));
 }
 
-function addClipperLabelRow(path = "", label = "") {
-  const container = els.clipperLabelList;
+function addClipperRuleRow(urlPattern = "", label = "", savePath = "") {
+  const container = els.clipperRuleList;
   if (!container) return;
   const row = document.createElement("div");
-  row.className = "clipper-label-row";
-  const pathInput = document.createElement("input");
-  pathInput.type = "text";
-  pathInput.placeholder = "경로 (예: Clippings/Tech)";
-  pathInput.value = path;
-  pathInput.className = "clipper-label-path-input";
-  pathInput.addEventListener("input", scheduleSettingsSave);
-  const arrow = document.createElement("span");
-  arrow.className = "clipper-label-arrow";
-  arrow.textContent = "→";
+  row.className = "clipper-rule-row";
+
+  const urlInput = document.createElement("input");
+  urlInput.type = "text";
+  urlInput.placeholder = "예: github.com";
+  urlInput.value = urlPattern;
+  urlInput.className = "clipper-rule-url-input";
+  urlInput.addEventListener("input", scheduleSettingsSave);
+
   const labelInput = document.createElement("input");
   labelInput.type = "text";
-  labelInput.placeholder = "태그 텍스트";
+  labelInput.placeholder = "제목 태그";
   labelInput.value = label;
-  labelInput.className = "clipper-label-text-input";
+  labelInput.className = "clipper-rule-label-input";
   labelInput.addEventListener("input", scheduleSettingsSave);
+
+  const pathInput = document.createElement("input");
+  pathInput.type = "text";
+  pathInput.placeholder = "저장 경로";
+  pathInput.value = savePath;
+  pathInput.className = "clipper-rule-path-input";
+  pathInput.addEventListener("input", scheduleSettingsSave);
+
   const delBtn = document.createElement("button");
   delBtn.type = "button";
   delBtn.className = "discord-notify-del-btn";
   delBtn.textContent = "×";
   delBtn.addEventListener("click", () => { row.remove(); scheduleSettingsSave(); });
-  row.append(pathInput, arrow, labelInput, delBtn);
+
+  row.append(urlInput, labelInput, pathInput, delBtn);
   container.append(row);
 }
 
-function getClipperLabels() {
-  const container = els.clipperLabelList;
+function getClipperRules() {
+  const container = els.clipperRuleList;
   if (!container) return [];
-  const rows = container.querySelectorAll(".clipper-label-row");
   const result = [];
-  rows.forEach((row) => {
-    const path = row.querySelector(".clipper-label-path-input")?.value.trim() || "";
-    const label = row.querySelector(".clipper-label-text-input")?.value.trim() || "";
-    if (path && label) result.push({ path, label });
+  container.querySelectorAll(".clipper-rule-row").forEach((row) => {
+    const urlPattern = row.querySelector(".clipper-rule-url-input")?.value.trim() || "";
+    const label = row.querySelector(".clipper-rule-label-input")?.value.trim() || "";
+    const savePath = row.querySelector(".clipper-rule-path-input")?.value.trim() || "";
+    if (urlPattern) result.push({ urlPattern, label, savePath });
   });
   return result;
 }

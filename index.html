@@ -299,11 +299,14 @@
           </div>
           <p class="option-help">위 버튼을 북마크 바로 드래그하세요. 이후 어느 페이지에서든 클릭하면 현재 페이지를 노트로 저장합니다.</p>
           <div class="option-field">
-            <span>경로별 제목 태그</span>
-            <div id="clipperLabelList" class="clipper-label-list"></div>
-            <button id="clipperLabelAddBtn" type="button" class="discord-notify-add-btn">+ 추가</button>
+            <span>URL 패턴별 규칙</span>
+            <div class="clipper-rule-header">
+              <span>URL 패턴</span><span>제목 태그</span><span>저장 경로</span>
+            </div>
+            <div id="clipperRuleList" class="clipper-rule-list"></div>
+            <button id="clipperRuleAddBtn" type="button" class="discord-notify-add-btn">+ 추가</button>
           </div>
-          <p class="option-help">저장 경로가 지정한 경로로 시작하면 제목 뒤에 해당 텍스트가 자동으로 붙습니다.</p>
+          <p class="option-help">URL에 패턴이 포함되면 제목에 태그가 붙고, 지정한 경로에 저장됩니다.</p>
         </div>
       </details>
 
