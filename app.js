@@ -4015,7 +4015,12 @@ function arrangeChromeControls() {
       statusBar.append(els.notePath, saveStatusEl, els.syncStatus);
     }
 
-    document.body.append(statusBar);
+    const contentPane = document.querySelector(".content-pane");
+    if (contentPane && !window.matchMedia("(max-width: 780px)").matches) {
+      contentPane.append(statusBar);
+    } else {
+      document.body.append(statusBar);
+    }
     return;
   }
   const historyWrap = statusBar.querySelector(".status-history") || document.createElement("div");

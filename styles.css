@@ -4644,13 +4644,14 @@ button.calendar-more {
 
 .tab-sidebar-toggle:hover { opacity: 1; }
 
-/* PC: tab strip above note-header inside content-pane */
+/* PC: tab strip above note-header inside content-pane, status bar as last row */
 @media (min-width: 781px) {
-  .content-pane { grid-template-rows: auto auto 1fr; padding-bottom: 0; }
+  .content-pane { grid-template-rows: auto auto 1fr auto; padding-bottom: 0; }
   .tab-strip { order: -1; }
   .header-left { display: none; }
   .note-header { justify-content: flex-end; }
-  .viewer-wrap { padding-bottom: 56px; }
+  .viewer-wrap { padding-bottom: 0; }
+  .app-status-bar { bottom: auto; left: auto; position: static; right: auto; z-index: auto; }
 }
 
 /* Mobile: tab strip above status bar (fixed) */
