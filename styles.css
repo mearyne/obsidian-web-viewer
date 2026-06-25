@@ -4640,7 +4640,7 @@ button.calendar-more {
   .content-pane { padding-bottom: 88px; }
   .tab-item { font-size: 11px; max-width: 150px; min-width: 90px; padding: 5px 6px 5px 8px; }
   .mobile-tabs-btn { font-size: 13px; font-weight: 600; min-width: 28px; }
-  .tab-item:not(.active) .tab-close { display: none; }
+  .tab-item:not(.active) .tab-close { visibility: hidden; }
 
   .editing-mode .editor-toolbar-bottom {
     bottom: 0;
