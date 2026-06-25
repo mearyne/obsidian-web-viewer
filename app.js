@@ -9426,7 +9426,7 @@ function showClockPicker(inputEl) {
   }
   const overlay = document.getElementById("clockPickerOverlay");
   if (!overlay) return;
-  overlay.hidden = false;
+  overlay.showModal();
   renderClockPickerDisplay();
   renderClockFace();
 }
@@ -9507,17 +9507,17 @@ function confirmClockPicker() {
     targetInput.dispatchEvent(new Event("input", { bubbles: true }));
     targetInput.dispatchEvent(new Event("change", { bubbles: true }));
   }
-  document.getElementById("clockPickerOverlay").hidden = true;
+  document.getElementById("clockPickerOverlay").close();
 }
 
 // 시계 피커 버튼 이벤트 연결
 (function initClockPickerEvents() {
   document.getElementById("clockPickerCancel")?.addEventListener("click", () => {
-    document.getElementById("clockPickerOverlay").hidden = true;
+    document.getElementById("clockPickerOverlay").close();
   });
   document.getElementById("clockPickerConfirm")?.addEventListener("click", confirmClockPicker);
-  document.getElementById("clockPickerBackdrop")?.addEventListener("click", () => {
-    document.getElementById("clockPickerOverlay").hidden = true;
+  document.getElementById("clockPickerOverlay")?.addEventListener("click", (e) => {
+    if (e.target === e.currentTarget) document.getElementById("clockPickerOverlay").close();
   });
   document.getElementById("clockPickerHourBtn")?.addEventListener("click", () => {
     clockPicker.mode = "hour";

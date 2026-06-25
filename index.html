@@ -182,27 +182,24 @@
     <div id="connectionBanner" class="connection-banner" hidden></div>
 
     <!-- Clock Picker -->
-    <div id="clockPickerOverlay" class="clock-picker-overlay" hidden>
-      <div class="clock-picker-backdrop" id="clockPickerBackdrop"></div>
-      <div class="clock-picker" role="dialog" aria-label="시간 선택">
-        <div class="clock-picker-header">
-          <button class="clock-display-part" id="clockPickerHourBtn">12</button>
-          <span class="clock-sep">:</span>
-          <button class="clock-display-part" id="clockPickerMinuteBtn">00</button>
-          <div class="clock-picker-ampm">
-            <button class="ampm-btn" id="clockPickerAM">AM</button>
-            <button class="ampm-btn" id="clockPickerPM">PM</button>
-          </div>
-        </div>
-        <div class="clock-face-wrap">
-          <div id="clockFace" class="clock-face"></div>
-        </div>
-        <div class="clock-picker-footer">
-          <button id="clockPickerCancel" type="button" class="clock-picker-action">취소</button>
-          <button id="clockPickerConfirm" type="button" class="clock-picker-action clock-picker-ok">확인</button>
+    <dialog id="clockPickerOverlay" class="clock-picker-overlay" aria-label="시간 선택">
+      <div class="clock-picker-header">
+        <button class="clock-display-part" id="clockPickerHourBtn">12</button>
+        <span class="clock-sep">:</span>
+        <button class="clock-display-part" id="clockPickerMinuteBtn">00</button>
+        <div class="clock-picker-ampm">
+          <button class="ampm-btn" id="clockPickerAM">AM</button>
+          <button class="ampm-btn" id="clockPickerPM">PM</button>
         </div>
       </div>
-    </div>
+      <div class="clock-face-wrap">
+        <div id="clockFace" class="clock-face"></div>
+      </div>
+      <div class="clock-picker-footer">
+        <button id="clockPickerCancel" type="button" class="clock-picker-action">취소</button>
+        <button id="clockPickerConfirm" type="button" class="clock-picker-action clock-picker-ok">확인</button>
+      </div>
+    </dialog>
 
 
     <div id="optionsBackdrop" class="options-backdrop" hidden></div>
