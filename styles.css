@@ -5092,6 +5092,88 @@ button.calendar-more {
   background: var(--color-hover, rgba(0,0,0,0.07));
 }
 
+.tab-context-menu button.danger {
+  color: var(--color-danger, #e05a5a);
+}
+
+/* ── Move Dialog ─────────────────────────────────────────────────────────── */
+.owv-move-overlay {
+  align-items: center;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  position: fixed;
+  z-index: 9998;
+}
+
+.owv-move-dialog {
+  background: var(--color-surface, #fff);
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 480px;
+  padding: 20px;
+  width: 90vw;
+}
+
+.owv-move-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.owv-move-label {
+  color: var(--text-muted, #888);
+  font-size: 12px;
+}
+
+.owv-move-input {
+  border: 1px solid var(--line, #ddd);
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: ui-monospace, monospace;
+  padding: 8px 10px;
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--color-bg, #fff);
+  color: var(--text, #222);
+}
+
+.owv-move-input:focus {
+  border-color: var(--color-accent, #4a7fd4);
+  outline: none;
+}
+
+.owv-move-footer {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.owv-move-cancel {
+  background: none;
+  border: 1px solid var(--line, #ddd);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 7px 14px;
+}
+
+.owv-move-confirm {
+  background: var(--color-accent, #4a7fd4);
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 7px 18px;
+}
+
 /* ── Discord Notify List ─────────────────────────────────────────────────── */
 .discord-notify-list {
   display: flex;

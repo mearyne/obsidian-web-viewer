@@ -1743,6 +1743,12 @@ function renderDirChildren(dir, parent, matcher, folderPaths, excludePaths = [])
         else await openFile(node.path);
       }
     });
+    if (node.kind === "file") {
+      row.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        showFileContextMenu(e.clientX, e.clientY, node.path);
+      });
+    }
     group.append(row);
 
     if (hasContentMatch && state.contentSearchSnippetsVisible) {
@@ -5763,6 +5769,8 @@ async function deleteVaultFileByPath(filePath) {
     refreshDirectoryMetadataFrom(filePath);
     refreshRecentFilesCache();
     invalidateRandomMarkdownCache();
+    const tabsToClose = state.tabs.filter((t) => t.path === filePath).map((t) => t.id);
+    for (const id of tabsToClose) await closeTab(id);
     if (state.currentPath === filePath) {
       state.currentPath = "";
       state.currentContent = "";
@@ -5772,8 +5780,87 @@ async function deleteVaultFileByPath(filePath) {
     renderTree();
     renderCalendar();
   } catch {
-    alert("삭제에 실패했습니다.");
+    showAppToast("삭제에 실패했습니다.", "error");
   }
+}
+
+async function moveVaultFile(oldPath, newPath) {
+  const res = await fetch(`/api/vault-file?path=${encodeURIComponent(oldPath)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ newPath }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || "이동에 실패했습니다.");
+  return json.path;
+}
+
+function showMoveDialog(filePath) {
+  document.getElementById("owv-move-overlay")?.remove();
+  const overlay = document.createElement("div");
+  overlay.id = "owv-move-overlay";
+  overlay.className = "owv-move-overlay";
+
+  const dialog = document.createElement("div");
+  dialog.className = "owv-move-dialog";
+  dialog.innerHTML = `<div class="owv-move-title">파일 이동</div><label class="owv-move-label">새 경로</label><input class="owv-move-input" type="text" value="${filePath.replace(/"/g, "&quot;")}"><div class="owv-move-footer"><button class="owv-move-cancel">취소</button><button class="owv-move-confirm">이동</button></div>`;
+
+  overlay.appendChild(dialog);
+  document.body.appendChild(overlay);
+
+  const input = dialog.querySelector(".owv-move-input");
+  const close = () => overlay.remove();
+
+  // 경로 끝에서 파일명만 선택
+  input.focus();
+  const lastSlash = filePath.lastIndexOf("/");
+  input.setSelectionRange(lastSlash + 1, filePath.length);
+
+  dialog.querySelector(".owv-move-cancel").addEventListener("click", close);
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+
+  dialog.querySelector(".owv-move-confirm").addEventListener("click", async () => {
+    const newPath = input.value.trim();
+    if (!newPath || newPath === filePath) { close(); return; }
+    try {
+      const resultPath = await moveVaultFile(filePath, newPath);
+      // 로컬 상태 업데이트
+      const node = state.files.get(filePath);
+      if (node) {
+        state.files.delete(filePath);
+        const newName = resultPath.split("/").pop();
+        node.name = newName;
+        node.path = resultPath;
+        state.files.set(resultPath, node);
+        const oldDir = state.directories.get(filePath.includes("/") ? filePath.slice(0, filePath.lastIndexOf("/")) : "");
+        const newDirPath = resultPath.includes("/") ? resultPath.slice(0, resultPath.lastIndexOf("/")) : "";
+        oldDir?.children.delete(node.name === newName ? filePath.split("/").pop() : filePath.split("/").pop());
+        const newDir = state.directories.get(newDirPath);
+        if (newDir) newDir.children.set(newName, node);
+      }
+      state.tabs.forEach((t) => {
+        if (t.path === filePath) { t.path = resultPath; t.title = resultPath.split("/").pop(); }
+      });
+      if (state.currentPath === filePath) {
+        state.currentPath = resultPath;
+        state.currentNode = state.files.get(resultPath) || null;
+      }
+      refreshDirectoryMetadataFrom(filePath);
+      refreshDirectoryMetadataFrom(resultPath);
+      renderTree();
+      renderTabStrip();
+      saveOpenTabs();
+      showAppToast("이동 완료: " + resultPath, "success");
+      close();
+    } catch (e) {
+      showAppToast(e.message || "이동에 실패했습니다.", "error");
+    }
+  });
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") dialog.querySelector(".owv-move-confirm").click();
+    if (e.key === "Escape") close();
+  });
 }
 
 function shiftCalendarDate(direction) {
@@ -8655,16 +8742,36 @@ function pinTab(id) {
   });
 }
 
+function showFileContextMenu(x, y, filePath) {
+  document.querySelector(".tab-context-menu")?.remove();
+  const menu = document.createElement("div");
+  menu.className = "tab-context-menu";
+  menu.innerHTML = `<button type="button" data-action="move">이동하기</button><button type="button" data-action="delete" class="danger">삭제하기</button>`;
+  menu.style.cssText = `position:fixed;left:${x}px;top:${y}px;z-index:9999;`;
+  menu.querySelector("[data-action='move']").addEventListener("click", () => { menu.remove(); showMoveDialog(filePath); });
+  menu.querySelector("[data-action='delete']").addEventListener("click", () => { menu.remove(); void deleteVaultFileByPath(filePath); });
+  const dismiss = (e) => { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener("mousedown", dismiss, true); document.removeEventListener("touchstart", dismiss, true); } };
+  document.addEventListener("mousedown", dismiss, true);
+  document.addEventListener("touchstart", dismiss, true);
+  document.body.append(menu);
+  const rect = menu.getBoundingClientRect();
+  if (rect.right > window.innerWidth) menu.style.left = (window.innerWidth - rect.width - 4) + "px";
+  if (rect.bottom > window.innerHeight) menu.style.top = (y - rect.height) + "px";
+}
+
 function showTabContextMenu(x, y, tabId) {
   document.querySelector(".tab-context-menu")?.remove();
   const tab = state.tabs.find((t) => t.id === tabId);
   if (!tab) return;
   const menu = document.createElement("div");
   menu.className = "tab-context-menu";
-  menu.innerHTML = `<button type="button" data-action="pin">${tab.pinned ? "고정 해제" : "고정하기"}</button><button type="button" data-action="close">삭제하기</button>`;
+  const hasFile = Boolean(tab.path);
+  menu.innerHTML = `<button type="button" data-action="pin">${tab.pinned ? "고정 해제" : "고정하기"}</button>${hasFile ? `<button type="button" data-action="move">이동하기</button>` : ""}<button type="button" data-action="tab-close">탭 닫기</button>${hasFile ? `<button type="button" data-action="delete" class="danger">삭제하기</button>` : ""}`;
   menu.style.cssText = `position:fixed;left:${x}px;top:${y}px;z-index:9999;`;
   menu.querySelector("[data-action='pin']").addEventListener("click", () => { menu.remove(); pinTab(tabId); });
-  menu.querySelector("[data-action='close']").addEventListener("click", () => { menu.remove(); void closeTab(tabId); });
+  menu.querySelector("[data-action='tab-close']").addEventListener("click", () => { menu.remove(); void closeTab(tabId); });
+  menu.querySelector("[data-action='move']")?.addEventListener("click", () => { menu.remove(); showMoveDialog(tab.path); });
+  menu.querySelector("[data-action='delete']")?.addEventListener("click", () => { menu.remove(); void deleteVaultFileByPath(tab.path); });
   const dismiss = (e) => { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener("mousedown", dismiss, true); document.removeEventListener("touchstart", dismiss, true); } };
   document.addEventListener("mousedown", dismiss, true);
   document.addEventListener("touchstart", dismiss, true);

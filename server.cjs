@@ -877,16 +877,27 @@ function renameVaultFile(requestedPath, body, res) {
   if (readOnly) { sendJson(res, 403, { error: "Vault is read-only" }); return; }
   let parsed;
   try { parsed = JSON.parse(body || "{}"); } catch { sendJson(res, 400, { error: "Invalid JSON" }); return; }
-  const newName = (parsed.newName || "").replace(/[/\\:*?"<>|]/g, "").trim();
-  if (!newName) { sendJson(res, 400, { error: "newName required" }); return; }
   const safePath = normalizeVaultPath(requestedPath || "");
   const oldFull = resolveVaultFilePath(safePath);
   if (!oldFull || !isIndexedFile(safePath)) { sendJson(res, 403, { error: "Invalid vault file path" }); return; }
-  const dir = path.dirname(oldFull);
-  const newFull = path.resolve(dir, newName);
-  if (!newFull.startsWith(vaultRoot + path.sep) && newFull !== vaultRoot) { sendJson(res, 403, { error: "Invalid target path" }); return; }
-  const newSafePath = normalizeVaultPath(path.relative(vaultRoot, newFull));
+
+  let newFull, newSafePath;
+  if (typeof parsed.newPath === "string" && parsed.newPath) {
+    newSafePath = normalizeVaultPath(parsed.newPath);
+    if (!newSafePath) { sendJson(res, 400, { error: "Invalid newPath" }); return; }
+    newFull = resolveVaultFilePath(newSafePath);
+    if (!newFull) { sendJson(res, 403, { error: "Invalid target path" }); return; }
+  } else {
+    const newName = (parsed.newName || "").replace(/[/\\:*?"<>|]/g, "").trim();
+    if (!newName) { sendJson(res, 400, { error: "newName or newPath required" }); return; }
+    const dir = path.dirname(oldFull);
+    newFull = path.resolve(dir, newName);
+    if (!newFull.startsWith(vaultRoot + path.sep) && newFull !== vaultRoot) { sendJson(res, 403, { error: "Invalid target path" }); return; }
+    newSafePath = normalizeVaultPath(path.relative(vaultRoot, newFull));
+  }
+
   try {
+    fs.mkdirSync(path.dirname(newFull), { recursive: true });
     fs.renameSync(oldFull, newFull);
     forgetTextFileCache(safePath);
     const createdTimes = readCreatedTimes();
