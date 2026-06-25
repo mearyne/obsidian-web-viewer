@@ -181,24 +181,11 @@
     <div id="syncStatus" class="sync-status sync-status-bar" hidden></div>
     <div id="connectionBanner" class="connection-banner" hidden></div>
 
-    <!-- Clock Picker -->
-    <dialog id="clockPickerOverlay" class="clock-picker-overlay" aria-label="시간 선택">
-      <div class="clock-picker-header">
-        <button class="clock-display-part" id="clockPickerHourBtn">12</button>
-        <span class="clock-sep">:</span>
-        <button class="clock-display-part" id="clockPickerMinuteBtn">00</button>
-        <div class="clock-picker-ampm">
-          <button class="ampm-btn" id="clockPickerAM">AM</button>
-          <button class="ampm-btn" id="clockPickerPM">PM</button>
-        </div>
-      </div>
-      <div class="clock-face-wrap">
-        <div id="clockFace" class="clock-face"></div>
-      </div>
-      <div class="clock-picker-footer">
-        <button id="clockPickerCancel" type="button" class="clock-picker-action">취소</button>
-        <button id="clockPickerConfirm" type="button" class="clock-picker-action clock-picker-ok">확인</button>
-      </div>
+    <!-- Time Dropdown -->
+    <dialog id="timeDropdown" class="time-dropdown">
+      <div id="timeDropHours" class="time-drop-col"></div>
+      <div class="time-drop-sep">:</div>
+      <div id="timeDropMinutes" class="time-drop-col"></div>
     </dialog>
 
 
