@@ -6072,8 +6072,7 @@ function showMergeDialog(initialPaths) {
       for (const p of orderedPaths) {
         const res = await fetch(`/api/vault-file?path=${encodeURIComponent(p)}`);
         if (!res.ok) throw new Error(`읽기 실패: ${p}`);
-        const data = await res.json();
-        let body = typeof data.content === "string" ? data.content : "";
+        let body = await res.text();
         // frontmatter 제거
         if (body.startsWith("---")) {
           const end = body.indexOf("\n---", 3);

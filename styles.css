@@ -5116,6 +5116,7 @@ button.calendar-more {
   background: var(--color-surface, #fff);
   border-radius: 10px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+  color: var(--text, #222);
   display: flex;
   flex-direction: column;
   gap: 8px;
