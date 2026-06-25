@@ -181,21 +181,6 @@
     <div id="syncStatus" class="sync-status sync-status-bar" hidden></div>
     <div id="connectionBanner" class="connection-banner" hidden></div>
 
-    <!-- Clock Picker -->
-    <dialog id="clockPickerDialog" class="clock-picker-dialog">
-      <div class="clock-picker-header">
-        <button class="clock-display-part" id="clockPickerHourBtn">12</button>
-        <span class="clock-sep">:</span>
-        <button class="clock-display-part" id="clockPickerMinuteBtn">00</button>
-        <div class="clock-picker-ampm">
-          <button class="ampm-btn" id="clockPickerAM">AM</button>
-          <button class="ampm-btn" id="clockPickerPM">PM</button>
-        </div>
-      </div>
-      <div class="clock-face-wrap">
-        <div id="clockFace" class="clock-face"></div>
-      </div>
-    </dialog>
 
 
     <div id="optionsBackdrop" class="options-backdrop" hidden></div>
@@ -405,6 +390,7 @@
           </div>
         </div>
         <div id="taskDatePickerCal" class="task-date-picker-cal" hidden></div>
+        <div id="taskClockPickerEl" class="task-clock-picker" hidden></div>
         <div class="task-create-field task-create-sub-items">
           <label>내용 <span class="task-date-optional">(선택)</span></label>
           <textarea id="taskCreateSubItemsInput" rows="3" spellcheck="false" placeholder="- 세부 내용"></textarea>
@@ -488,6 +474,7 @@
               </div>
             </div>
             <div id="taskEditDatePickerCal" class="task-date-picker-cal" hidden></div>
+            <div id="taskEditClockPickerEl" class="task-clock-picker" hidden></div>
           </div>
           <div id="taskEditSubItems" class="task-edit-sub-items">
             <textarea id="taskEditSubItemsInput" rows="10" spellcheck="false" placeholder="- 세부 내용"></textarea>

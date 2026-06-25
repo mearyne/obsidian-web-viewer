@@ -5109,28 +5109,17 @@ button.calendar-more {
   color: var(--text);
 }
 
-/* ── Clock Picker ────────────────────────────────────────────────────────── */
-.clock-picker-dialog {
-  display: none;
-}
-
-.clock-picker-dialog[open] {
-  background: var(--surface);
+/* ── Inline Clock Picker ─────────────────────────────────────────────────── */
+.task-clock-picker {
   border: 1px solid var(--line);
-  border-radius: 16px;
-  box-shadow: 0 6px 28px rgba(0, 0, 0, 0.22);
+  border-radius: 10px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  margin: 0;
-  padding: 16px;
-  position: fixed;
+  align-items: center;
+  gap: 12px;
+  overflow: hidden;
+  padding: 12px;
   user-select: none;
-  width: 260px;
-}
-
-.clock-picker-dialog::backdrop {
-  background: transparent;
 }
 
 .clock-picker-header {

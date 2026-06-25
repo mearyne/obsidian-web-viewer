@@ -6623,6 +6623,7 @@ function formatDateKorean(dateKey) {
 
 function renderTaskDatePicker(field) {
   if (!els.taskDatePickerCal) return;
+  if (field) { getClockEl("create").hidden = true; clockPicker.dialog = null; clockPicker.field = null; }
   if (!field) {
     els.taskDatePickerCal.hidden = true;
     els.taskDatePickerCal.innerHTML = "";
@@ -6728,10 +6729,10 @@ function bindTaskCreateDialog() {
     handleTaskTitleEnter(e, els.taskCreateConfirmBtn);
   });
   els.taskStartTimeInput?.addEventListener("click", () => {
-    if (!isTouchPrimaryDevice()) showClockPicker(els.taskStartTimeInput);
+    if (!isTouchPrimaryDevice()) toggleInlineClock("create", "start");
   });
   els.taskDueTimeInput?.addEventListener("click", () => {
-    if (!isTouchPrimaryDevice()) showClockPicker(els.taskDueTimeInput);
+    if (!isTouchPrimaryDevice()) toggleInlineClock("create", "due");
   });
   els.taskStartTimeInput?.addEventListener("input", applyTaskCreateStartDateHint);
   els.taskStartTimeInput?.addEventListener("change", applyTaskCreateStartDateHint);
@@ -6824,11 +6825,11 @@ function bindTaskEditDialog() {
   });
 
   els.taskEditStartTimeInput?.addEventListener("click", () => {
-    if (!isTouchPrimaryDevice()) showClockPicker(els.taskEditStartTimeInput);
+    if (!isTouchPrimaryDevice()) toggleInlineClock("edit", "start");
   });
 
   els.taskEditDueTimeInput?.addEventListener("click", () => {
-    if (!isTouchPrimaryDevice()) showClockPicker(els.taskEditDueTimeInput);
+    if (!isTouchPrimaryDevice()) toggleInlineClock("edit", "due");
   });
 
   els.taskEditStartTimeInput?.addEventListener("input", () => {
@@ -7031,6 +7032,7 @@ function setTaskEditDate(field, value) {
 
 function renderTaskEditDatePicker(field) {
   if (!els.taskEditDatePickerCal) return;
+  if (field) { getClockEl("edit").hidden = true; clockPicker.dialog = null; clockPicker.field = null; }
   if (!field) {
     els.taskEditDatePickerCal.hidden = true;
     els.taskEditDatePickerCal.innerHTML = "";
@@ -9405,30 +9407,60 @@ function getDiscordFixedTimes(kind) {
   return result;
 }
 
-// ── Clock Picker ────────────────────────────────────────────────────────────
+// ── Inline Clock Picker ──────────────────────────────────────────────────────
 
 const clockPicker = {
-  targetInput: null,
+  dialog: null,   // "create" | "edit"
+  field: null,    // "start" | "due"
   mode: "hour",
-  hour24: 12,
+  hour24: 0,
   minute: 0,
 };
 
-function showClockPicker(inputEl) {
-  if (!inputEl) return;
-  if (navigator.maxTouchPoints > 0) {
-    try { inputEl.showPicker(); } catch { inputEl.focus(); }
+function getClockTargetInput() {
+  if (clockPicker.dialog === "create") {
+    return clockPicker.field === "start" ? els.taskStartTimeInput : els.taskDueTimeInput;
+  }
+  return clockPicker.field === "start" ? els.taskEditStartTimeInput : els.taskEditDueTimeInput;
+}
+
+function getClockEl(dlg) {
+  return document.getElementById(dlg === "create" ? "taskClockPickerEl" : "taskEditClockPickerEl");
+}
+
+function toggleInlineClock(dlg, field) {
+  const el = getClockEl(dlg);
+  if (!el) return;
+
+  // 같은 필드 다시 클릭 → 닫기
+  if (clockPicker.dialog === dlg && clockPicker.field === field && !el.hidden) {
+    el.hidden = true;
+    clockPicker.dialog = null;
+    clockPicker.field = null;
     return;
   }
-  const dialog = document.getElementById("clockPickerDialog");
-  if (!dialog) return;
 
-  clockPicker.targetInput = inputEl;
+  // 날짜 피커가 열려 있으면 닫기
+  if (dlg === "create") {
+    renderTaskDatePicker(null);
+    state.taskDialogActiveField = null;
+  } else {
+    renderTaskEditDatePicker(null);
+    state.taskEditActiveField = null;
+  }
+
+  // 다른 다이얼로그의 시계가 열려 있으면 닫기
+  getClockEl(dlg === "create" ? "edit" : "create").hidden = true;
+
+  clockPicker.dialog = dlg;
+  clockPicker.field = field;
   clockPicker.mode = "hour";
-  const val = inputEl.value;
+
+  const input = getClockTargetInput();
+  const val = input?.value || "";
   if (val) {
     const [h, m] = val.split(":").map(Number);
-    clockPicker.hour24 = isNaN(h) ? 12 : h;
+    clockPicker.hour24 = isNaN(h) ? 0 : h;
     clockPicker.minute = isNaN(m) ? 0 : Math.round(m / 5) * 5 % 60;
   } else {
     const now = new Date();
@@ -9436,45 +9468,14 @@ function showClockPicker(inputEl) {
     clockPicker.minute = Math.round(now.getMinutes() / 5) * 5 % 60;
   }
 
-  renderClockPickerDisplay();
-  renderClockFace();
-
-  // input 아래에 위치, 뷰포트 밖으로 나가면 위로 올림
-  dialog.showModal();
-  const rect = inputEl.getBoundingClientRect();
-  const dw = dialog.offsetWidth || 280;
-  const dh = dialog.offsetHeight || 360;
-  let top = rect.bottom + 6;
-  let left = rect.left;
-  if (top + dh > window.innerHeight - 8) top = rect.top - dh - 6;
-  if (left + dw > window.innerWidth - 8) left = window.innerWidth - dw - 8;
-  dialog.style.top = `${Math.max(8, top)}px`;
-  dialog.style.left = `${Math.max(8, left)}px`;
+  renderInlineClock(el);
+  el.hidden = false;
 }
 
 function clockHour12() { return clockPicker.hour24 % 12 || 12; }
 function clockIsAM() { return clockPicker.hour24 < 12; }
 
-function renderClockPickerDisplay() {
-  const hBtn = document.getElementById("clockPickerHourBtn");
-  const mBtn = document.getElementById("clockPickerMinuteBtn");
-  const amBtn = document.getElementById("clockPickerAM");
-  const pmBtn = document.getElementById("clockPickerPM");
-  if (hBtn) {
-    hBtn.textContent = String(clockHour12());
-    hBtn.classList.toggle("clock-part-active", clockPicker.mode === "hour");
-  }
-  if (mBtn) {
-    mBtn.textContent = clockPicker.minute.toString().padStart(2, "0");
-    mBtn.classList.toggle("clock-part-active", clockPicker.mode === "minute");
-  }
-  amBtn?.classList.toggle("ampm-active", clockIsAM());
-  pmBtn?.classList.toggle("ampm-active", !clockIsAM());
-}
-
-function renderClockFace() {
-  const face = document.getElementById("clockFace");
-  if (!face) return;
+function renderInlineClock(el) {
   const isHour = clockPicker.mode === "hour";
   const values = isHour
     ? [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
@@ -9493,14 +9494,44 @@ function renderClockFace() {
     return `<button class="clock-num${sel}" style="left:${x}%;top:${y}%" data-val="${val}">${label}</button>`;
   }).join("");
 
-  face.innerHTML = `
-    <div class="clock-hand-wrap" style="transform:rotate(${handAngle}deg)">
-      <div class="clock-hand"></div>
-    </div>
-    <div class="clock-center-dot"></div>
-    ${nums}`;
+  const h12 = clockHour12();
+  const mStr = clockPicker.minute.toString().padStart(2, "0");
 
-  face.querySelectorAll(".clock-num").forEach((btn) => {
+  el.innerHTML = `
+    <div class="clock-picker-header">
+      <button class="clock-display-part${isHour ? " clock-part-active" : ""}" data-clock-mode="hour">${h12}</button>
+      <span class="clock-sep">:</span>
+      <button class="clock-display-part${!isHour ? " clock-part-active" : ""}" data-clock-mode="minute">${mStr}</button>
+      <div class="clock-picker-ampm">
+        <button class="ampm-btn${clockIsAM() ? " ampm-active" : ""}" data-ampm="am">AM</button>
+        <button class="ampm-btn${!clockIsAM() ? " ampm-active" : ""}" data-ampm="pm">PM</button>
+      </div>
+    </div>
+    <div class="clock-face-wrap">
+      <div class="clock-face">
+        <div class="clock-hand-wrap" style="transform:rotate(${handAngle}deg)"><div class="clock-hand"></div></div>
+        <div class="clock-center-dot"></div>
+        ${nums}
+      </div>
+    </div>`;
+
+  el.querySelectorAll("[data-clock-mode]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      clockPicker.mode = btn.dataset.clockMode;
+      renderInlineClock(el);
+    });
+  });
+
+  el.querySelectorAll("[data-ampm]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const isAm = btn.dataset.ampm === "am";
+      if (isAm && !clockIsAM()) clockPicker.hour24 -= 12;
+      if (!isAm && clockIsAM()) clockPicker.hour24 += 12;
+      renderInlineClock(el);
+    });
+  });
+
+  el.querySelectorAll(".clock-num").forEach((btn) => {
     btn.addEventListener("click", () => {
       const val = Number(btn.dataset.val);
       if (isHour) {
@@ -9509,46 +9540,25 @@ function renderClockFace() {
         if (pm) h += 12;
         clockPicker.hour24 = h;
         clockPicker.mode = "minute";
-        renderClockPickerDisplay();
-        renderClockFace();
+        renderInlineClock(el);
       } else {
         clockPicker.minute = val;
-        confirmClockPicker();
+        commitInlineClock(el);
       }
     });
   });
 }
 
-function confirmClockPicker() {
-  const { hour24, minute, targetInput } = clockPicker;
-  if (targetInput) {
-    targetInput.value = `${hour24.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`;
-    targetInput.dispatchEvent(new Event("input", { bubbles: true }));
-    targetInput.dispatchEvent(new Event("change", { bubbles: true }));
+function commitInlineClock(el) {
+  const input = getClockTargetInput();
+  if (input) {
+    const h = clockPicker.hour24.toString().padStart(2, "0");
+    const m = clockPicker.minute.toString().padStart(2, "0");
+    input.value = `${h}:${m}`;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
   }
-  document.getElementById("clockPickerDialog")?.close();
+  if (el) el.hidden = true;
+  clockPicker.dialog = null;
+  clockPicker.field = null;
 }
-
-(function initClockPickerEvents() {
-  const dialog = document.getElementById("clockPickerDialog");
-  if (!dialog) return;
-  dialog.addEventListener("click", (e) => {
-    if (e.target === dialog) dialog.close();
-  });
-  document.getElementById("clockPickerHourBtn")?.addEventListener("click", () => {
-    clockPicker.mode = "hour";
-    renderClockPickerDisplay();
-    renderClockFace();
-  });
-  document.getElementById("clockPickerMinuteBtn")?.addEventListener("click", () => {
-    clockPicker.mode = "minute";
-    renderClockPickerDisplay();
-    renderClockFace();
-  });
-  document.getElementById("clockPickerAM")?.addEventListener("click", () => {
-    if (!clockIsAM()) { clockPicker.hour24 -= 12; renderClockPickerDisplay(); }
-  });
-  document.getElementById("clockPickerPM")?.addEventListener("click", () => {
-    if (clockIsAM()) { clockPicker.hour24 += 12; renderClockPickerDisplay(); }
-  });
-})();
