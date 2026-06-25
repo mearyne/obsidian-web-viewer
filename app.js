@@ -4487,6 +4487,7 @@ function showCalendarView() {
   els.markdownView.hidden = true;
   els.editorShell.hidden = true;
   els.calendarView.hidden = false;
+  els.viewerWrap.scrollTop = 0;
   if (els.noteTitleArea) els.noteTitleArea.hidden = true;
   if (els.headingControlsOverlay) els.headingControlsOverlay.hidden = true;
   if (els.viewControlsOverlay) els.viewControlsOverlay.hidden = false;
