@@ -4918,6 +4918,13 @@ function renderCalendar() {
   const recentField = state.calendarKind === "created" ? "createdAt" : "updatedAt";
   const recentByDate = groupRecentFilesByDate(state.recentFiles[state.calendarKind] || [], recentField);
   const rowLimit = state.calendarRowLimit || 5;
+
+  // 이 달에 실제로 필요한 주(row) 수 계산: 마지막 날이 속한 행이 row 5 이하면 5주, 그 외엔 6주
+  const lastDayOfMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0);
+  const lastOffset = Math.floor((lastDayOfMonth - firstGridDate) / 864e5);
+  const weeksNeeded = lastOffset < 35 ? 5 : 6;
+  const totalCells = weeksNeeded * 7;
+
   const cells = [];
   const agendaItems = calendarAgendaDates(month).map((date) => {
     const dateKey = formatDate(date);
@@ -4927,7 +4934,7 @@ function renderCalendar() {
       : renderRecentAgendaDay(date, recentByDate.get(dateKey) || [], dateKey === todayKey, recentField, holidays);
   });
 
-  for (let offset = 0; offset < 42; offset += 1) {
+  for (let offset = 0; offset < totalCells; offset += 1) {
     const date = addDays(firstGridDate, offset);
     const dateKey = formatDate(date);
     const dayTasks = tasksByDate.get(dateKey) || [];
@@ -4956,7 +4963,7 @@ function renderCalendar() {
   }
 
   els.calendarView.innerHTML = `
-    <div class="calendar-shell calendar-mode-${state.calendarMode} mobile-${state.mobileCalendarMode}" style="--calendar-row-count: ${rowLimit};">
+    <div class="calendar-shell calendar-mode-${state.calendarMode} mobile-${state.mobileCalendarMode}" style="--calendar-row-count: ${rowLimit}; --calendar-weeks: ${weeksNeeded};">
       <div class="calendar-toolbar">
         ${showingTasks ? renderCalendarFilterToggleButton("calendar-toolbar-filter-btn") : ""}
         <div class="calendar-month-nav">
