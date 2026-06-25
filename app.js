@@ -773,24 +773,6 @@ function handleUrlAction() {
     window.history.replaceState(null, "", window.location.pathname);
     handleSharedUrl(sharedUrl, sharedTitle);
   }
-  const hash = window.location.hash;
-  if (hash.startsWith("#clip=")) {
-    window.history.replaceState(null, "", window.location.pathname + window.location.search);
-    try {
-      const data = JSON.parse(decodeURIComponent(escape(atob(hash.slice(6)))));
-      const folder = localStorage.getItem("obsidian-web-viewer-clipper-folder") || "Clippings";
-      const show = () => showClipperPopup({
-        title: data.title || "",
-        url: data.url || "",
-        html: data.html || "",
-        excerpt: data.excerpt || "",
-        folder: data.folder || folder,
-        path: data.path || "",
-      });
-      if (state.vaultLoaded) show();
-      else window.addEventListener("vaultReady", show, { once: true });
-    } catch (e) {}
-  }
 }
 
 function handleSharedUrl(sharedUrl, sharedTitle = "") {
