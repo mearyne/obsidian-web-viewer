@@ -1352,7 +1352,11 @@ button:disabled {
 }
 
 .viewer-wrap:has(.calendar-view:not([hidden])) {
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
+  padding-bottom: 0;
+  padding-top: 0;
 }
 
 .loading-overlay {
@@ -3132,9 +3136,11 @@ button:disabled {
 }
 
 .calendar-view {
-  height: calc(100vh - 176px);
+  flex: 1;
+  height: auto;
   margin: 0 auto;
   max-width: 1180px;
+  min-height: 0;
   overflow: hidden;
   padding: 0;
   position: relative;
@@ -4213,13 +4219,16 @@ button.calendar-more {
   }
 
   .calendar-view {
-    height: calc(100vh - 156px);
-    height: calc(100dvh - 156px);
     margin: 0;
     max-width: none;
     min-width: 0;
     padding: 0;
     width: 100%;
+  }
+
+  /* 모바일: 고정 탭스트립(44px) + 상태바(44px)를 위한 하단 여백 복원 */
+  .viewer-wrap:has(.calendar-view:not([hidden])) {
+    padding-bottom: 88px;
   }
 
   .calendar-shell {
