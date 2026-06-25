@@ -65,11 +65,11 @@
     overlay.appendChild(sheet);
     document.body.appendChild(overlay);
 
-    var titleInput = document.getElementById('owv-clip-title');
-    var pathInput = document.getElementById('owv-clip-path');
-    var preview = document.getElementById('owv-clip-preview');
-    var status = document.getElementById('owv-clip-status');
-    var saveBtn = document.getElementById('owv-clip-save');
+    var titleInput = sheet.querySelector('#owv-clip-title');
+    var pathInput = sheet.querySelector('#owv-clip-path');
+    var preview = sheet.querySelector('#owv-clip-preview');
+    var status = sheet.querySelector('#owv-clip-status');
+    var saveBtn = sheet.querySelector('#owv-clip-save');
 
     titleInput.value = displayTitle;
     pathInput.value = defaultPath;
@@ -81,8 +81,8 @@
 
     function close() { overlay.remove(); }
 
-    document.getElementById('owv-clip-close').addEventListener('click', close);
-    document.getElementById('owv-clip-cancel').addEventListener('click', close);
+    sheet.querySelector('#owv-clip-close').addEventListener('click', close);
+    sheet.querySelector('#owv-clip-cancel').addEventListener('click', close);
     overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
 
     saveBtn.addEventListener('click', function () {
