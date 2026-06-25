@@ -3500,9 +3500,7 @@ button:disabled {
   border-left: 1px solid var(--line);
   border-top: 1px solid var(--line);
   flex: 1;
-  min-height: 0;
   grid-template-rows: repeat(var(--calendar-weeks, 6), minmax(0, 1fr));
-  height: 100%;
   min-height: 0;
   user-select: none;
 }
