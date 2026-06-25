@@ -667,7 +667,12 @@ function handleGlobalKeydown(event) {
     if (event.key.toLowerCase() === "e") {
       event.preventDefault();
       event.stopPropagation();
-      enterEditMode();
+      if (els.taskEditDialog?.open) {
+        const isView = els.taskEditDialog.querySelector(".task-create-form")?.classList.contains("task-mode-view");
+        if (isView) { setTaskDialogMode("edit"); els.taskEditDialogTitle?.focus(); els.taskEditDialogTitle?.select(); }
+      } else {
+        enterEditMode();
+      }
       return;
     }
     if (event.key.toLowerCase() === "w") {
@@ -717,7 +722,12 @@ function handleGlobalKeydown(event) {
   if (isShortcut(event, "KeyE", "e")) {
     event.preventDefault();
     event.stopPropagation();
-    enterEditMode();
+    if (els.taskEditDialog?.open) {
+      const isView = els.taskEditDialog.querySelector(".task-create-form")?.classList.contains("task-mode-view");
+      if (isView) { setTaskDialogMode("edit"); els.taskEditDialogTitle?.focus(); els.taskEditDialogTitle?.select(); }
+    } else {
+      enterEditMode();
+    }
   } else if (isShortcut(event, "KeyS", "s")) {
     event.preventDefault();
     event.stopPropagation();
@@ -7459,6 +7469,7 @@ function bindTaskEditDialog() {
     const isView = els.taskEditDialog.querySelector(".task-create-form")?.classList.contains("task-mode-view");
     if (isView && e.key === "e" && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
       e.preventDefault();
+      e.stopPropagation();
       setTaskDialogMode("edit");
       els.taskEditDialogTitle?.focus();
       els.taskEditDialogTitle?.select();
