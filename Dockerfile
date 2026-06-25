@@ -5,7 +5,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --omit=dev
 
-COPY server.cjs index.html styles.css app.js manifest.webmanifest sw.js calendar-gesture-rules.js ./
+COPY server.cjs index.html styles.css app.js manifest.webmanifest sw.js calendar-gesture-rules.js clipper-inline.js clipper.js ./
 COPY icons ./icons
 COPY vendor ./vendor
 COPY sample-vault ./sample-vault
