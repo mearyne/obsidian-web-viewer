@@ -1039,6 +1039,12 @@ function normalizeSettings(settings) {
     discordNotifyOffsetsEvent: normalizeNotifyOffsets(settings?.discordNotifyOffsetsEvent, settings?.discordNotifyHoursEvent),
     discordFixedTimesTodo: normalizeNotifyFixedTimes(settings?.discordFixedTimesTodo),
     discordFixedTimesEvent: normalizeNotifyFixedTimes(settings?.discordFixedTimesEvent),
+    clipperLabels: Array.isArray(settings?.clipperLabels)
+      ? settings.clipperLabels
+          .filter((item) => item && typeof item.path === "string" && typeof item.label === "string")
+          .map((item) => ({ path: item.path.slice(0, 512), label: item.label.slice(0, 128) }))
+          .slice(0, 50)
+      : [],
   };
 }
 

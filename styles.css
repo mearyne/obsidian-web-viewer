@@ -5156,6 +5156,36 @@ button.calendar-more {
   color: var(--text);
 }
 
+/* ── Clipper Label List ──────────────────────────────────────────────────── */
+.clipper-label-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.clipper-label-row {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+}
+
+.clipper-label-path-input {
+  flex: 2;
+  min-width: 0;
+}
+
+.clipper-label-arrow {
+  color: var(--text-muted);
+  flex-shrink: 0;
+  font-size: 13px;
+}
+
+.clipper-label-text-input {
+  flex: 1;
+  min-width: 0;
+}
+
 /* ── Inline Clock Picker ─────────────────────────────────────────────────── */
 .task-clock-picker {
   border: 1px solid var(--line);

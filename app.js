@@ -146,6 +146,8 @@ const els = {
   newNotePathInput: document.querySelector("#newNotePathInput"),
   imagePathInput: document.querySelector("#imagePathInput"),
   clipperFolderInput: document.querySelector("#clipperFolderInput"),
+  clipperLabelList: document.querySelector("#clipperLabelList"),
+  clipperLabelAddBtn: document.querySelector("#clipperLabelAddBtn"),
   searchExcludeInput: document.querySelector("#searchExcludeInput"),
   discordWebhookInput: document.querySelector("#discordWebhookInput"),
   discordNotifyListTodo: document.querySelector("#discordNotifyListTodo"),
@@ -419,6 +421,7 @@ els.clipperFolderInput?.addEventListener("input", () => {
   localStorage.setItem("obsidian-web-viewer-clipper-folder", folder);
   updateBookmarkletHref(folder);
 });
+els.clipperLabelAddBtn?.addEventListener("click", () => { addClipperLabelRow("", ""); scheduleSettingsSave(); });
 els.searchExcludeInput?.addEventListener("input", handleSearchExcludeInput);
 els.discordWebhookInput?.addEventListener("input", scheduleSettingsSave);
 els.discordNotifyAddTodoBtn?.addEventListener("click", () => { addDiscordNotifyRow("todo", 60); scheduleSettingsSave(); });
@@ -870,13 +873,28 @@ function showClipperPopup({ title, url, folder, html = "", excerpt = "", path: i
   const status = document.getElementById("owv-clip-status");
   const saveBtn = document.getElementById("owv-clip-save");
 
-  titleInput.value = title || "";
+  const matchLabel = (p) => getClipperLabels().find(({ path: lp }) => {
+    const prefix = lp.endsWith("/") ? lp : lp + "/";
+    return p === lp || p.startsWith(prefix);
+  })?.label || "";
+
+  let activeLabel = matchLabel(defaultPath);
+  titleInput.value = activeLabel ? `${title || safeTitle} (${activeLabel})` : (title || "");
   pathInput.value = defaultPath;
   preview.textContent = excerpt.trim() || url || "";
 
   titleInput.addEventListener("input", () => {
     const t = titleInput.value.trim() || safeTitle;
     pathInput.value = `${folder || "Clippings"}/${today} ${t.replace(/[/\\:*?"<>|]/g, " ").trim().slice(0, 80)}.md`;
+  });
+
+  pathInput.addEventListener("input", () => {
+    const newLabel = matchLabel(pathInput.value);
+    if (newLabel !== activeLabel) {
+      const base = titleInput.value.replace(/ \([^)]*\)$/, "").trim() || safeTitle;
+      titleInput.value = newLabel ? `${base} (${newLabel})` : base;
+      activeLabel = newLabel;
+    }
   });
 
   const close = () => overlay.remove();
@@ -2391,6 +2409,7 @@ async function loadServerSettings() {
     }
     renderDiscordFixedList("todo", Array.isArray(settings.discordFixedTimesTodo) ? settings.discordFixedTimesTodo : []);
     renderDiscordFixedList("event", Array.isArray(settings.discordFixedTimesEvent) ? settings.discordFixedTimesEvent : []);
+    renderClipperLabelList(Array.isArray(settings.clipperLabels) ? settings.clipperLabels : []);
   } catch {
     // Local storage remains the fallback for file:// or unavailable server settings.
   }
@@ -2925,6 +2944,7 @@ async function saveServerSettings() {
         discordNotifyOffsetsEvent: getDiscordNotifyOffsets("event"),
         discordFixedTimesTodo: getDiscordFixedTimes("todo"),
         discordFixedTimesEvent: getDiscordFixedTimes("event"),
+        clipperLabels: getClipperLabels(),
       }),
     });
   } catch {
@@ -9498,6 +9518,57 @@ function getDiscordNotifyOffsets(kind) {
     if (Number.isFinite(v) && v > 0) result.push(Math.round(v));
   });
   return result.length ? result : [60];
+}
+
+// ── Clipper Label List ──────────────────────────────────────────────────────
+
+function renderClipperLabelList(pairs) {
+  const container = els.clipperLabelList;
+  if (!container) return;
+  container.innerHTML = "";
+  pairs.forEach(({ path, label }) => addClipperLabelRow(path, label));
+}
+
+function addClipperLabelRow(path = "", label = "") {
+  const container = els.clipperLabelList;
+  if (!container) return;
+  const row = document.createElement("div");
+  row.className = "clipper-label-row";
+  const pathInput = document.createElement("input");
+  pathInput.type = "text";
+  pathInput.placeholder = "경로 (예: Clippings/Tech)";
+  pathInput.value = path;
+  pathInput.className = "clipper-label-path-input";
+  pathInput.addEventListener("input", scheduleSettingsSave);
+  const arrow = document.createElement("span");
+  arrow.className = "clipper-label-arrow";
+  arrow.textContent = "→";
+  const labelInput = document.createElement("input");
+  labelInput.type = "text";
+  labelInput.placeholder = "태그 텍스트";
+  labelInput.value = label;
+  labelInput.className = "clipper-label-text-input";
+  labelInput.addEventListener("input", scheduleSettingsSave);
+  const delBtn = document.createElement("button");
+  delBtn.type = "button";
+  delBtn.className = "discord-notify-del-btn";
+  delBtn.textContent = "×";
+  delBtn.addEventListener("click", () => { row.remove(); scheduleSettingsSave(); });
+  row.append(pathInput, arrow, labelInput, delBtn);
+  container.append(row);
+}
+
+function getClipperLabels() {
+  const container = els.clipperLabelList;
+  if (!container) return [];
+  const rows = container.querySelectorAll(".clipper-label-row");
+  const result = [];
+  rows.forEach((row) => {
+    const path = row.querySelector(".clipper-label-path-input")?.value.trim() || "";
+    const label = row.querySelector(".clipper-label-text-input")?.value.trim() || "";
+    if (path && label) result.push({ path, label });
+  });
+  return result;
 }
 
 // ── Discord Fixed Time List ─────────────────────────────────────────────────
