@@ -1785,7 +1785,9 @@ function renderDirChildren(dir, parent, matcher, folderPaths, excludePaths = [])
       state.selectedPaths.clear();
       state.selectedPaths.add(node.path);
       state.lastSelectedPath = node.path;
-      renderTree();
+      // 즉시 DOM 클래스만 업데이트 (전체 renderTree 없이)
+      els.sidebarPanel?.querySelectorAll(".tree-row.selected").forEach((el) => el.classList.remove("selected"));
+      row.classList.add("selected");
       if (node.kind === "directory") {
         node.collapsed = !node.collapsed;
         renderTree();
