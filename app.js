@@ -770,6 +770,24 @@ function handleUrlAction() {
     window.history.replaceState(null, "", window.location.pathname);
     handleSharedUrl(sharedUrl, sharedTitle);
   }
+  const hash = window.location.hash;
+  if (hash.startsWith("#clip=")) {
+    window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    try {
+      const data = JSON.parse(decodeURIComponent(escape(atob(hash.slice(6)))));
+      const folder = localStorage.getItem("obsidian-web-viewer-clipper-folder") || "Clippings";
+      const show = () => showClipperPopup({
+        title: data.title || "",
+        url: data.url || "",
+        html: data.html || "",
+        excerpt: data.excerpt || "",
+        folder: data.folder || folder,
+        path: data.path || "",
+      });
+      if (state.vaultLoaded) show();
+      else window.addEventListener("vaultReady", show, { once: true });
+    } catch (e) {}
+  }
 }
 
 function handleSharedUrl(sharedUrl, sharedTitle = "") {
@@ -822,12 +840,12 @@ function handleSharedUrl(sharedUrl, sharedTitle = "") {
   }
 }
 
-function showClipperPopup({ title, url, folder }) {
+function showClipperPopup({ title, url, folder, html = "", excerpt = "", path: initialPath = "" }) {
   document.getElementById("owv-clip-overlay")?.remove();
 
   const today = new Date().toISOString().slice(0, 10);
   const safeTitle = (title || "Clipped Page").replace(/[/\\:*?"<>|]/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
-  const defaultPath = `${folder || "Clippings"}/${today} ${safeTitle}.md`;
+  const defaultPath = initialPath || `${folder || "Clippings"}/${today} ${safeTitle}.md`;
 
   const buildContent = (t) =>
     `---\ntitle: "${t.replace(/"/g, '\\"')}"\nurl: ${url}\ndate: ${today}\n---\n\n[${t}](${url})`;
@@ -854,7 +872,7 @@ function showClipperPopup({ title, url, folder }) {
 
   titleInput.value = title || "";
   pathInput.value = defaultPath;
-  preview.textContent = url || "";
+  preview.textContent = excerpt.trim() || url || "";
 
   titleInput.addEventListener("input", () => {
     const t = titleInput.value.trim() || safeTitle;
@@ -873,10 +891,13 @@ function showClipperPopup({ title, url, folder }) {
     saveBtn.textContent = "저장 중…";
     status.textContent = "";
     try {
+      const body = html
+        ? { path: savePath, title: saveTitle, url, html }
+        : { path: savePath, content: buildContent(saveTitle) };
       const res = await fetch("/api/clip", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path: savePath, content: buildContent(saveTitle) }),
+        body: JSON.stringify(body),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "HTTP error");
