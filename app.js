@@ -9405,9 +9405,14 @@ function getDiscordFixedTimes(kind) {
   return result;
 }
 
-// ── Time Dropdown ────────────────────────────────────────────────────────────
+// ── Clock Picker ────────────────────────────────────────────────────────────
 
-const timeDrop = { targetInput: null, hour24: 0, minute: 0 };
+const clockPicker = {
+  targetInput: null,
+  mode: "hour",
+  hour24: 12,
+  minute: 0,
+};
 
 function showClockPicker(inputEl) {
   if (!inputEl) return;
@@ -9415,92 +9420,134 @@ function showClockPicker(inputEl) {
     try { inputEl.showPicker(); } catch { inputEl.focus(); }
     return;
   }
-  const dropdown = document.getElementById("timeDropdown");
-  if (!dropdown) return;
+  const dialog = document.getElementById("clockPickerDialog");
+  if (!dialog) return;
 
-  timeDrop.targetInput = inputEl;
+  clockPicker.targetInput = inputEl;
+  clockPicker.mode = "hour";
   const val = inputEl.value;
   if (val) {
     const [h, m] = val.split(":").map(Number);
-    timeDrop.hour24 = isNaN(h) ? 0 : h;
-    timeDrop.minute = isNaN(m) ? 0 : Math.round(m / 5) * 5 % 60;
+    clockPicker.hour24 = isNaN(h) ? 12 : h;
+    clockPicker.minute = isNaN(m) ? 0 : Math.round(m / 5) * 5 % 60;
   } else {
-    timeDrop.hour24 = 0;
-    timeDrop.minute = 0;
+    clockPicker.hour24 = 12;
+    clockPicker.minute = 0;
   }
 
-  renderTimeDropdown();
+  renderClockPickerDisplay();
+  renderClockFace();
 
-  // Position below the input, clamped to viewport
+  // input 아래에 위치, 뷰포트 밖으로 나가면 위로 올림
+  dialog.showModal();
   const rect = inputEl.getBoundingClientRect();
-  const dropH = 220;
-  const dropW = 130;
-  let top = rect.bottom + 4;
+  const dw = dialog.offsetWidth || 280;
+  const dh = dialog.offsetHeight || 360;
+  let top = rect.bottom + 6;
   let left = rect.left;
-  if (top + dropH > window.innerHeight - 8) top = rect.top - dropH - 4;
-  if (left + dropW > window.innerWidth - 8) left = window.innerWidth - dropW - 8;
-  dropdown.style.top = `${top}px`;
-  dropdown.style.left = `${Math.max(8, left)}px`;
+  if (top + dh > window.innerHeight - 8) top = rect.top - dh - 6;
+  if (left + dw > window.innerWidth - 8) left = window.innerWidth - dw - 8;
+  dialog.style.top = `${Math.max(8, top)}px`;
+  dialog.style.left = `${Math.max(8, left)}px`;
+}
 
-  dropdown.showModal();
+function clockHour12() { return clockPicker.hour24 % 12 || 12; }
+function clockIsAM() { return clockPicker.hour24 < 12; }
 
-  // Scroll selected items into view after render
-  requestAnimationFrame(() => {
-    dropdown.querySelector(".time-drop-item.selected")?.scrollIntoView({ block: "center" });
-    dropdown.querySelectorAll(".time-drop-col").forEach((col) => {
-      col.querySelector(".time-drop-item.selected")?.scrollIntoView({ block: "center" });
+function renderClockPickerDisplay() {
+  const hBtn = document.getElementById("clockPickerHourBtn");
+  const mBtn = document.getElementById("clockPickerMinuteBtn");
+  const amBtn = document.getElementById("clockPickerAM");
+  const pmBtn = document.getElementById("clockPickerPM");
+  if (hBtn) {
+    hBtn.textContent = String(clockHour12());
+    hBtn.classList.toggle("clock-part-active", clockPicker.mode === "hour");
+  }
+  if (mBtn) {
+    mBtn.textContent = clockPicker.minute.toString().padStart(2, "0");
+    mBtn.classList.toggle("clock-part-active", clockPicker.mode === "minute");
+  }
+  amBtn?.classList.toggle("ampm-active", clockIsAM());
+  pmBtn?.classList.toggle("ampm-active", !clockIsAM());
+}
+
+function renderClockFace() {
+  const face = document.getElementById("clockFace");
+  if (!face) return;
+  const isHour = clockPicker.mode === "hour";
+  const values = isHour
+    ? [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+    : [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
+  const currentVal = isHour ? clockHour12() : clockPicker.minute;
+  const selIdx = values.indexOf(currentVal);
+  const handAngle = selIdx >= 0 ? (selIdx / 12) * 360 : 0;
+
+  const nums = values.map((val, i) => {
+    const angle = (i / 12) * 2 * Math.PI - Math.PI / 2;
+    const r = 38;
+    const x = (50 + Math.cos(angle) * r).toFixed(2);
+    const y = (50 + Math.sin(angle) * r).toFixed(2);
+    const label = isHour ? String(val) : val.toString().padStart(2, "0");
+    const sel = val === currentVal ? " clock-num-sel" : "";
+    return `<button class="clock-num${sel}" style="left:${x}%;top:${y}%" data-val="${val}">${label}</button>`;
+  }).join("");
+
+  face.innerHTML = `
+    <div class="clock-hand-wrap" style="transform:rotate(${handAngle}deg)">
+      <div class="clock-hand"></div>
+    </div>
+    <div class="clock-center-dot"></div>
+    ${nums}`;
+
+  face.querySelectorAll(".clock-num").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const val = Number(btn.dataset.val);
+      if (isHour) {
+        const pm = !clockIsAM();
+        let h = val === 12 ? 0 : val;
+        if (pm) h += 12;
+        clockPicker.hour24 = h;
+        clockPicker.mode = "minute";
+        renderClockPickerDisplay();
+        renderClockFace();
+      } else {
+        clockPicker.minute = val;
+        confirmClockPicker();
+      }
     });
   });
 }
 
-function renderTimeDropdown() {
-  const hoursCol = document.getElementById("timeDropHours");
-  const minsCol = document.getElementById("timeDropMinutes");
-  if (!hoursCol || !minsCol) return;
-
-  hoursCol.innerHTML = Array.from({ length: 24 }, (_, h) => {
-    const sel = h === timeDrop.hour24 ? " selected" : "";
-    return `<button type="button" class="time-drop-item${sel}" data-h="${h}">${h.toString().padStart(2, "0")}</button>`;
-  }).join("");
-
-  minsCol.innerHTML = Array.from({ length: 12 }, (_, i) => {
-    const m = i * 5;
-    const sel = m === timeDrop.minute ? " selected" : "";
-    return `<button type="button" class="time-drop-item${sel}" data-m="${m}">${m.toString().padStart(2, "0")}</button>`;
-  }).join("");
-
-  hoursCol.querySelectorAll(".time-drop-item").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      timeDrop.hour24 = Number(btn.dataset.h);
-      hoursCol.querySelectorAll(".time-drop-item").forEach((b) => b.classList.toggle("selected", b === btn));
-      commitTimeDrop();
-    });
-  });
-
-  minsCol.querySelectorAll(".time-drop-item").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      timeDrop.minute = Number(btn.dataset.m);
-      minsCol.querySelectorAll(".time-drop-item").forEach((b) => b.classList.toggle("selected", b === btn));
-      commitTimeDrop();
-    });
-  });
-}
-
-function commitTimeDrop() {
-  const { hour24, minute, targetInput } = timeDrop;
+function confirmClockPicker() {
+  const { hour24, minute, targetInput } = clockPicker;
   if (targetInput) {
     targetInput.value = `${hour24.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`;
     targetInput.dispatchEvent(new Event("input", { bubbles: true }));
     targetInput.dispatchEvent(new Event("change", { bubbles: true }));
   }
+  document.getElementById("clockPickerDialog")?.close();
 }
 
-(function initTimeDropEvents() {
-  const dropdown = document.getElementById("timeDropdown");
-  if (!dropdown) return;
-  // 외부 클릭 시 닫기 (dialog 배경 클릭)
-  dropdown.addEventListener("click", (e) => {
-    if (e.target === dropdown) dropdown.close();
+(function initClockPickerEvents() {
+  const dialog = document.getElementById("clockPickerDialog");
+  if (!dialog) return;
+  dialog.addEventListener("click", (e) => {
+    if (e.target === dialog) dialog.close();
   });
-  // ESC 키 닫기는 dialog 기본 동작으로 처리됨
+  document.getElementById("clockPickerHourBtn")?.addEventListener("click", () => {
+    clockPicker.mode = "hour";
+    renderClockPickerDisplay();
+    renderClockFace();
+  });
+  document.getElementById("clockPickerMinuteBtn")?.addEventListener("click", () => {
+    clockPicker.mode = "minute";
+    renderClockPickerDisplay();
+    renderClockFace();
+  });
+  document.getElementById("clockPickerAM")?.addEventListener("click", () => {
+    if (!clockIsAM()) { clockPicker.hour24 -= 12; renderClockPickerDisplay(); }
+  });
+  document.getElementById("clockPickerPM")?.addEventListener("click", () => {
+    if (clockIsAM()) { clockPicker.hour24 += 12; renderClockPickerDisplay(); }
+  });
 })();

@@ -181,11 +181,20 @@
     <div id="syncStatus" class="sync-status sync-status-bar" hidden></div>
     <div id="connectionBanner" class="connection-banner" hidden></div>
 
-    <!-- Time Dropdown -->
-    <dialog id="timeDropdown" class="time-dropdown">
-      <div id="timeDropHours" class="time-drop-col"></div>
-      <div class="time-drop-sep">:</div>
-      <div id="timeDropMinutes" class="time-drop-col"></div>
+    <!-- Clock Picker -->
+    <dialog id="clockPickerDialog" class="clock-picker-dialog">
+      <div class="clock-picker-header">
+        <button class="clock-display-part" id="clockPickerHourBtn">12</button>
+        <span class="clock-sep">:</span>
+        <button class="clock-display-part" id="clockPickerMinuteBtn">00</button>
+        <div class="clock-picker-ampm">
+          <button class="ampm-btn" id="clockPickerAM">AM</button>
+          <button class="ampm-btn" id="clockPickerPM">PM</button>
+        </div>
+      </div>
+      <div class="clock-face-wrap">
+        <div id="clockFace" class="clock-face"></div>
+      </div>
     </dialog>
 
 
