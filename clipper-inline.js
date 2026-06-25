@@ -120,7 +120,7 @@
               fetch(SERVER + '/api/clip', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ path: savedPath, content: updatedContent }),
+                body: JSON.stringify({ path: savedPath, content: updatedContent, overwrite: true }),
               }).catch(function () {});
             });
         })

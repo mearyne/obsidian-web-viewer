@@ -926,7 +926,7 @@ function showClipperPopup({ title, url, folder, path: initialPath = "" }) {
             await fetch("/api/clip", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ path: savedPath, content: updatedContent }),
+              body: JSON.stringify({ path: savedPath, content: updatedContent, overwrite: true }),
             });
           }
         } catch {}

@@ -1649,12 +1649,14 @@ function clipWebPage(body, res) {
   let finalFilePath = resolveVaultFilePath(safePath);
   if (!finalFilePath) { sendJsonCors(res, 403, { error: "Forbidden path" }); return; }
 
-  // Avoid overwriting: append suffix if file exists
-  let suffix = 0;
-  while (fs.existsSync(finalFilePath) && suffix < 99) {
-    suffix++;
-    finalSafePath = safePath.replace(/\.md$/, "") + " " + suffix + ".md";
-    finalFilePath = resolveVaultFilePath(finalSafePath) || "";
+  // Avoid overwriting unless explicitly requested
+  if (!payload.overwrite) {
+    let suffix = 0;
+    while (fs.existsSync(finalFilePath) && suffix < 99) {
+      suffix++;
+      finalSafePath = safePath.replace(/\.md$/, "") + " " + suffix + ".md";
+      finalFilePath = resolveVaultFilePath(finalSafePath) || "";
+    }
   }
   if (!finalFilePath) { sendJsonCors(res, 403, { error: "Forbidden path" }); return; }
 
