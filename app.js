@@ -2389,10 +2389,16 @@ function handleNewNotePathInput() {
   scheduleSettingsSave();
 }
 
-function updateBookmarkletHref(folder) {
+async function updateBookmarkletHref(folder) {
   const link = document.getElementById("bookmarkletLink");
   if (!link) return;
-  link.href = `/api/clip-bookmarklet?folder=${encodeURIComponent(folder || "Clippings")}`;
+  try {
+    const res = await fetch(`/api/clip-bookmarklet?folder=${encodeURIComponent(folder || "Clippings")}`);
+    const code = await res.text();
+    link.href = code;
+  } catch (e) {
+    link.href = "#";
+  }
 }
 
 function handleImagePathInput() {
