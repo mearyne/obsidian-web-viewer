@@ -9,22 +9,6 @@
   var prev = document.getElementById('owv-clip-overlay');
   if (prev) { prev.remove(); }
 
-  function extractArticle() {
-    if (window.Readability) {
-      try {
-        var clone = document.cloneNode(true);
-        var article = new window.Readability(clone).parse();
-        if (article && article.content) return article;
-      } catch (e) {}
-    }
-    var selectors = ['article', '[role="main"]', 'main', '.post-content', '.article-content', '.entry-content', '.content', '#content', '#main'];
-    for (var i = 0; i < selectors.length; i++) {
-      var el = document.querySelector(selectors[i]);
-      if (el && el.textContent.trim().length > 200) return { title: document.title, content: el.innerHTML, excerpt: '' };
-    }
-    return { title: document.title, content: document.body.innerHTML, excerpt: '' };
-  }
-
   function todayStr() {
     var d = new Date(), pad = function (n) { return n < 10 ? '0' + n : '' + n; };
     return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
@@ -47,12 +31,11 @@
     return label ? baseTitle + ' (' + label + ')' : baseTitle;
   }
 
-  function showPopup(article, clipperLabels) {
-    var rawTitle = (article.title || document.title).trim() || 'Clipped Page';
+  function showPopup(clipperLabels) {
+    var rawTitle = document.title.trim() || 'Clipped Page';
     var pageUrl = location.href;
     var today = todayStr();
-    var html = article.content || '';
-    var excerpt = (article.excerpt || article.textContent || '').trim().slice(0, 600);
+    var excerpt = pageUrl;
     var defaultPath = DEFAULT_FOLDER + '/' + today + ' ' + safeName(rawTitle) + '.md';
     var initialLabel = matchLabel(defaultPath, clipperLabels);
     var displayTitle = applyLabel(rawTitle, initialLabel);
@@ -79,7 +62,7 @@
 
     titleInput.value = displayTitle;
     pathInput.value = defaultPath;
-    preview.textContent = excerpt || '(본문 없음)';
+    preview.textContent = excerpt;
 
     var activeLabel = initialLabel;
 
@@ -108,13 +91,14 @@
     saveBtn.addEventListener('click', function () {
       var saveTitle = titleInput.value.trim() || displayTitle;
       var savePath = pathInput.value.trim() || defaultPath;
+      var content = '---\ntitle: "' + saveTitle.replace(/"/g, '\\"') + '"\nurl: ' + pageUrl + '\ndate: ' + today + '\n---\n\n[' + saveTitle + '](' + pageUrl + ')';
       saveBtn.disabled = true;
       saveBtn.textContent = '저장 중…';
       status.textContent = '';
       fetch(SERVER + '/api/clip', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: savePath, title: saveTitle, url: pageUrl, html: html }),
+        body: JSON.stringify({ path: savePath, content: content }),
       })
         .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
         .then(function (r) {
@@ -133,9 +117,8 @@
     });
   }
 
-  var article = extractArticle();
   fetch(SERVER + '/api/settings', { cache: 'no-store' })
     .then(function (r) { return r.ok ? r.json() : {}; })
-    .then(function (s) { showPopup(article, Array.isArray(s.clipperLabels) ? s.clipperLabels : []); })
-    .catch(function () { showPopup(article, []); });
+    .then(function (s) { showPopup(Array.isArray(s.clipperLabels) ? s.clipperLabels : []); })
+    .catch(function () { showPopup([]); });
 })();

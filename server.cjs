@@ -1506,18 +1506,15 @@ async function fetchAndParseUrl(targetUrl, res) {
 }
 
 function sendClipBookmarklet(folder, req, res) {
-  const readabilityPath = path.join(root, "node_modules/@mozilla/readability/Readability.js");
   const clipperPath = path.join(root, "clipper-inline.js");
   const origin = `${req.headers["x-forwarded-proto"] || "http"}://${req.headers.host}`;
 
   try {
-    const readabilityCode = fs.readFileSync(readabilityPath, "utf8");
     const clipperTemplate = fs.readFileSync(clipperPath, "utf8");
     const clipperCode = clipperTemplate
       .replace("'__SERVER__'", JSON.stringify(origin))
       .replace("'__FOLDER__'", JSON.stringify(folder));
-    const combined = readabilityCode + "\n;\n" + clipperCode;
-    const bookmarklet = "javascript:" + encodeURIComponent("(function(){" + combined + "})();");
+    const bookmarklet = "javascript:" + encodeURIComponent("(function(){" + clipperCode + "})();");
     res.writeHead(200, {
       "Content-Type": "text/plain; charset=utf-8",
       "Access-Control-Allow-Origin": "*",
