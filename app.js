@@ -831,7 +831,14 @@ function handleSharedUrl(sharedUrl, sharedTitle = "") {
 
 function matchClipperRule(pageUrl) {
   const rules = getClipperRules();
-  return rules.find((r) => r.urlPattern && pageUrl.includes(r.urlPattern)) || null;
+  return rules.find((r) => {
+    if (!r.urlPattern) return false;
+    if (r.urlPattern.includes("*")) {
+      const regex = new RegExp(r.urlPattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*"));
+      return regex.test(pageUrl);
+    }
+    return pageUrl.includes(r.urlPattern);
+  }) || null;
 }
 
 function buildClipEmbedContent(title, url, meta) {

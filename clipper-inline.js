@@ -20,7 +20,14 @@
 
   function matchRule(pageUrl, rules) {
     for (var i = 0; i < rules.length; i++) {
-      if (rules[i].urlPattern && pageUrl.includes(rules[i].urlPattern)) return rules[i];
+      var p = rules[i].urlPattern;
+      if (!p) continue;
+      if (p.includes('*')) {
+        var regex = new RegExp(p.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*'));
+        if (regex.test(pageUrl)) return rules[i];
+      } else if (pageUrl.includes(p)) {
+        return rules[i];
+      }
     }
     return null;
   }
