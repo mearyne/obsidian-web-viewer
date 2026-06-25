@@ -3054,6 +3054,7 @@ function renderCurrentDocument(showOpenStep = null, diagnostics = null) {
     markRenderStep("체크박스 연결 중");
     bindRenderedTaskCheckboxes(els.markdownView);
     bindEmbedCardToggles(els.markdownView);
+    bindEmbedRefreshButtons(els.markdownView);
     markRenderStep("링크 연결 중");
     bindWikiLinks(els.markdownView);
     markRenderStep("이미지 그룹 정리 중");
@@ -8257,6 +8258,39 @@ function bindEmbedCardToggles(root) {
   });
 }
 
+function bindEmbedRefreshButtons(root) {
+  root.querySelectorAll(".embed-refresh-btn").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const embedUrl = btn.dataset.embedUrl;
+      if (!embedUrl || !state.currentPath || !state.serverVaultWritable) return;
+      btn.textContent = "⏳";
+      btn.disabled = true;
+      try {
+        const metaRes = await fetch(`/api/url-meta?url=${encodeURIComponent(embedUrl)}`);
+        if (!metaRes.ok) throw new Error("meta fetch failed");
+        const meta = await metaRes.json();
+        const fullBlock = buildEmbedBlock(meta, embedUrl);
+        const loadingPattern = new RegExp(
+          "```embed\\s*\\nstatus:\\s*\"loading\"\\s*\\nurl:\\s*\"" +
+          embedUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") +
+          "\"\\s*\\n```",
+          "g"
+        );
+        const newContent = state.currentContent.replace(loadingPattern, fullBlock);
+        if (newContent === state.currentContent) throw new Error("block not found");
+        await writeServerFile(state.currentPath, newContent, { backup: false });
+        state.currentContent = newContent;
+        renderCurrentDocument();
+      } catch {
+        btn.textContent = "🔄";
+        btn.disabled = false;
+      }
+    });
+  });
+}
+
 function bindRenderedTaskCheckboxes(root) {
   root.querySelectorAll(".task-list-checkbox[data-task-path][data-task-line]").forEach((checkbox) => {
     checkbox.addEventListener("click", (event) => {
@@ -8290,11 +8324,12 @@ function renderEmbedBlock(code) {
   if (!url) return `<pre class="code-block language-text"><code>${escapeHtml(code)}</code></pre>`;
   if (status === "loading") {
     return `<div class="link-embed-wrap">` +
-      `<div class="link-embed-card link-embed-loading">` +
+      `<a href="${escapeAttribute(url)}" target="_blank" rel="noopener" class="link-embed-card link-embed-loading">` +
+      `<button class="embed-refresh-btn" type="button" title="새로고침" data-embed-url="${escapeAttribute(url)}">🔄</button>` +
       `<div class="link-embed-body">` +
       `<div class="link-embed-title link-embed-fetching">불러오는 중...</div>` +
       `<div class="link-embed-url"><span>${escapeHtml(url)}</span></div>` +
-      `</div></div></div>`;
+      `</div></a></div>`;
   }
   const favicon = get("favicon");
   const noVisual = !image && !favicon;
