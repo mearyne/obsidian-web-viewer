@@ -5994,6 +5994,135 @@ function showMoveMultiDialog() {
   });
 }
 
+function showMergeDialog(initialPaths) {
+  document.getElementById("owv-merge-overlay")?.remove();
+
+  const overlay = document.createElement("div");
+  overlay.id = "owv-merge-overlay";
+  overlay.className = "owv-move-overlay";
+
+  const dialog = document.createElement("div");
+  dialog.className = "owv-move-dialog";
+  dialog.style.maxWidth = "520px";
+
+  // 기본 저장 경로: 첫 번째 파일의 폴더 + "합치기.md"
+  const firstPath = initialPaths[0] || "";
+  const defaultFolder = firstPath.includes("/") ? firstPath.slice(0, firstPath.lastIndexOf("/")) : "";
+  const defaultSavePath = (defaultFolder ? defaultFolder + "/" : "") + "합치기.md";
+
+  let orderedPaths = [...initialPaths];
+
+  function getName(p) { return p.split("/").pop().replace(/\.md$/i, ""); }
+
+  function renderList() {
+    listEl.innerHTML = "";
+    orderedPaths.forEach((p, i) => {
+      const item = document.createElement("div");
+      item.className = "owv-merge-item";
+      item.innerHTML = `<span class="owv-merge-name" title="${p}">${getName(p)}</span><span class="owv-merge-btns"><button type="button" data-dir="-1" data-i="${i}" ${i === 0 ? "disabled" : ""}>▲</button><button type="button" data-dir="1" data-i="${i}" ${i === orderedPaths.length - 1 ? "disabled" : ""}>▼</button></span>`;
+      listEl.appendChild(item);
+    });
+  }
+
+  dialog.innerHTML = `
+    <div class="owv-move-title">합치기 (${initialPaths.length}개)</div>
+    <div class="owv-merge-list-wrap"></div>
+    <label class="owv-move-label" style="margin-top:10px">저장 경로 (.md)</label>
+    <input class="owv-move-input" type="text" value="${defaultSavePath}">
+    <div class="owv-move-footer"><button class="owv-move-cancel">취소</button><button class="owv-move-confirm">합치기</button></div>`;
+
+  const listEl = document.createElement("div");
+  listEl.className = "owv-merge-list";
+  dialog.querySelector(".owv-merge-list-wrap").appendChild(listEl);
+  renderList();
+
+  listEl.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-dir]");
+    if (!btn) return;
+    const i = Number(btn.dataset.i);
+    const dir = Number(btn.dataset.dir);
+    const j = i + dir;
+    if (j < 0 || j >= orderedPaths.length) return;
+    [orderedPaths[i], orderedPaths[j]] = [orderedPaths[j], orderedPaths[i]];
+    renderList();
+  });
+
+  overlay.appendChild(dialog);
+  document.body.appendChild(overlay);
+
+  const pathInput = dialog.querySelector(".owv-move-input");
+  const close = () => overlay.remove();
+
+  dialog.querySelector(".owv-move-cancel").addEventListener("click", close);
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+
+  dialog.querySelector(".owv-move-confirm").addEventListener("click", async () => {
+    const savePath = pathInput.value.trim();
+    if (!savePath || !savePath.endsWith(".md")) {
+      showAppToast("저장 경로는 .md 파일이어야 합니다.", "error");
+      return;
+    }
+
+    const confirmBtn = dialog.querySelector(".owv-move-confirm");
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = "합치는 중…";
+
+    try {
+      const parts = [];
+      for (const p of orderedPaths) {
+        const res = await fetch(`/api/vault-file?path=${encodeURIComponent(p)}`);
+        if (!res.ok) throw new Error(`읽기 실패: ${p}`);
+        const data = await res.json();
+        let body = typeof data.content === "string" ? data.content : "";
+        // frontmatter 제거
+        if (body.startsWith("---")) {
+          const end = body.indexOf("\n---", 3);
+          if (end !== -1) body = body.slice(end + 4).trimStart();
+        }
+        parts.push(`<!-- ${getName(p)} -->\n\n${body}`);
+      }
+
+      const merged = parts.join("\n\n---\n\n");
+      const putRes = await fetch(`/api/vault-file?path=${encodeURIComponent(savePath)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: merged }),
+      });
+      if (!putRes.ok) {
+        const j = await putRes.json().catch(() => ({}));
+        throw new Error(j.error || "저장 실패");
+      }
+
+      // 원본 삭제
+      for (const p of orderedPaths) {
+        await fetch(`/api/vault-file?path=${encodeURIComponent(p)}`, { method: "DELETE" }).catch(() => {});
+        removeFileNode(p);
+        state.tasks = state.tasks.filter((t) => t.path !== p);
+        state.calendarTaskFiles.delete(p);
+        const tabsToClose = state.tabs.filter((t) => t.path === p).map((t) => t.id);
+        for (const id of tabsToClose) await closeTab(id);
+      }
+
+      state.selectedPaths.clear();
+      await reloadVaultFileList();
+      await openFile(savePath);
+      showAppToast(`${orderedPaths.length}개 파일을 합쳤습니다.`, "success");
+      close();
+    } catch (e) {
+      showAppToast(`합치기 실패: ${e.message}`, "error");
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = "합치기";
+    }
+  });
+
+  pathInput.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") close();
+  });
+
+  pathInput.focus();
+  pathInput.setSelectionRange(pathInput.value.length, pathInput.value.length);
+}
+
 async function moveVaultFile(oldPath, newPath) {
   const res = await fetch(`/api/vault-file?path=${encodeURIComponent(oldPath)}`, {
     method: "PATCH",
@@ -8960,8 +9089,10 @@ function showNodeContextMenu(x, y, path, isDirectory = false) {
 
   const count = state.selectedPaths.size;
   if (count > 1) {
-    menu.innerHTML = `<button type="button" data-action="move">이동하기 (${count}개)</button><button type="button" data-action="delete" class="danger">삭제하기 (${count}개)</button>`;
+    const onlyFiles = [...state.selectedPaths].every((p) => !state.directories.has(p));
+    menu.innerHTML = `<button type="button" data-action="move">이동하기 (${count}개)</button>${onlyFiles ? `<button type="button" data-action="merge">합치기 (${count}개)</button>` : ""}<button type="button" data-action="delete" class="danger">삭제하기 (${count}개)</button>`;
     menu.querySelector("[data-action='move']").addEventListener("click", () => { menu.remove(); showMoveMultiDialog(); });
+    menu.querySelector("[data-action='merge']")?.addEventListener("click", () => { menu.remove(); showMergeDialog([...state.selectedPaths]); });
     menu.querySelector("[data-action='delete']").addEventListener("click", () => { menu.remove(); void deleteSelected(); });
   } else {
     menu.innerHTML = `<button type="button" data-action="move">이동하기</button><button type="button" data-action="delete" class="danger">삭제하기${isDirectory ? " (폴더)" : ""}</button>`;
