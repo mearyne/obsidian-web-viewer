@@ -4239,6 +4239,7 @@ async function buildCalendarView() {
   closeSidebar();
   state.calendarKind = "tasks";
   state.calendarMode = "month";
+  state.calendarDate = new Date();
   showCalendarView();
   renderCalendar();
   scheduleCalendarRefresh();
@@ -4442,6 +4443,11 @@ async function openCalendarFromShortcut() {
   const calTab = state.tabs.find((t) => t.view === "calendar");
   if (calTab && calTab.id !== state.activeTabId) {
     await switchTab(calTab.id);
+    state.calendarKind = "tasks";
+    state.calendarMode = "month";
+    state.calendarDate = new Date();
+    showCalendarView();
+    renderCalendar();
     return;
   }
   if (state.activeView !== "calendar") {
