@@ -1783,7 +1783,9 @@ function renderDirChildren(dir, parent, matcher, folderPaths, excludePaths = [])
         return;
       }
       state.selectedPaths.clear();
+      state.selectedPaths.add(node.path);
       state.lastSelectedPath = node.path;
+      renderTree();
       if (node.kind === "directory") {
         node.collapsed = !node.collapsed;
         renderTree();
