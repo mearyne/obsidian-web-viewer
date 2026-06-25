@@ -164,10 +164,18 @@ const els = {
   taskCreateDialog: document.querySelector("#taskCreateDialog"),
   taskTitleInput: document.querySelector("#taskTitleInput"),
   taskStartDateBtn: document.querySelector("#taskStartDateBtn"),
+  taskStartDatePrevBtn: document.querySelector("#taskStartDatePrevBtn"),
+  taskStartDateNextBtn: document.querySelector("#taskStartDateNextBtn"),
+  taskStartDateClearBtn: document.querySelector("#taskStartDateClearBtn"),
   taskDueDateBtn: document.querySelector("#taskDueDateBtn"),
+  taskDueDatePrevBtn: document.querySelector("#taskDueDatePrevBtn"),
+  taskDueDateNextBtn: document.querySelector("#taskDueDateNextBtn"),
+  taskDueDateClearBtn: document.querySelector("#taskDueDateClearBtn"),
   taskDatePickerCal: document.querySelector("#taskDatePickerCal"),
   taskStartTimeInput: document.querySelector("#taskStartTimeInput"),
+  taskStartTimeClearBtn: document.querySelector("#taskStartTimeClearBtn"),
   taskDueTimeInput: document.querySelector("#taskDueTimeInput"),
+  taskDueTimeClearBtn: document.querySelector("#taskDueTimeClearBtn"),
   taskCreateCancelBtn: document.querySelector("#taskCreateCancelBtn"),
   taskCreateConfirmBtn: document.querySelector("#taskCreateConfirmBtn"),
   taskKindChips: document.querySelector("#taskKindChips"),
@@ -192,6 +200,7 @@ const els = {
   taskEditConfirmBtn: document.querySelector("#taskEditConfirmBtn"),
   taskEditOpenFileBtn: document.querySelector("#taskEditOpenFileBtn"),
   taskEditDeleteBtn: document.querySelector("#taskEditDeleteBtn"),
+  taskEditDuplicateBtn: document.querySelector("#taskEditDuplicateBtn"),
   taskEditKindChips: document.querySelector("#taskEditKindChips"),
   taskEditCategoryChips: document.querySelector("#taskEditCategoryChips"),
   taskEditPriorityChips: document.querySelector("#taskEditPriorityChips"),
@@ -6506,24 +6515,32 @@ function setNotifyChip(btn, on) {
   btn.textContent = on ? "🔔" : "🔕";
 }
 
-async function showTaskCreateDialog(dueDate, startDate = "") {
+async function showTaskCreateDialog(dueDate, startDate = "", prefill = null) {
   if (!els.taskCreateDialog) return;
 
   // reset state
   state.taskDialogActiveField = null;
-  state.taskDialogMeta = { kind: "할일", category: null, priority: null, tags: [] };
+  state.taskDialogMeta = prefill
+    ? { kind: prefill.kind || "할일", category: prefill.category || null, priority: prefill.priority || null, tags: [...(prefill.tags || [])] }
+    : { kind: "할일", category: null, priority: null, tags: [] };
   state.taskCreateSourceDate = startDate || dueDate;
-  if (els.taskTitleInput) els.taskTitleInput.value = "";
-  if (els.taskCreateSubItemsInput) els.taskCreateSubItemsInput.value = "";
-  if (els.taskStartTimeInput) els.taskStartTimeInput.value = "";
-  if (els.taskDueTimeInput) els.taskDueTimeInput.value = "";
+  if (els.taskTitleInput) els.taskTitleInput.value = prefill?.text || "";
+  if (els.taskCreateSubItemsInput) els.taskCreateSubItemsInput.value = prefill ? taskSubItemsToEditableText(prefill.subItems) : "";
+  if (els.taskStartTimeInput) {
+    els.taskStartTimeInput.value = prefill?.startTime || "";
+    if (els.taskStartTimeClearBtn) els.taskStartTimeClearBtn.hidden = !els.taskStartTimeInput.value;
+  }
+  if (els.taskDueTimeInput) {
+    els.taskDueTimeInput.value = prefill?.dueTime || "";
+    if (els.taskDueTimeClearBtn) els.taskDueTimeClearBtn.hidden = !els.taskDueTimeInput.value;
+  }
   syncMobileTaskTimePlaceholders();
   setTaskDialogDate("due", dueDate);
   setTaskDialogDate("start", startDate);
   renderTaskDatePicker(null);
   renderDialogTagChips();
   updateTaskDialogMetaUI();
-  setNotifyChip(els.taskNotifyChip, true);
+  setNotifyChip(els.taskNotifyChip, prefill ? prefill.notify !== false : true);
 
   els.taskCreateDialog.showModal();
   positionTaskCreateDialog();
@@ -6575,12 +6592,18 @@ function positionTaskEditDialog() {
 
 function setTaskDialogDate(field, value) {
   const btn = field === "start" ? els.taskStartDateBtn : els.taskDueDateBtn;
+  const prevBtn = field === "start" ? els.taskStartDatePrevBtn : els.taskDueDatePrevBtn;
+  const nextBtn = field === "start" ? els.taskStartDateNextBtn : els.taskDueDateNextBtn;
+  const clearBtn = field === "start" ? els.taskStartDateClearBtn : els.taskDueDateClearBtn;
   if (!btn) return;
   btn.dataset.date = value || "";
   if (!btn.dataset.emptyLabel) btn.dataset.emptyLabel = btn.textContent || "";
   const emptyLabel = isTouchPrimaryDevice() ? "--" : btn.dataset.emptyLabel;
   btn.textContent = value ? formatDateKorean(value) : emptyLabel;
   btn.classList.toggle("has-date", Boolean(value));
+  if (prevBtn) prevBtn.hidden = !value;
+  if (nextBtn) nextBtn.hidden = !value;
+  if (clearBtn) clearBtn.hidden = !value;
 }
 
 function syncMobileTaskTimePlaceholders() {
@@ -6613,6 +6636,19 @@ function normalizeTaskTimeInput(input) {
   const normalized = `${String(Math.floor(rounded / 60) % 24).padStart(2, "0")}:${String(rounded % 60).padStart(2, "0")}`;
   input.value = normalized;
   return normalized;
+}
+
+function shiftTaskCreateDate(field, days) {
+  const btn = field === "start" ? els.taskStartDateBtn : els.taskDueDateBtn;
+  const current = btn?.dataset.date;
+  if (!current) return;
+  const d = parseDateKey(current);
+  if (!d) return;
+  d.setDate(d.getDate() + days);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  setTaskDialogDate(field, `${yyyy}-${mm}-${dd}`);
 }
 
 function formatDateKorean(dateKey) {
@@ -6708,6 +6744,30 @@ function bindTaskCreateDialog() {
     }
   });
 
+  els.taskStartDateClearBtn?.addEventListener("click", () => {
+    setTaskDialogDate("start", "");
+    state.taskDialogActiveField = null;
+    renderTaskDatePicker(null);
+  });
+
+  els.taskStartDatePrevBtn?.addEventListener("click", () => {
+    shiftTaskCreateDate("start", -1);
+  });
+
+  els.taskStartDateNextBtn?.addEventListener("click", () => {
+    shiftTaskCreateDate("start", 1);
+  });
+
+  els.taskStartTimeClearBtn?.addEventListener("click", () => {
+    if (els.taskStartTimeInput) els.taskStartTimeInput.value = "";
+    els.taskStartTimeClearBtn.hidden = true;
+  });
+
+  els.taskStartTimeInput?.addEventListener("input", () => {
+    if (els.taskStartTimeClearBtn) els.taskStartTimeClearBtn.hidden = !els.taskStartTimeInput.value;
+    applyTaskCreateStartDateHint();
+  });
+
   els.taskDueDateBtn?.addEventListener("click", () => {
     const field = "due";
     if (state.taskDialogActiveField === field) {
@@ -6718,6 +6778,28 @@ function bindTaskCreateDialog() {
     }
   });
 
+  els.taskDueDateClearBtn?.addEventListener("click", () => {
+    setTaskDialogDate("due", "");
+    state.taskDialogActiveField = null;
+    renderTaskDatePicker(null);
+  });
+
+  els.taskDueDatePrevBtn?.addEventListener("click", () => {
+    shiftTaskCreateDate("due", -1);
+  });
+
+  els.taskDueDateNextBtn?.addEventListener("click", () => {
+    shiftTaskCreateDate("due", 1);
+  });
+
+  els.taskDueTimeClearBtn?.addEventListener("click", () => {
+    if (els.taskDueTimeInput) els.taskDueTimeInput.value = "";
+    els.taskDueTimeClearBtn.hidden = true;
+  });
+
+  els.taskDueTimeInput?.addEventListener("input", () => {
+    if (els.taskDueTimeClearBtn) els.taskDueTimeClearBtn.hidden = !els.taskDueTimeInput.value;
+  });
 
   els.taskNotifyChip?.addEventListener("click", () => toggleNotifyChip(els.taskNotifyChip));
   els.taskEditNotifyChip?.addEventListener("click", () => toggleNotifyChip(els.taskEditNotifyChip));
@@ -6735,9 +6817,6 @@ function bindTaskCreateDialog() {
   els.taskDueTimeInput?.addEventListener("click", () => {
     if (!isTouchPrimaryDevice()) toggleInlineClock("create", "due");
   });
-  els.taskStartTimeInput?.addEventListener("input", applyTaskCreateStartDateHint);
-  els.taskStartTimeInput?.addEventListener("change", applyTaskCreateStartDateHint);
-
   els.taskCreateConfirmBtn?.addEventListener("click", async () => {
     const title = els.taskTitleInput?.value.trim() || "";
     const dueDate = els.taskDueDateBtn?.dataset.date || "";
@@ -6895,6 +6974,15 @@ function bindTaskEditDialog() {
     const task = state.taskEditTask;
     els.taskEditDialog.close("open");
     if (task?.path) await openFile(task.path);
+  });
+
+  els.taskEditDuplicateBtn?.addEventListener("click", async () => {
+    const task = state.taskEditTask;
+    if (!task) return;
+    els.taskEditDialog.close("cancel");
+    const dueDate = task.dates?.due || task.dates?.end || task.date || "";
+    const startDate = task.dates?.start || "";
+    await showTaskCreateDialog(dueDate, startDate, task);
   });
 
   els.taskEditDialogTitle?.addEventListener("keydown", (e) => {

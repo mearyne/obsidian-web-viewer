@@ -377,15 +377,31 @@
           <div class="task-create-field">
             <label>시작일 <span class="task-date-optional">(선택)</span></label>
             <div class="date-time-row">
-              <button type="button" id="taskStartDateBtn" class="date-picker-btn" data-date="">날짜 없음</button>
-              <input type="time" id="taskStartTimeInput" class="time-input" value="" step="300">
+              <div class="date-picker-row">
+                <button type="button" id="taskStartDatePrevBtn" class="date-nav-btn" aria-label="하루 전" hidden>←</button>
+                <button type="button" id="taskStartDateBtn" class="date-picker-btn" data-date="">날짜 없음</button>
+                <button type="button" id="taskStartDateNextBtn" class="date-nav-btn" aria-label="하루 후" hidden>→</button>
+                <button type="button" id="taskStartDateClearBtn" class="date-clear-btn" hidden aria-label="날짜 삭제">✕</button>
+              </div>
+              <div class="date-picker-row">
+                <input type="time" id="taskStartTimeInput" class="time-input" value="" step="300">
+                <button type="button" id="taskStartTimeClearBtn" class="date-clear-btn" hidden aria-label="시간 삭제">✕</button>
+              </div>
             </div>
           </div>
           <div class="task-create-field">
             <label>종료일</label>
             <div class="date-time-row">
-              <button type="button" id="taskDueDateBtn" class="date-picker-btn" data-date="">날짜 선택</button>
-              <input type="time" id="taskDueTimeInput" class="time-input" value="" step="300">
+              <div class="date-picker-row">
+                <button type="button" id="taskDueDatePrevBtn" class="date-nav-btn" aria-label="하루 전" hidden>←</button>
+                <button type="button" id="taskDueDateBtn" class="date-picker-btn" data-date="">날짜 선택</button>
+                <button type="button" id="taskDueDateNextBtn" class="date-nav-btn" aria-label="하루 후" hidden>→</button>
+                <button type="button" id="taskDueDateClearBtn" class="date-clear-btn" hidden aria-label="날짜 삭제">✕</button>
+              </div>
+              <div class="date-picker-row">
+                <input type="time" id="taskDueTimeInput" class="time-input" value="" step="300">
+                <button type="button" id="taskDueTimeClearBtn" class="date-clear-btn" hidden aria-label="시간 삭제">✕</button>
+              </div>
             </div>
           </div>
         </div>
@@ -488,6 +504,7 @@
         <div class="dialog-buttons">
           <button type="button" id="taskEditOpenFileBtn" class="task-edit-open-btn">📄 파일 열기</button>
           <button type="button" id="taskEditDeleteBtn" class="task-edit-delete-btn">🗑 삭제</button>
+          <button type="button" id="taskEditDuplicateBtn" class="task-edit-duplicate-btn">복제</button>
           <button type="button" id="taskViewCloseBtn" hidden>닫기</button>
           <button type="button" id="taskViewEditBtn" hidden>편집</button>
           <button type="button" id="taskEditCancelBtn">취소</button>
