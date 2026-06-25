@@ -120,6 +120,9 @@ const state = {
   customConfirmResolve: null,
   lastGPressAt: 0,
   taskCreateSourceDate: "",
+  selectedPaths: new Set(),
+  lastSelectedPath: null,
+  treeVisibleOrder: [],
 };
 
 const EXCALIDRAW_PREVIEW_ENABLED = false;
@@ -1495,6 +1498,7 @@ function getDirNode(path) {
 
 function renderTree() {
   const previousScrollTop = els.fileTree.scrollTop;
+  state.treeVisibleOrder = [];
   els.fileTree.replaceChildren();
   const query = els.searchInput.value;
   const trimmedQuery = query.trim();
@@ -1716,6 +1720,8 @@ function renderDirChildren(dir, parent, matcher, folderPaths, excludePaths = [])
       row.classList.add("directory");
     }
     if (node.path === state.currentPath) row.classList.add("active");
+    if (state.selectedPaths.has(node.path)) row.classList.add("selected");
+    state.treeVisibleOrder.push(node.path);
 
     const toggle = document.createElement("span");
     toggle.className = "tree-toggle";
@@ -1734,6 +1740,28 @@ function renderDirChildren(dir, parent, matcher, folderPaths, excludePaths = [])
     }
     row.addEventListener("click", async (event) => {
       event.stopPropagation();
+      if (event.ctrlKey || event.metaKey) {
+        if (state.selectedPaths.has(node.path)) state.selectedPaths.delete(node.path);
+        else state.selectedPaths.add(node.path);
+        state.lastSelectedPath = node.path;
+        renderTree();
+        return;
+      }
+      if (event.shiftKey && state.lastSelectedPath) {
+        const lastIdx = state.treeVisibleOrder.indexOf(state.lastSelectedPath);
+        const curIdx = state.treeVisibleOrder.indexOf(node.path);
+        if (lastIdx >= 0 && curIdx >= 0) {
+          const lo = Math.min(lastIdx, curIdx), hi = Math.max(lastIdx, curIdx);
+          state.treeVisibleOrder.slice(lo, hi + 1).forEach((p) => state.selectedPaths.add(p));
+        } else {
+          state.selectedPaths.add(node.path);
+        }
+        renderTree();
+        return;
+      }
+      state.selectedPaths.clear();
+      state.selectedPaths.add(node.path);
+      state.lastSelectedPath = node.path;
       if (node.kind === "directory") {
         node.collapsed = !node.collapsed;
         renderTree();
@@ -1743,12 +1771,16 @@ function renderDirChildren(dir, parent, matcher, folderPaths, excludePaths = [])
         else await openFile(node.path);
       }
     });
-    if (node.kind === "file") {
-      row.addEventListener("contextmenu", (e) => {
-        e.preventDefault();
-        showFileContextMenu(e.clientX, e.clientY, node.path);
-      });
-    }
+    row.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      if (!state.selectedPaths.has(node.path) || state.selectedPaths.size <= 1) {
+        state.selectedPaths.clear();
+        state.selectedPaths.add(node.path);
+        state.lastSelectedPath = node.path;
+        renderTree();
+      }
+      showNodeContextMenu(e.clientX, e.clientY, node.path, node.kind === "directory");
+    });
     group.append(row);
 
     if (hasContentMatch && state.contentSearchSnippetsVisible) {
@@ -5784,6 +5816,155 @@ async function deleteVaultFileByPath(filePath) {
   }
 }
 
+async function reloadVaultFileList() {
+  try {
+    const res = await fetch("/api/vault", { cache: "no-store" });
+    if (!res.ok) return;
+    const vault = await res.json();
+    if (!vault || !Array.isArray(vault.files)) return;
+    state.files.clear();
+    state.directories.clear();
+    state.root = makeDirNode(vault.name || state.vaultName, "");
+    state.directories.set("", state.root);
+    vault.files.forEach((file) => {
+      const normalizedPath = normalizeVaultPath(file.path);
+      if (!normalizedPath || !isIndexedFile(normalizedPath)) return;
+      const parts = normalizedPath.split("/");
+      const fileName = parts.pop();
+      let dir = state.root;
+      let dirPath = "";
+      parts.forEach((part) => {
+        const nextPath = dirPath ? `${dirPath}/${part}` : part;
+        if (!state.directories.has(nextPath)) {
+          const node = makeDirNode(part, nextPath);
+          state.directories.set(nextPath, node);
+          dir.children.set(part, node);
+        }
+        dir = state.directories.get(nextPath);
+        dirPath = nextPath;
+      });
+      const fileNode = {
+        kind: "file",
+        name: fileName,
+        path: normalizedPath,
+        url: file.url || "",
+        serverBacked: true,
+        size: file.size || 0,
+        updatedAt: file.updatedAt || file.modifiedAt || 0,
+        createdAt: file.createdAt || file.birthtime || file.updatedAt || 0,
+      };
+      state.files.set(normalizedPath, fileNode);
+      dir.children.set(fileName, fileNode);
+    });
+    refreshDirectoryMetadata();
+    renderTree();
+  } catch {}
+}
+
+async function deleteVaultFolder(folderPath) {
+  if (!confirm(`"${folderPath}" 폴더와 그 안의 모든 파일을 삭제하시겠습니까?`)) return;
+  try {
+    const res = await fetch(`/api/vault-folder?path=${encodeURIComponent(folderPath)}`, { method: "DELETE" });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "삭제 실패");
+    state.selectedPaths.delete(folderPath);
+    const tabsToClose = state.tabs.filter((t) => t.path && (t.path === folderPath || t.path.startsWith(folderPath + "/"))).map((t) => t.id);
+    for (const id of tabsToClose) await closeTab(id);
+    await reloadVaultFileList();
+    showAppToast("폴더를 삭제했습니다.", "success");
+  } catch (e) {
+    showAppToast(e.message || "삭제에 실패했습니다.", "error");
+  }
+}
+
+async function deleteSelected() {
+  const paths = [...state.selectedPaths];
+  if (!paths.length) return;
+  if (!confirm(`선택한 ${paths.length}개 항목을 삭제하시겠습니까?`)) return;
+  const folderPaths = paths.filter((p) => state.directories.has(p));
+  const filePaths = paths.filter((p) => !state.directories.has(p));
+  let errors = 0;
+  for (const p of filePaths) {
+    try {
+      const res = await fetch(`/api/vault-file?path=${encodeURIComponent(p)}`, { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      removeFileNode(p);
+      state.tasks = state.tasks.filter((t) => t.path !== p);
+      state.calendarTaskFiles.delete(p);
+    } catch { errors++; }
+  }
+  for (const p of folderPaths) {
+    try {
+      const res = await fetch(`/api/vault-folder?path=${encodeURIComponent(p)}`, { method: "DELETE" });
+      if (!res.ok) throw new Error();
+    } catch { errors++; }
+  }
+  const tabsToClose = state.tabs.filter((t) => t.path && paths.some((p) => t.path === p || t.path.startsWith(p + "/"))).map((t) => t.id);
+  for (const id of tabsToClose) await closeTab(id);
+  state.selectedPaths.clear();
+  await reloadVaultFileList();
+  saveCalendarCache();
+  refreshRecentFilesCache();
+  invalidateRandomMarkdownCache();
+  renderCalendar();
+  if (errors > 0) showAppToast(`${errors}개 삭제에 실패했습니다.`, "error");
+  else showAppToast(`${paths.length}개 항목을 삭제했습니다.`, "success");
+}
+
+function showMoveMultiDialog() {
+  document.getElementById("owv-move-overlay")?.remove();
+  const overlay = document.createElement("div");
+  overlay.id = "owv-move-overlay";
+  overlay.className = "owv-move-overlay";
+  const count = state.selectedPaths.size;
+
+  const dialog = document.createElement("div");
+  dialog.className = "owv-move-dialog";
+  dialog.innerHTML = `<div class="owv-move-title">이동하기 (${count}개)</div><label class="owv-move-label">대상 폴더 경로</label><input class="owv-move-input" type="text" placeholder="예: Archive/2024"><div class="owv-move-footer"><button class="owv-move-cancel">취소</button><button class="owv-move-confirm">이동</button></div>`;
+
+  overlay.appendChild(dialog);
+  document.body.appendChild(overlay);
+
+  const input = dialog.querySelector(".owv-move-input");
+  const close = () => overlay.remove();
+  input.focus();
+
+  dialog.querySelector(".owv-move-cancel").addEventListener("click", close);
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+
+  dialog.querySelector(".owv-move-confirm").addEventListener("click", async () => {
+    const destFolder = input.value.trim().replace(/\/$/, "");
+    if (!destFolder) return;
+    const paths = [...state.selectedPaths];
+    let errors = 0;
+    for (const oldPath of paths) {
+      const name = oldPath.split("/").pop();
+      const newPath = `${destFolder}/${name}`;
+      const isDir = state.directories.has(oldPath);
+      try {
+        const endpoint = isDir ? "/api/vault-folder" : "/api/vault-file";
+        const res = await fetch(`${endpoint}?path=${encodeURIComponent(oldPath)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ newPath }),
+        });
+        if (!res.ok) throw new Error();
+      } catch { errors++; }
+    }
+    state.selectedPaths.clear();
+    await reloadVaultFileList();
+    renderTabStrip();
+    saveOpenTabs();
+    if (errors > 0) showAppToast(`${errors}개 이동에 실패했습니다.`, "error");
+    else showAppToast(`${paths.length}개 항목을 이동했습니다.`, "success");
+    close();
+  });
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") dialog.querySelector(".owv-move-confirm").click();
+    if (e.key === "Escape") close();
+  });
+}
+
 async function moveVaultFile(oldPath, newPath) {
   const res = await fetch(`/api/vault-file?path=${encodeURIComponent(oldPath)}`, {
     method: "PATCH",
@@ -5795,7 +5976,7 @@ async function moveVaultFile(oldPath, newPath) {
   return json.path;
 }
 
-function showMoveDialog(filePath) {
+function showMoveDialog(filePath, isDirectory = false) {
   document.getElementById("owv-move-overlay")?.remove();
   const overlay = document.createElement("div");
   overlay.id = "owv-move-overlay";
@@ -5823,31 +6004,32 @@ function showMoveDialog(filePath) {
     const newPath = input.value.trim();
     if (!newPath || newPath === filePath) { close(); return; }
     try {
-      const resultPath = await moveVaultFile(filePath, newPath);
-      // 로컬 상태 업데이트
-      const node = state.files.get(filePath);
-      if (node) {
-        state.files.delete(filePath);
-        const newName = resultPath.split("/").pop();
-        node.name = newName;
-        node.path = resultPath;
-        state.files.set(resultPath, node);
-        const oldDir = state.directories.get(filePath.includes("/") ? filePath.slice(0, filePath.lastIndexOf("/")) : "");
-        const newDirPath = resultPath.includes("/") ? resultPath.slice(0, resultPath.lastIndexOf("/")) : "";
-        oldDir?.children.delete(node.name === newName ? filePath.split("/").pop() : filePath.split("/").pop());
-        const newDir = state.directories.get(newDirPath);
-        if (newDir) newDir.children.set(newName, node);
+      const endpoint = isDirectory ? "/api/vault-folder" : "/api/vault-file";
+      const res = await fetch(`${endpoint}?path=${encodeURIComponent(filePath)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ newPath }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || "이동에 실패했습니다.");
+      if (isDirectory) {
+        state.selectedPaths.delete(filePath);
+        const tabsToUpdate = state.tabs.filter((t) => t.path && t.path.startsWith(filePath + "/"));
+        tabsToUpdate.forEach((t) => { t.path = newPath + t.path.slice(filePath.length); });
+        await reloadVaultFileList();
+        renderTabStrip();
+        saveOpenTabs();
+        showAppToast("이동 완료: " + newPath, "success");
+        close();
+        return;
       }
+      const resultPath = json.path || newPath;
       state.tabs.forEach((t) => {
         if (t.path === filePath) { t.path = resultPath; t.title = resultPath.split("/").pop(); }
       });
-      if (state.currentPath === filePath) {
-        state.currentPath = resultPath;
-        state.currentNode = state.files.get(resultPath) || null;
-      }
-      refreshDirectoryMetadataFrom(filePath);
-      refreshDirectoryMetadataFrom(resultPath);
-      renderTree();
+      if (state.currentPath === filePath) state.currentPath = resultPath;
+      state.selectedPaths.delete(filePath);
+      await reloadVaultFileList();
       renderTabStrip();
       saveOpenTabs();
       showAppToast("이동 완료: " + resultPath, "success");
@@ -8742,14 +8924,27 @@ function pinTab(id) {
   });
 }
 
-function showFileContextMenu(x, y, filePath) {
+function showNodeContextMenu(x, y, path, isDirectory = false) {
   document.querySelector(".tab-context-menu")?.remove();
   const menu = document.createElement("div");
   menu.className = "tab-context-menu";
-  menu.innerHTML = `<button type="button" data-action="move">이동하기</button><button type="button" data-action="delete" class="danger">삭제하기</button>`;
+
+  const count = state.selectedPaths.size;
+  if (count > 1) {
+    menu.innerHTML = `<button type="button" data-action="move">이동하기 (${count}개)</button><button type="button" data-action="delete" class="danger">삭제하기 (${count}개)</button>`;
+    menu.querySelector("[data-action='move']").addEventListener("click", () => { menu.remove(); showMoveMultiDialog(); });
+    menu.querySelector("[data-action='delete']").addEventListener("click", () => { menu.remove(); void deleteSelected(); });
+  } else {
+    menu.innerHTML = `<button type="button" data-action="move">이동하기</button><button type="button" data-action="delete" class="danger">삭제하기${isDirectory ? " (폴더)" : ""}</button>`;
+    menu.querySelector("[data-action='move']").addEventListener("click", () => { menu.remove(); showMoveDialog(path, isDirectory); });
+    menu.querySelector("[data-action='delete']").addEventListener("click", () => {
+      menu.remove();
+      if (isDirectory) void deleteVaultFolder(path);
+      else void deleteVaultFileByPath(path);
+    });
+  }
+
   menu.style.cssText = `position:fixed;left:${x}px;top:${y}px;z-index:9999;`;
-  menu.querySelector("[data-action='move']").addEventListener("click", () => { menu.remove(); showMoveDialog(filePath); });
-  menu.querySelector("[data-action='delete']").addEventListener("click", () => { menu.remove(); void deleteVaultFileByPath(filePath); });
   const dismiss = (e) => { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener("mousedown", dismiss, true); document.removeEventListener("touchstart", dismiss, true); } };
   document.addEventListener("mousedown", dismiss, true);
   document.addEventListener("touchstart", dismiss, true);

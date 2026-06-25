@@ -164,6 +164,20 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (requestPath === "/api/vault-folder") {
+    if (req.method === "DELETE") {
+      deleteVaultFolder(url.searchParams.get("path"), res);
+      return;
+    }
+    if (req.method === "PATCH") {
+      receiveBody(req, (error, body) => {
+        if (error) { sendJson(res, 400, { error: "Invalid request body" }); return; }
+        moveVaultFolder(url.searchParams.get("path"), body, res);
+      });
+      return;
+    }
+  }
+
   if (requestPath === "/api/vault-file") {
     if (req.method === "DELETE") {
       deleteVaultFile(url.searchParams.get("path"), res);
@@ -870,6 +884,49 @@ function writeCalendarCache(key, body, res) {
     sendJson(res, 200, { ok: true, syncedAt: cached.syncedAt });
   } catch (error) {
     sendJson(res, 500, { error: error.message || "Calendar cache write failed" });
+  }
+}
+
+function deleteVaultFolder(requestedPath, res) {
+  if (readOnly) { sendJson(res, 403, { error: "Vault is read-only" }); return; }
+  const safePath = normalizeVaultPath(requestedPath || "");
+  if (!safePath) { sendJson(res, 400, { error: "Invalid path" }); return; }
+  const folderFull = path.resolve(vaultRoot, safePath);
+  if (!folderFull.startsWith(vaultRoot + path.sep)) { sendJson(res, 403, { error: "Forbidden path" }); return; }
+  if (!fs.existsSync(folderFull) || !fs.statSync(folderFull).isDirectory()) {
+    sendJson(res, 404, { error: "Folder not found" }); return;
+  }
+  try {
+    fs.rmSync(folderFull, { recursive: true, force: true });
+    sendJson(res, 200, { ok: true, path: safePath });
+    broadcastVaultEvent("folder-deleted", { path: safePath });
+  } catch (error) {
+    sendJson(res, 500, { error: error.message || "Delete failed" });
+  }
+}
+
+function moveVaultFolder(requestedPath, body, res) {
+  if (readOnly) { sendJson(res, 403, { error: "Vault is read-only" }); return; }
+  let parsed;
+  try { parsed = JSON.parse(body || "{}"); } catch { sendJson(res, 400, { error: "Invalid JSON" }); return; }
+  const safePath = normalizeVaultPath(requestedPath || "");
+  if (!safePath) { sendJson(res, 400, { error: "Invalid path" }); return; }
+  const oldFull = path.resolve(vaultRoot, safePath);
+  if (!oldFull.startsWith(vaultRoot + path.sep)) { sendJson(res, 403, { error: "Forbidden path" }); return; }
+  if (!fs.existsSync(oldFull) || !fs.statSync(oldFull).isDirectory()) {
+    sendJson(res, 404, { error: "Folder not found" }); return;
+  }
+  const newSafePath = normalizeVaultPath(parsed.newPath || "");
+  if (!newSafePath) { sendJson(res, 400, { error: "newPath required" }); return; }
+  const newFull = path.resolve(vaultRoot, newSafePath);
+  if (!newFull.startsWith(vaultRoot + path.sep)) { sendJson(res, 403, { error: "Invalid target path" }); return; }
+  try {
+    fs.mkdirSync(path.dirname(newFull), { recursive: true });
+    fs.renameSync(oldFull, newFull);
+    sendJson(res, 200, { ok: true, path: newSafePath });
+    broadcastVaultEvent("folder-renamed", { oldPath: safePath, path: newSafePath });
+  } catch (error) {
+    sendJson(res, 500, { error: error.message || "Move failed" });
   }
 }
 

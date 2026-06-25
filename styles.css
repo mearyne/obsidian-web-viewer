@@ -476,12 +476,17 @@ button:disabled {
 }
 
 .tree-row:hover,
-.tree-row.active {
+.tree-row.active,
+.tree-row.selected {
   background: var(--surface-3);
 }
 
 .tree-row.active {
   font-weight: 650;
+}
+
+.tree-row.selected {
+  background: color-mix(in srgb, var(--color-accent, #4a7fd4) 18%, transparent);
 }
 
 .tree-row.not-openable {
