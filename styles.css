@@ -486,7 +486,7 @@ button:disabled {
 }
 
 .tree-row.selected {
-  background: color-mix(in srgb, var(--color-accent, #4a7fd4) 18%, transparent);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
 .tree-row.not-openable {
