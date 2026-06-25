@@ -902,25 +902,35 @@ function showClipperPopup({ title, url, folder, path: initialPath = "" }) {
     saveBtn.textContent = "저장 중…";
     status.textContent = "";
     try {
-      let meta = null;
-      if (url) {
-        try {
-          const metaRes = await fetch(`/api/url-meta?url=${encodeURIComponent(url)}`);
-          if (metaRes.ok) meta = await metaRes.json();
-        } catch {}
-      }
-      const content = buildClipEmbedContent(saveTitle, url, meta);
+      const loadingContent = buildClipEmbedContent(saveTitle, url, null);
       const res = await fetch("/api/clip", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path: savePath, content }),
+        body: JSON.stringify({ path: savePath, content: loadingContent }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "HTTP error");
-      status.textContent = "✓ 저장 완료: " + json.path;
+      const savedPath = json.path || savePath;
+      status.textContent = "✓ 저장 완료: " + savedPath;
       status.style.color = "#4caf7d";
       saveBtn.textContent = "저장됨 ✓";
-      setTimeout(close, 1800);
+      setTimeout(close, 1200);
+
+      // 백그라운드에서 메타데이터 fetch 후 파일 업데이트
+      if (url) {
+        try {
+          const metaRes = await fetch(`/api/url-meta?url=${encodeURIComponent(url)}`);
+          if (metaRes.ok) {
+            const meta = await metaRes.json();
+            const updatedContent = buildClipEmbedContent(saveTitle, url, meta);
+            await fetch("/api/clip", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ path: savedPath, content: updatedContent }),
+            });
+          }
+        } catch {}
+      }
     } catch (e) {
       status.textContent = "저장 실패: " + e.message;
       status.style.color = "#e05a5a";

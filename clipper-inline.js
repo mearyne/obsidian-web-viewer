@@ -92,24 +92,37 @@
       saveBtn.textContent = '저장 중…';
       status.textContent = '';
 
-      fetch(SERVER + '/api/url-meta?url=' + encodeURIComponent(pageUrl))
-        .then(function (r) { return r.ok ? r.json() : null; })
-        .catch(function () { return null; })
-        .then(function (meta) {
-          var content = buildEmbedContent(saveTitle, pageUrl, meta, today);
-          return fetch(SERVER + '/api/clip', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ path: savePath, content: content }),
-          });
-        })
+      var esc = function (s) { return (s || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"'); };
+      var loadingContent = '---\ntitle: "' + esc(saveTitle) + '"\nurl: ' + pageUrl + '\ndate: ' + today + '\n---\n\n'
+        + '```embed\nstatus: "loading"\nurl: "' + esc(pageUrl) + '"\n```';
+
+      fetch(SERVER + '/api/clip', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: savePath, content: loadingContent }),
+      })
         .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
         .then(function (r) {
           if (!r.ok) throw new Error(r.j.error || 'HTTP error');
-          status.textContent = '✓ 저장 완료: ' + r.j.path;
+          var savedPath = r.j.path || savePath;
+          status.textContent = '✓ 저장 완료: ' + savedPath;
           status.style.color = '#4caf7d';
           saveBtn.textContent = '저장됨 ✓';
-          setTimeout(close, 1800);
+          setTimeout(close, 1200);
+
+          // 백그라운드에서 메타데이터 fetch 후 파일 업데이트
+          fetch(SERVER + '/api/url-meta?url=' + encodeURIComponent(pageUrl))
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .catch(function () { return null; })
+            .then(function (meta) {
+              if (!meta) return;
+              var updatedContent = buildEmbedContent(saveTitle, pageUrl, meta, today);
+              fetch(SERVER + '/api/clip', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path: savedPath, content: updatedContent }),
+              }).catch(function () {});
+            });
         })
         .catch(function (e) {
           status.textContent = '저장 실패: ' + e.message;
