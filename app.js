@@ -6084,7 +6084,7 @@ function showMergeDialog(initialPaths) {
           const end = body.indexOf("\n---", 3);
           if (end !== -1) body = body.slice(end + 4).trimStart();
         }
-        parts.push(`# ${getName(p)}\n\n${body}`);
+        parts.push(body);
       }
 
       const merged = parts.join("\n\n---\n\n");
