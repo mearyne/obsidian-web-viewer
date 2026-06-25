@@ -2788,6 +2788,17 @@ button:disabled {
 }
 
 /* task create sub-bullets */
+.task-create-sub-items-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.task-create-sub-items-header label {
+  margin-bottom: 0;
+}
+
 .task-create-sub-items textarea {
   background: var(--surface-2, rgba(128,128,128,0.08));
   border: 1px solid var(--line);

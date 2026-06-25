@@ -336,7 +336,6 @@
 
     <dialog id="taskCreateDialog" class="task-create-dialog">
       <div class="task-create-form">
-        <h3>태스크 추가</h3>
         <div class="task-create-field">
           <label>제목</label>
           <div class="task-title-row">
@@ -378,9 +377,7 @@
             <label>시작일 <span class="task-date-optional">(선택)</span></label>
             <div class="date-time-row">
               <div class="date-picker-row">
-                <button type="button" id="taskStartDatePrevBtn" class="date-nav-btn" aria-label="하루 전" hidden>←</button>
                 <button type="button" id="taskStartDateBtn" class="date-picker-btn" data-date="">날짜 없음</button>
-                <button type="button" id="taskStartDateNextBtn" class="date-nav-btn" aria-label="하루 후" hidden>→</button>
                 <button type="button" id="taskStartDateClearBtn" class="date-clear-btn" hidden aria-label="날짜 삭제">✕</button>
               </div>
               <div class="date-picker-row">
@@ -393,9 +390,7 @@
             <label>종료일</label>
             <div class="date-time-row">
               <div class="date-picker-row">
-                <button type="button" id="taskDueDatePrevBtn" class="date-nav-btn" aria-label="하루 전" hidden>←</button>
                 <button type="button" id="taskDueDateBtn" class="date-picker-btn" data-date="">날짜 선택</button>
-                <button type="button" id="taskDueDateNextBtn" class="date-nav-btn" aria-label="하루 후" hidden>→</button>
                 <button type="button" id="taskDueDateClearBtn" class="date-clear-btn" hidden aria-label="날짜 삭제">✕</button>
               </div>
               <div class="date-picker-row">
@@ -408,7 +403,13 @@
         <div id="taskDatePickerCal" class="task-date-picker-cal" hidden></div>
         <div id="taskClockPickerEl" class="task-clock-picker" hidden></div>
         <div class="task-create-field task-create-sub-items">
-          <label>내용 <span class="task-date-optional">(선택)</span></label>
+          <div class="task-create-sub-items-header">
+            <label>내용 <span class="task-date-optional">(선택)</span></label>
+            <div class="task-edit-depth-controls" aria-label="하위 불릿 깊이 조절">
+              <button type="button" id="taskCreateOutdentButton" class="icon-button" aria-label="내어쓰기" title="내어쓰기">⇤</button>
+              <button type="button" id="taskCreateIndentButton" class="icon-button" aria-label="들여쓰기" title="들여쓰기">⇥</button>
+            </div>
+          </div>
           <textarea id="taskCreateSubItemsInput" rows="3" spellcheck="false" placeholder="- 세부 내용"></textarea>
         </div>
         <div class="dialog-buttons">

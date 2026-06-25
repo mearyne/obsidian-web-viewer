@@ -164,12 +164,8 @@ const els = {
   taskCreateDialog: document.querySelector("#taskCreateDialog"),
   taskTitleInput: document.querySelector("#taskTitleInput"),
   taskStartDateBtn: document.querySelector("#taskStartDateBtn"),
-  taskStartDatePrevBtn: document.querySelector("#taskStartDatePrevBtn"),
-  taskStartDateNextBtn: document.querySelector("#taskStartDateNextBtn"),
   taskStartDateClearBtn: document.querySelector("#taskStartDateClearBtn"),
   taskDueDateBtn: document.querySelector("#taskDueDateBtn"),
-  taskDueDatePrevBtn: document.querySelector("#taskDueDatePrevBtn"),
-  taskDueDateNextBtn: document.querySelector("#taskDueDateNextBtn"),
   taskDueDateClearBtn: document.querySelector("#taskDueDateClearBtn"),
   taskDatePickerCal: document.querySelector("#taskDatePickerCal"),
   taskStartTimeInput: document.querySelector("#taskStartTimeInput"),
@@ -211,6 +207,8 @@ const els = {
   taskEditIndentButton: document.querySelector("#taskEditIndentButton"),
   taskEditOutdentButton: document.querySelector("#taskEditOutdentButton"),
   taskCreateSubItemsInput: document.querySelector("#taskCreateSubItemsInput"),
+  taskCreateIndentButton: document.querySelector("#taskCreateIndentButton"),
+  taskCreateOutdentButton: document.querySelector("#taskCreateOutdentButton"),
   taskEditBodyEl: document.querySelector("#taskEditBodyEl"),
   taskEditDialogTitle: document.querySelector("#taskEditDialogTitle"),
   taskViewEditBtn: document.querySelector("#taskViewEditBtn"),
@@ -6592,8 +6590,6 @@ function positionTaskEditDialog() {
 
 function setTaskDialogDate(field, value) {
   const btn = field === "start" ? els.taskStartDateBtn : els.taskDueDateBtn;
-  const prevBtn = field === "start" ? els.taskStartDatePrevBtn : els.taskDueDatePrevBtn;
-  const nextBtn = field === "start" ? els.taskStartDateNextBtn : els.taskDueDateNextBtn;
   const clearBtn = field === "start" ? els.taskStartDateClearBtn : els.taskDueDateClearBtn;
   if (!btn) return;
   btn.dataset.date = value || "";
@@ -6601,8 +6597,6 @@ function setTaskDialogDate(field, value) {
   const emptyLabel = isTouchPrimaryDevice() ? "--" : btn.dataset.emptyLabel;
   btn.textContent = value ? formatDateKorean(value) : emptyLabel;
   btn.classList.toggle("has-date", Boolean(value));
-  if (prevBtn) prevBtn.hidden = !value;
-  if (nextBtn) nextBtn.hidden = !value;
   if (clearBtn) clearBtn.hidden = !value;
 }
 
@@ -6636,19 +6630,6 @@ function normalizeTaskTimeInput(input) {
   const normalized = `${String(Math.floor(rounded / 60) % 24).padStart(2, "0")}:${String(rounded % 60).padStart(2, "0")}`;
   input.value = normalized;
   return normalized;
-}
-
-function shiftTaskCreateDate(field, days) {
-  const btn = field === "start" ? els.taskStartDateBtn : els.taskDueDateBtn;
-  const current = btn?.dataset.date;
-  if (!current) return;
-  const d = parseDateKey(current);
-  if (!d) return;
-  d.setDate(d.getDate() + days);
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  setTaskDialogDate(field, `${yyyy}-${mm}-${dd}`);
 }
 
 function formatDateKorean(dateKey) {
@@ -6750,14 +6731,6 @@ function bindTaskCreateDialog() {
     renderTaskDatePicker(null);
   });
 
-  els.taskStartDatePrevBtn?.addEventListener("click", () => {
-    shiftTaskCreateDate("start", -1);
-  });
-
-  els.taskStartDateNextBtn?.addEventListener("click", () => {
-    shiftTaskCreateDate("start", 1);
-  });
-
   els.taskStartTimeClearBtn?.addEventListener("click", () => {
     if (els.taskStartTimeInput) els.taskStartTimeInput.value = "";
     els.taskStartTimeClearBtn.hidden = true;
@@ -6782,14 +6755,6 @@ function bindTaskCreateDialog() {
     setTaskDialogDate("due", "");
     state.taskDialogActiveField = null;
     renderTaskDatePicker(null);
-  });
-
-  els.taskDueDatePrevBtn?.addEventListener("click", () => {
-    shiftTaskCreateDate("due", -1);
-  });
-
-  els.taskDueDateNextBtn?.addEventListener("click", () => {
-    shiftTaskCreateDate("due", 1);
   });
 
   els.taskDueTimeClearBtn?.addEventListener("click", () => {
@@ -6859,6 +6824,13 @@ function bindTaskCreateDialog() {
     if (state.activeView === "calendar" && isTaskCalendarKind()) renderCalendar();
     else setTasksDirty();
   });
+
+  els.taskCreateSubItemsInput?.addEventListener("keydown", handleTaskCreateSubItemsEnter);
+  els.taskCreateSubItemsInput?.addEventListener("focus", ensureTaskCreateSubItemBullet);
+  els.taskCreateSubItemsInput?.addEventListener("input", normalizeTaskCreateSubItemDraft);
+  els.taskCreateSubItemsInput?.addEventListener("paste", handleSubItemsPaste);
+  els.taskCreateIndentButton?.addEventListener("click", () => adjustTaskCreateSubItemDepth(false));
+  els.taskCreateOutdentButton?.addEventListener("click", () => adjustTaskCreateSubItemDepth(true));
 
   els.taskCreateDialog.addEventListener("keydown", (e) => {
     if (e.key === "Escape") { e.preventDefault(); els.taskCreateDialog.close("cancel"); }
@@ -7038,6 +7010,28 @@ function handleTaskTitleEnter(event, confirmButton) {
   confirmButton?.click();
 }
 
+function handleTaskCreateSubItemsEnter(event) {
+  if (event.target.readOnly) return;
+  if (event.key === "Tab" && !event.ctrlKey && !event.metaKey && !event.altKey && !event.isComposing) {
+    event.preventDefault();
+    adjustTaskCreateSubItemDepth(event.shiftKey);
+    return;
+  }
+  if (event.key !== "Enter" && event.key !== "NumpadEnter") return;
+  if (event.isComposing || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return;
+  event.preventDefault();
+  const textarea = event.currentTarget;
+  const { selectionStart, selectionEnd, value } = textarea;
+  const line = currentEditorLine(value, selectionStart).text;
+  const indent = line.match(/^(\s*)/)?.[1] || "";
+  const body = line.slice(indent.length);
+  const bullet = body.match(/^[-*+]\s+/)?.[0] || "- ";
+  const insertion = `\n${indent}${bullet}`;
+  textarea.value = `${value.slice(0, selectionStart)}${insertion}${value.slice(selectionEnd)}`;
+  const next = selectionStart + insertion.length;
+  textarea.setSelectionRange(next, next);
+}
+
 function handleTaskSubItemsEnter(event) {
   if (event.target.readOnly) return;
   if (event.key === "Tab" && !event.ctrlKey && !event.metaKey && !event.altKey && !event.isComposing) {
@@ -7080,6 +7074,31 @@ function normalizeTaskEditSubItemDraft(event) {
 
 function adjustTaskEditSubItemDepth(outdent) {
   const textarea = els.taskEditSubItemsInput;
+  if (!textarea) return;
+  textarea.focus();
+  indentSelectedEditorLines(textarea, outdent);
+}
+
+function ensureTaskCreateSubItemBullet(event) {
+  const textarea = event.currentTarget;
+  if (textarea.readOnly || textarea.value.trim()) return;
+  textarea.value = "- ";
+  textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+}
+
+function normalizeTaskCreateSubItemDraft(event) {
+  const textarea = event.currentTarget;
+  if (textarea.readOnly) return;
+  const { value, selectionStart, selectionEnd } = textarea;
+  const nextValue = value.replace(/(^|\n)([ \t]*)(?![-*+]\s)(\S)/g, "$1$2- $3");
+  if (nextValue === value) return;
+  const delta = nextValue.length - value.length;
+  textarea.value = nextValue;
+  textarea.setSelectionRange(selectionStart + delta, selectionEnd + delta);
+}
+
+function adjustTaskCreateSubItemDepth(outdent) {
+  const textarea = els.taskCreateSubItemsInput;
   if (!textarea) return;
   textarea.focus();
   indentSelectedEditorLines(textarea, outdent);
@@ -9571,7 +9590,7 @@ function renderInlineClock(el) {
     : [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
   const currentVal = isHour ? clockHour12() : clockPicker.minute;
   const selIdx = values.indexOf(currentVal);
-  const handAngle = selIdx >= 0 ? (selIdx / 12) * 360 : 0;
+  const handAngle = selIdx >= 0 ? (selIdx / 12) * 360 - 180 : -180;
 
   const nums = values.map((val, i) => {
     const angle = (i / 12) * 2 * Math.PI - Math.PI / 2;
