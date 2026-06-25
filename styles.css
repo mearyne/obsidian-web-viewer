@@ -3196,7 +3196,7 @@ button:disabled {
   align-items: center;
   display: grid;
   flex: 0 0 auto;
-  grid-template-columns: 28px minmax(126px, auto) 28px;
+  grid-template-columns: 28px 160px 28px;
   justify-items: center;
 }
 
