@@ -5111,6 +5111,10 @@ button.calendar-more {
 
 /* ── Clock Picker ────────────────────────────────────────────────────────── */
 .clock-picker-dialog {
+  display: none;
+}
+
+.clock-picker-dialog[open] {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 16px;

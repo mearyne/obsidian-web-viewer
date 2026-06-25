@@ -9431,8 +9431,9 @@ function showClockPicker(inputEl) {
     clockPicker.hour24 = isNaN(h) ? 12 : h;
     clockPicker.minute = isNaN(m) ? 0 : Math.round(m / 5) * 5 % 60;
   } else {
-    clockPicker.hour24 = 12;
-    clockPicker.minute = 0;
+    const now = new Date();
+    clockPicker.hour24 = now.getHours();
+    clockPicker.minute = Math.round(now.getMinutes() / 5) * 5 % 60;
   }
 
   renderClockPickerDisplay();
