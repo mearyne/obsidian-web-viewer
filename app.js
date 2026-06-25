@@ -186,10 +186,8 @@ const els = {
   taskEditDatePickerCal: document.querySelector("#taskEditDatePickerCal"),
   taskEditStartTimeInput: document.querySelector("#taskEditStartTimeInput"),
   taskEditStartTimeClearBtn: document.querySelector("#taskEditStartTimeClearBtn"),
-  taskEditStartClockBtn: document.querySelector("#taskEditStartClockBtn"),
   taskEditDueTimeInput: document.querySelector("#taskEditDueTimeInput"),
   taskEditDueTimeClearBtn: document.querySelector("#taskEditDueTimeClearBtn"),
-  taskEditDueClockBtn: document.querySelector("#taskEditDueClockBtn"),
   taskEditCancelBtn: document.querySelector("#taskEditCancelBtn"),
   taskEditConfirmBtn: document.querySelector("#taskEditConfirmBtn"),
   taskEditOpenFileBtn: document.querySelector("#taskEditOpenFileBtn"),
@@ -6722,6 +6720,12 @@ function bindTaskCreateDialog() {
   els.taskTitleInput?.addEventListener("keydown", (e) => {
     handleTaskTitleEnter(e, els.taskCreateConfirmBtn);
   });
+  els.taskStartTimeInput?.addEventListener("click", () => {
+    if (!isTouchPrimaryDevice()) showClockPicker(els.taskStartTimeInput);
+  });
+  els.taskDueTimeInput?.addEventListener("click", () => {
+    if (!isTouchPrimaryDevice()) showClockPicker(els.taskDueTimeInput);
+  });
   els.taskStartTimeInput?.addEventListener("input", applyTaskCreateStartDateHint);
   els.taskStartTimeInput?.addEventListener("change", applyTaskCreateStartDateHint);
 
@@ -6812,12 +6816,12 @@ function bindTaskEditDialog() {
     renderTaskEditDatePicker(null);
   });
 
-  els.taskEditStartClockBtn?.addEventListener("click", () => {
-    showClockPicker(els.taskEditStartTimeInput);
+  els.taskEditStartTimeInput?.addEventListener("click", () => {
+    if (!isTouchPrimaryDevice()) showClockPicker(els.taskEditStartTimeInput);
   });
 
-  els.taskEditDueClockBtn?.addEventListener("click", () => {
-    showClockPicker(els.taskEditDueTimeInput);
+  els.taskEditDueTimeInput?.addEventListener("click", () => {
+    if (!isTouchPrimaryDevice()) showClockPicker(els.taskEditDueTimeInput);
   });
 
   els.taskEditStartTimeInput?.addEventListener("input", () => {
@@ -7086,9 +7090,7 @@ function setTaskDialogMode(mode) {
     els.taskEditStartDateBtn,
     els.taskEditDueDateBtn,
     els.taskEditStartTimeInput,
-    els.taskEditStartClockBtn,
     els.taskEditDueTimeInput,
-    els.taskEditDueClockBtn,
     els.taskEditIndentButton,
     els.taskEditOutdentButton,
   ].forEach((el) => { if (el) el.disabled = isView; });

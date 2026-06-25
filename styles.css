@@ -2335,20 +2335,6 @@ button:disabled {
   color: var(--text);
 }
 
-.time-clock-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  flex-shrink: 0;
-  font-size: 15px;
-  line-height: 1;
-  padding: 2px 4px;
-}
-
-.time-clock-btn:disabled {
-  display: none;
-}
-
 .time-input {
   background: var(--surface-2);
   border: 1px solid var(--line);
@@ -2363,6 +2349,15 @@ button:disabled {
 .time-input:focus {
   border-color: var(--accent);
   outline: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .time-input {
+    cursor: pointer;
+  }
+  .time-input::-webkit-calendar-picker-indicator {
+    display: none;
+  }
 }
 
 .task-time-badge {
