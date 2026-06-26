@@ -129,6 +129,7 @@ const state = {
   mindmapKeyCaptureActive: false,
   mindmapToolbarDrag: null,
   mindmapDirectImagePasteAt: 0,
+  mergedDocumentRange: null,
   lastGPressAt: 0,
   taskCreateSourceDate: "",
   selectedPaths: new Set(),
@@ -645,6 +646,13 @@ async function lockPreferredOrientation() {
 }
 
 function handleGlobalKeydown(event) {
+  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && (event.code === "KeyP" || event.key.toLowerCase() === "p")) {
+    event.preventDefault();
+    event.stopPropagation();
+    openCommandPalette();
+    return;
+  }
+
   if (isMindmapSaveShortcut(event)) {
     event.preventDefault();
     event.stopPropagation();
@@ -654,6 +662,11 @@ function handleGlobalKeydown(event) {
   }
 
   if (isMindmapTextEditingEvent(event)) return;
+
+  if (document.querySelector(".command-palette-overlay")) {
+    if (event.key === "Escape") closeCommandPalette();
+    return;
+  }
 
   if (!els.optionsMenu.hidden) {
     if (event.key === "Escape") {
@@ -886,6 +899,232 @@ function isMindmapSaveShortcut(event) {
   const targetInMindmap = event.target?.closest?.(".mindmap-shell");
   const activeInMindmap = els.mindmapShell.contains(document.activeElement);
   return Boolean(targetInMindmap || activeInMindmap || state.mindmapKeyCaptureActive);
+}
+
+function openCommandPalette() {
+  const existing = document.querySelector(".command-palette-overlay");
+  if (existing) {
+    existing.remove();
+    return;
+  }
+  const overlay = document.createElement("div");
+  overlay.className = "command-palette-overlay";
+  overlay.innerHTML = `
+    <section class="command-palette" role="dialog" aria-modal="true" aria-label="Command palette">
+      <input class="command-palette-input" type="search" placeholder="명령 검색..." autocomplete="off" />
+      <div class="command-palette-list">
+        <button class="command-palette-item" type="button" data-command="merged-documents">
+          <span>문서 합쳐보기</span>
+          <small>생성/수정 날짜 범위의 문서를 한 화면에서 읽기</small>
+        </button>
+      </div>
+    </section>
+  `;
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) closeCommandPalette();
+  });
+  const input = overlay.querySelector(".command-palette-input");
+  const item = overlay.querySelector("[data-command='merged-documents']");
+  const runSelected = () => {
+    closeCommandPalette();
+    openMergedDocumentsDialog();
+  };
+  item.addEventListener("click", runSelected);
+  input.addEventListener("input", () => {
+    const query = input.value.trim().toLowerCase();
+    item.hidden = query && !"문서 합쳐보기 merged documents".includes(query);
+  });
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !item.hidden) {
+      event.preventDefault();
+      runSelected();
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      closeCommandPalette();
+    }
+  });
+  document.body.append(overlay);
+  requestAnimationFrame(() => input.focus());
+}
+
+function closeCommandPalette() {
+  document.querySelector(".command-palette-overlay")?.remove();
+}
+
+function openMergedDocumentsDialog() {
+  const existing = document.querySelector(".merged-documents-dialog-overlay");
+  if (existing) existing.remove();
+  const today = formatDate(new Date());
+  const start = state.mergedDocumentRange?.start || today;
+  const end = state.mergedDocumentRange?.end || today;
+  const overlay = document.createElement("div");
+  overlay.className = "merged-documents-dialog-overlay";
+  overlay.innerHTML = `
+    <section class="merged-documents-dialog" role="dialog" aria-modal="true" aria-label="문서 합쳐보기">
+      <header>
+        <h2>문서 합쳐보기</h2>
+        <button type="button" class="merged-documents-close" aria-label="닫기">×</button>
+      </header>
+      <label>
+        <span>시작날</span>
+        <input class="merged-documents-start" type="date" value="${escapeAttribute(start)}" />
+      </label>
+      <label>
+        <span>끝날짜</span>
+        <input class="merged-documents-end" type="date" value="${escapeAttribute(end)}" />
+      </label>
+      <footer>
+        <button type="button" class="merged-documents-cancel">취소</button>
+        <button type="button" class="merged-documents-run">보기</button>
+      </footer>
+    </section>
+  `;
+  const close = () => overlay.remove();
+  const run = () => {
+    const range = normalizeMergedDocumentRange(
+      overlay.querySelector(".merged-documents-start")?.value,
+      overlay.querySelector(".merged-documents-end")?.value,
+    );
+    if (!range) {
+      showAppToast("날짜 범위를 확인하세요.", "error");
+      return;
+    }
+    close();
+    void showMergedDocuments(range);
+  };
+  overlay.addEventListener("click", (event) => { if (event.target === overlay) close(); });
+  overlay.querySelector(".merged-documents-close")?.addEventListener("click", close);
+  overlay.querySelector(".merged-documents-cancel")?.addEventListener("click", close);
+  overlay.querySelector(".merged-documents-run")?.addEventListener("click", run);
+  overlay.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") close();
+    if (event.key === "Enter") run();
+  });
+  document.body.append(overlay);
+  requestAnimationFrame(() => overlay.querySelector(".merged-documents-start")?.focus());
+}
+
+function normalizeMergedDocumentRange(startValue, endValue) {
+  const start = parseDateKey(startValue);
+  const end = parseDateKey(endValue);
+  if (!start || !end) return null;
+  const from = start <= end ? start : end;
+  const to = start <= end ? end : start;
+  return { start: formatDate(from), end: formatDate(to) };
+}
+
+async function showMergedDocuments(range) {
+  state.mergedDocumentRange = range;
+  const tab = activeTab();
+  if (tab) {
+    tab.path = null;
+    tab.view = "merged";
+    tab.title = "문서 합쳐보기";
+    tab.mergedRange = range;
+    renderTabStrip();
+  }
+  await renderMergedDocuments(range);
+}
+
+async function renderMergedDocuments(range) {
+  const files = collectMergedDocumentFiles(range);
+  state.mindmapEmbedData = new Map();
+  state.activeView = "merged";
+  state.currentPath = null;
+  state.currentContent = "";
+  state.currentNode = null;
+  state.editMode = false;
+  if (els.newTabPage) els.newTabPage.hidden = true;
+  if (els.mindmapShell) els.mindmapShell.hidden = true;
+  els.editorShell.hidden = true;
+  els.calendarView.hidden = true;
+  els.markdownView.hidden = false;
+  if (els.headingControlsOverlay) els.headingControlsOverlay.hidden = true;
+  if (els.viewControlsOverlay) els.viewControlsOverlay.hidden = false;
+  if (els.notePath) {
+    els.notePath.textContent = `문서 합쳐보기: ${range.start} - ${range.end}`;
+    els.notePath.title = "생성일 또는 수정일이 범위에 포함된 문서";
+  }
+  if (els.mobileDocTitle) els.mobileDocTitle.textContent = "문서 합쳐보기";
+  updateEditButtons();
+  updateHistoryButtons();
+  showLoadingOverlay(`문서 합쳐보기\n${files.length}개 문서 준비 중`);
+  try {
+    const sections = [];
+    for (const file of files) {
+      const node = state.files.get(file.path);
+      if (!node) continue;
+      const content = await readFileNode(node);
+      sections.push(renderMergedDocumentSection(node, content, file, range));
+      await waitForBrowser();
+    }
+    els.markdownView.className = "markdown-body merged-documents-view";
+    els.markdownView.innerHTML = `
+      <header class="merged-documents-header">
+        <h1>문서 합쳐보기</h1>
+        <p>${escapeHtml(range.start)} - ${escapeHtml(range.end)} · ${files.length}개 문서</p>
+      </header>
+      ${sections.length ? sections.join("") : '<p class="merged-documents-empty">해당 날짜 범위에 생성 또는 수정된 문서가 없습니다.</p>'}
+    `;
+    bindWikiLinks(els.markdownView);
+    bindRenderedTaskCheckboxes(els.markdownView);
+    hydrateVaultImages(els.markdownView);
+    hydrateMindmapEmbeds(els.markdownView);
+    hydrateEmbeddedDocuments(els.markdownView);
+    scrollViewerTop();
+  } finally {
+    hideLoading();
+  }
+}
+
+function collectMergedDocumentFiles(range) {
+  const start = parseDateKey(range.start);
+  const end = addDays(parseDateKey(range.end), 1).getTime() - 1;
+  const startMs = start.getTime();
+  return [...state.files.values()]
+    .filter((node) => node.kind === "file" && isOpenableDocument(node.name))
+    .map((node) => ({
+      path: node.path,
+      name: node.name,
+      createdAt: Number(node.createdAt || 0),
+      updatedAt: Number(node.updatedAt || 0),
+    }))
+    .filter((file) => isTimestampInRange(file.createdAt, startMs, end) || isTimestampInRange(file.updatedAt, startMs, end))
+    .sort((a, b) => mergedFileSortTime(a, startMs, end) - mergedFileSortTime(b, startMs, end) || a.path.localeCompare(b.path, "ko"));
+}
+
+function isTimestampInRange(value, startMs, endMs) {
+  return Number.isFinite(value) && value >= startMs && value <= endMs;
+}
+
+function mergedFileSortTime(file, startMs, endMs) {
+  const times = [file.createdAt, file.updatedAt].filter((value) => isTimestampInRange(value, startMs, endMs));
+  return times.length ? Math.min(...times) : Number.MAX_SAFE_INTEGER;
+}
+
+function renderMergedDocumentSection(node, content, file, range) {
+  const previousPath = state.currentPath;
+  state.currentPath = node.path;
+  const rendered = isMindmapDocument(content) ? renderMindmapEmbedPreview(content, node.path) : renderMarkdown(content, { path: node.path });
+  state.currentPath = previousPath;
+  return `
+    <section class="merged-document-section">
+      <header class="merged-document-title">
+        <button type="button" data-wiki="${escapeAttribute(node.path)}">${escapeHtml(displayDocumentTitle(node.name || node.path))}</button>
+        <small>${escapeHtml(mergedDocumentMeta(file, range))}</small>
+      </header>
+      <div class="merged-document-body">${rendered}</div>
+    </section>
+  `;
+}
+
+function mergedDocumentMeta(file, range) {
+  const start = parseDateKey(range.start).getTime();
+  const end = addDays(parseDateKey(range.end), 1).getTime() - 1;
+  const parts = [];
+  if (isTimestampInRange(file.createdAt, start, end)) parts.push(`생성 ${formatDate(new Date(file.createdAt))}`);
+  if (isTimestampInRange(file.updatedAt, start, end)) parts.push(`수정 ${formatDate(new Date(file.updatedAt))}`);
+  return parts.join(" · ") || file.path;
 }
 
 function triggerRandomAction() {
@@ -2265,7 +2504,7 @@ async function openFile(path) {
     renderTabStrip();
     pushRecentlyOpened(path, displayDocumentTitle(node.name));
     updateEditButtons();
-    els.markdownView.classList.remove("empty-state", "plain-text-mode", "code-document");
+    els.markdownView.classList.remove("empty-state", "plain-text-mode", "code-document", "merged-documents-view");
     els.markdownView.replaceChildren();
     if (els.mindmapShell) {
       els.mindmapShell.hidden = true;
@@ -3543,7 +3782,7 @@ function renderCurrentDocument(showOpenStep = null, diagnostics = null) {
     showOpenStep?.(step);
   };
   markRenderStep("렌더 영역 초기화 중");
-  els.markdownView.classList.remove("empty-state", "plain-text-mode", "code-document");
+  els.markdownView.classList.remove("empty-state", "plain-text-mode", "code-document", "merged-documents-view");
   els.editorShell.hidden = true;
   if (els.mindmapShell) {
     clearMindmapShell();
@@ -10720,6 +10959,9 @@ async function switchTab(id) {
       showInitialCalendarView();
       if (isTaskCalendarKind(tab.calendarKind || state.calendarKind)) scheduleCalendarRefresh();
     }
+  } else if (tab.view === "merged" && tab.mergedRange) {
+    await renderMergedDocuments(tab.mergedRange);
+    requestAnimationFrame(() => { els.viewerWrap.scrollTop = tab.scrollTop || 0; });
   } else if (tab.path && state.files.has(tab.path)) {
     const wasNavigating = state.navigatingHistory;
     state.navigatingHistory = true;
@@ -10839,7 +11081,7 @@ const OPEN_TABS_KEY = "obsidian-web-viewer-open-tabs";
 
 function saveOpenTabs() {
   const data = {
-    tabs: state.tabs.map((t) => ({ id: t.id, path: t.path, title: t.title, pinned: t.pinned, scrollTop: t.scrollTop, view: t.view || null, calendarKind: t.calendarKind || null })),
+    tabs: state.tabs.map((t) => ({ id: t.id, path: t.path, title: t.title, pinned: t.pinned, scrollTop: t.scrollTop, view: t.view || null, calendarKind: t.calendarKind || null, mergedRange: t.mergedRange || null })),
     activeTabId: state.activeTabId,
   };
   try { localStorage.setItem(OPEN_TABS_KEY, JSON.stringify(data)); } catch {}
@@ -10858,7 +11100,8 @@ function loadOpenTabs() {
     data.tabs.forEach((t) => {
       const path = t?.path || null;
       const view = t?.view || null;
-      const tabKey = view === "calendar" ? "view:calendar" : path || "empty";
+      const mergedRange = normalizeMergedDocumentRange(t?.mergedRange?.start, t?.mergedRange?.end);
+      const tabKey = view === "calendar" ? "view:calendar" : view === "merged" && mergedRange ? `view:merged:${mergedRange.start}:${mergedRange.end}` : path || "empty";
       if (seen.has(tabKey)) return;
       seen.add(tabKey);
       state.tabs.push({
@@ -10867,8 +11110,9 @@ function loadOpenTabs() {
         title: t?.title || "새 탭",
         pinned: Boolean(t?.pinned),
         scrollTop: Number(t?.scrollTop) || 0,
-        view,
+        view: view === "merged" && !mergedRange ? null : view,
         calendarKind: t?.calendarKind || null,
+        mergedRange,
       });
     });
     if (!state.tabs.length) return false;
@@ -10882,6 +11126,8 @@ async function restoreActiveTab() {
   if (tab?.view === "calendar") {
     state.calendarKind = tab.calendarKind || "tasks";
     showInitialCalendarView();
+  } else if (tab?.view === "merged" && tab.mergedRange) {
+    await renderMergedDocuments(tab.mergedRange);
   } else if (tab?.path && state.files.has(tab.path)) {
     await openFile(tab.path);
     requestAnimationFrame(() => { els.viewerWrap.scrollTop = tab.scrollTop || 0; });
@@ -11390,7 +11636,7 @@ async function saveOpenTabsToVault() {
   const deviceName = getDeviceName();
   const tabs = state.tabs.filter((t) => t.path).map((t) => ({ path: t.path, title: t.title }));
   const openTabs = {
-    tabs: state.tabs.map((t) => ({ id: t.id, path: t.path, title: t.title, pinned: t.pinned, scrollTop: t.scrollTop, view: t.view || null, calendarKind: t.calendarKind || null })),
+    tabs: state.tabs.map((t) => ({ id: t.id, path: t.path, title: t.title, pinned: t.pinned, scrollTop: t.scrollTop, view: t.view || null, calendarKind: t.calendarKind || null, mergedRange: t.mergedRange || null })),
     activeTabId: state.activeTabId,
   };
   try {

@@ -1161,6 +1161,113 @@ button:disabled {
   z-index: 20;
 }
 
+.command-palette-overlay,
+.merged-documents-dialog-overlay {
+  align-items: flex-start;
+  background: rgba(0, 0, 0, 0.28);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 72px 14px 14px;
+  position: fixed;
+  z-index: 120;
+}
+
+.command-palette,
+.merged-documents-dialog {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 18px 54px rgba(0, 0, 0, 0.22);
+  width: min(640px, 100%);
+}
+
+.command-palette {
+  overflow: hidden;
+}
+
+.command-palette-input {
+  background: var(--surface);
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--text);
+  font-size: 17px;
+  outline: 0;
+  padding: 14px 16px;
+  width: 100%;
+}
+
+.command-palette-list {
+  display: grid;
+  gap: 4px;
+  max-height: min(420px, 60vh);
+  overflow: auto;
+  padding: 8px;
+}
+
+.command-palette-item {
+  align-items: start;
+  border-radius: 6px;
+  display: grid;
+  gap: 2px;
+  justify-items: start;
+  min-height: 48px;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.command-palette-item span {
+  font-weight: 650;
+}
+
+.command-palette-item small {
+  color: var(--muted);
+}
+
+.merged-documents-dialog {
+  display: grid;
+  gap: 12px;
+  max-width: 420px;
+  padding: 14px;
+}
+
+.merged-documents-dialog header,
+.merged-documents-dialog footer {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.merged-documents-dialog h2 {
+  font-size: 18px;
+  margin: 0;
+}
+
+.merged-documents-dialog label {
+  display: grid;
+  gap: 5px;
+}
+
+.merged-documents-dialog label span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.merged-documents-dialog input {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  min-height: 36px;
+  padding: 0 10px;
+}
+
+.merged-documents-run {
+  background: var(--accent);
+  color: #fff;
+}
+
 .options-header {
   align-items: center;
   border-bottom: 1px solid var(--line);
@@ -1354,6 +1461,10 @@ button:disabled {
   display: none !important;
 }
 
+.viewer-wrap:has(.mindmap-shell:not([hidden])) .heading-controls-overlay {
+  display: none !important;
+}
+
 .view-controls-overlay {
   display: flex;
   gap: 4px;
@@ -1488,6 +1599,60 @@ button:disabled {
 
 .markdown-body.empty-state {
   color: var(--muted);
+}
+
+.markdown-body.merged-documents-view {
+  max-width: min(980px, calc(100vw - 40px));
+  padding-bottom: 80px;
+}
+
+.merged-documents-header {
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 18px;
+  padding-bottom: 12px;
+}
+
+.merged-documents-header h1 {
+  margin-top: 0;
+}
+
+.merged-documents-header p,
+.merged-documents-empty {
+  color: var(--muted);
+}
+
+.merged-document-section {
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 28px;
+  padding-bottom: 28px;
+}
+
+.merged-document-title {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-bottom: 10px;
+}
+
+.merged-document-title button {
+  background: transparent;
+  border: 0;
+  color: var(--accent-strong);
+  font-size: 18px;
+  font-weight: 700;
+  min-height: 0;
+  padding: 0;
+  text-align: left;
+}
+
+.merged-document-title small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.merged-document-body > :first-child {
+  margin-top: 0;
 }
 
 .markdown-body.plain-text-mode {
