@@ -57,3 +57,4 @@
 - 2026-06-27: Replace codeblock-based mindmap detection with an OWV-specific frontmatter and hidden data-block format.
 - 2026-06-27: Refine mindmap arrow navigation, toolbar collapse width, embedded previews, per-mode themes, and branch-depth coloring.
 - 2026-06-27: Roll back mindmap arrow viewport override, preserve mindmap note content on save, mark mindmap tabs, retune branch-depth roots, and create root-only new mindmaps.
+- 2026-06-27: Keep embedded mindmap canvas clicks from opening files and save mindmaps correctly when switching tabs.

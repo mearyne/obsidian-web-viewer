@@ -10204,7 +10204,7 @@ function hydrateMindmapEmbeds(root) {
 function disableMindmapEmbedInteraction(canvas) {
   if (!canvas || canvas.dataset.mindmapInteractionBlocked === "true") return;
   canvas.dataset.mindmapInteractionBlocked = "true";
-  ["mousedown", "mousemove", "wheel", "touchstart", "touchmove", "pointerdown", "pointermove", "contextmenu"].forEach((type) => {
+  ["click", "mousedown", "mousemove", "wheel", "touchstart", "touchmove", "pointerdown", "pointermove", "contextmenu"].forEach((type) => {
     canvas.addEventListener(type, (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -10695,7 +10695,8 @@ async function switchTab(id) {
   if (id === state.activeTabId && state.tabs.find((t) => t.id === id)) return;
   if (state.editMode) {
     if (state.editorDirty && !state.autoSaveInFlight) {
-      await persistCurrentEdit({ closeEditor: false });
+      if (isMindmapDocument(state.currentContent)) await saveMindmapNow({ silent: true });
+      else await persistCurrentEdit({ closeEditor: false });
     }
     state.editMode = false;
     els.editorShell.hidden = true;
