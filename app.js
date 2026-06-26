@@ -4031,8 +4031,23 @@ function fitMindmapToView() {
 
 function handleMindmapKeydown(event) {
   if (!state.mindmapInstance || els.mindmapShell?.hidden) return;
-  if (!(state.editMode && canEditNode(state.currentNode))) return;
   if (isMindmapTextEditingEvent(event)) return;
+  if (isPlainMindmapKey(event, "e")) {
+    if (!state.editMode && canEditNode(state.currentNode)) {
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation?.();
+      void enterEditMode();
+      return;
+    }
+    if (state.editMode && canEditNode(state.currentNode) && startActiveMindmapNodeTextEdit()) {
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation?.();
+      return;
+    }
+  }
+  if (!(state.editMode && canEditNode(state.currentNode))) return;
   if (event.altKey || event.ctrlKey || event.metaKey || event.isComposing) return;
   if (event.key !== "Tab" && event.key !== "Enter") return;
   const target = event.target;
@@ -4052,6 +4067,36 @@ function handleMindmapKeydown(event) {
   }
   const activeNode = activeNodes[0];
   state.mindmapInstance.execCommand?.(activeNode?.isRoot ? "INSERT_CHILD_NODE" : "INSERT_NODE");
+}
+
+function isPlainMindmapKey(event, key) {
+  return !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.isComposing && event.key.toLowerCase() === key;
+}
+
+function startActiveMindmapNodeTextEdit() {
+  const jm = state.mindmapInstance;
+  const node = jm?.renderer?.activeNodeList?.[0];
+  if (!jm || !node) return false;
+  const candidates = [
+    [jm.renderer, "startTextEdit", [node]],
+    [jm.renderer?.textEdit, "showEditTextBox", [node]],
+    [jm.renderer?.textEdit, "show", [node]],
+    [jm.textEdit, "show", [node]],
+    [jm, "execCommand", ["EDIT_NODE", node]],
+    [jm, "execCommand", ["EDIT_NODE_TEXT", node]],
+    [jm, "execCommand", ["START_TEXT_EDIT", node]],
+  ];
+  for (const [owner, method, args] of candidates) {
+    if (typeof owner?.[method] !== "function") continue;
+    try {
+      owner[method](...args);
+      return true;
+    } catch {}
+  }
+  const target = node.group?.node || node.nodeDraw?.node || node.nodeDraw?.root?.node || node.node;
+  if (!target?.dispatchEvent) return false;
+  target.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true, view: window }));
+  return true;
 }
 
 function guardMindmapTextEditingKeydown(event) {
