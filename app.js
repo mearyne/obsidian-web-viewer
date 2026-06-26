@@ -1051,11 +1051,11 @@ async function renderMergedDocuments(range) {
   showLoadingOverlay(`문서 합쳐보기\n${files.length}개 문서 준비 중`);
   try {
     const sections = [];
-    for (const file of files) {
+    for (const [index, file] of files.entries()) {
       const node = state.files.get(file.path);
       if (!node) continue;
       const content = await readFileNode(node);
-      sections.push(renderMergedDocumentSection(node, content, file, range));
+      sections.push(renderMergedDocumentSection(node, content, file, range, index));
       await waitForBrowser();
     }
     els.markdownView.className = "markdown-body merged-documents-view";
@@ -1102,7 +1102,7 @@ function mergedFileSortTime(file, startMs, endMs) {
   return times.length ? Math.min(...times) : Number.MAX_SAFE_INTEGER;
 }
 
-function renderMergedDocumentSection(node, content, file, range) {
+function renderMergedDocumentSection(node, content, file, range, index = 0) {
   const previousPath = state.currentPath;
   state.currentPath = node.path;
   const rendered = isMindmapDocument(content) ? renderMindmapEmbedPreview(content, node.path) : renderMarkdown(content, { path: node.path });
@@ -1110,6 +1110,7 @@ function renderMergedDocumentSection(node, content, file, range) {
   return `
     <section class="merged-document-section">
       <header class="merged-document-title">
+        <span class="merged-document-index">${index + 1}</span>
         <button type="button" data-wiki="${escapeAttribute(node.path)}">${escapeHtml(displayDocumentTitle(node.name || node.path))}</button>
         <small>${escapeHtml(mergedDocumentMeta(file, range))}</small>
       </header>
