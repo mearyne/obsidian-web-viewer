@@ -15,3 +15,4 @@
 - 2026-06-26: Remove the sidebar recent-days placeholder text, rename the recent7 shortcut to 7d, and remove the bottom Obsidian button.
 - 2026-06-26: Allow dragging a document in the sidebar tree onto a folder to move it there.
 - 2026-06-26: Keep the embed refresh button visible on every embed card.
+- 2026-06-26: Change the sidebar recent-days filter into a button that increments by one day per click and resets with x.
