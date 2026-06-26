@@ -2487,17 +2487,11 @@ function toggleTheme() {
 }
 
 function setTheme(theme) {
-  const nextTheme = theme === "dark" ? "dark" : "light";
-  document.documentElement.dataset.theme = nextTheme;
-  localStorage.setItem("obsidian-web-viewer-theme", nextTheme);
-  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", nextTheme === "dark" ? "#181918" : "#f8fafc");
-  if (els.themeButton) {
-    const label = nextTheme === "dark" ? "Switch to light theme" : "Switch to dark theme";
-    els.themeButton.textContent = nextTheme === "dark" ? "☀️" : "🌙";
-    els.themeButton.title = label;
-    els.themeButton.setAttribute("aria-label", label);
-    els.themeButton.setAttribute("aria-pressed", String(nextTheme === "dark"));
-  }
+  document.documentElement.dataset.theme = theme;
+  localStorage.setItem("obsidian-web-viewer-theme", theme);
+  els.themeButton.textContent = theme === "dark" ? "☀️" : "🌙";
+  els.themeButton.title = theme === "dark" ? "Light" : "Dark";
+  els.themeButton.setAttribute("aria-label", els.themeButton.title);
 }
 
 function initOptions() {

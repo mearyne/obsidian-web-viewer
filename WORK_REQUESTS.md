@@ -24,4 +24,3 @@
 - 2026-06-26: Compare jsmind and markmap for local mindmap support.
 - 2026-06-26: Clarify whether direct in-mindmap editing and saveback are possible.
 - 2026-06-26: Restore local jsmind mindmap editing.
-- 2026-06-26: Add complete dark and light theme palettes with synced theme toggle state.
