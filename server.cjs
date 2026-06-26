@@ -1156,6 +1156,9 @@ function normalizeSettings(settings) {
     discordNotifyOffsetsEvent: normalizeNotifyOffsets(settings?.discordNotifyOffsetsEvent, settings?.discordNotifyHoursEvent),
     discordFixedTimesTodo: normalizeNotifyFixedTimes(settings?.discordFixedTimesTodo),
     discordFixedTimesEvent: normalizeNotifyFixedTimes(settings?.discordFixedTimesEvent),
+    mindmapLayout: normalizeMindmapLayout(settings?.mindmapLayout),
+    mindmapAutoFit: typeof settings?.mindmapAutoFit === "boolean" ? settings.mindmapAutoFit : true,
+    mindmapAdvancedTools: typeof settings?.mindmapAdvancedTools === "boolean" ? settings.mindmapAdvancedTools : true,
     clipperRules: Array.isArray(settings?.clipperRules)
       ? settings.clipperRules
           .filter((item) => item && typeof item.urlPattern === "string")
@@ -1167,6 +1170,12 @@ function normalizeSettings(settings) {
           .slice(0, 50)
       : [],
   };
+}
+
+function normalizeMindmapLayout(layout) {
+  return ["mindMap", "logicalStructure", "logicalStructureLeft", "organizationStructure", "catalogOrganization", "timeline"].includes(layout)
+    ? layout
+    : "mindMap";
 }
 
 function settingsFilePath() {

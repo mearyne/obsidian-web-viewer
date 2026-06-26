@@ -2024,7 +2024,6 @@ button:disabled {
   opacity: 0.45;
 }
 
-.mindmap-layout-select,
 .mindmap-search-input {
   background: var(--surface);
   border: 1px solid var(--line);
@@ -2032,10 +2031,6 @@ button:disabled {
   color: var(--text);
   font: inherit;
   height: 26px;
-}
-
-.mindmap-layout-select {
-  max-width: 92px;
 }
 
 .mindmap-search-input {
@@ -2075,10 +2070,6 @@ button:disabled {
 
 .mindmap-canvas .smm-richtext-node-wrap p {
   margin: 0;
-}
-
-.mindmap-canvas:focus {
-  border-color: var(--accent);
 }
 
 .mindmap-canvas input {

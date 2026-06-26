@@ -124,6 +124,7 @@ const state = {
   customConfirmResolve: null,
   mindmapInstance: null,
   mindmapContext: null,
+  mindmapOptions: { layout: "mindMap", autoFit: true, advancedTools: true },
   lastGPressAt: 0,
   taskCreateSourceDate: "",
   selectedPaths: new Set(),
@@ -441,6 +442,11 @@ els.clipperFolderInput?.addEventListener("input", () => {
 });
 els.clipperRuleAddBtn?.addEventListener("click", () => { addClipperRuleRow("", "", ""); scheduleSettingsSave(); });
 els.searchExcludeInput?.addEventListener("input", handleSearchExcludeInput);
+els.optionsMenu?.addEventListener("change", (event) => {
+  if (event.target?.matches?.("#mindmapLayoutSelect, #mindmapAutoFitInput, #mindmapAdvancedToolsInput")) {
+    handleMindmapOptionInput();
+  }
+});
 els.discordWebhookInput?.addEventListener("input", scheduleSettingsSave);
 els.discordNotifyAddTodoBtn?.addEventListener("click", () => { addDiscordNotifyRow("todo", 60); scheduleSettingsSave(); });
 els.discordNotifyAddEventBtn?.addEventListener("click", () => { addDiscordNotifyRow("event", 60); scheduleSettingsSave(); });
@@ -2495,6 +2501,8 @@ function setTheme(theme) {
 }
 
 function initOptions() {
+  ensureMindmapOptionsSection();
+  loadMindmapOptionsFromLocalStorage();
   const savedCalendarPath = localStorage.getItem("obsidian-web-viewer-calendar-paths") || "";
   if (els.calendarPathInput) els.calendarPathInput.value = savedCalendarPath;
   const savedRandomPath = localStorage.getItem("obsidian-web-viewer-random-paths") || "";
@@ -2535,6 +2543,109 @@ function initOptions() {
     if (parsed.length) state.calendarTaskTags = parsed;
   }
   if (els.taskTagsInput) els.taskTagsInput.value = state.calendarTaskTags.join(", ");
+}
+
+function ensureMindmapOptionsSection() {
+  if (!els.optionsMenu || document.getElementById("mindmapLayoutSelect")) return;
+  const section = document.createElement("details");
+  section.className = "option-node";
+  section.innerHTML = `
+    <summary>&#47560;&#51064;&#46300;&#47605;</summary>
+    <div class="option-node-body">
+      <label class="option-field">
+        <span>&#44592;&#48376; &#47112;&#51060;&#50500;&#50883;</span>
+        <select id="mindmapLayoutSelect">
+          <option value="mindMap">Mind</option>
+          <option value="logicalStructure">Logic</option>
+          <option value="logicalStructureLeft">Left</option>
+          <option value="organizationStructure">Org</option>
+          <option value="catalogOrganization">Catalog</option>
+          <option value="timeline">Timeline</option>
+        </select>
+      </label>
+      <label class="option-field option-field-row">
+        <span>&#47116;&#45908; &#54980; &#54868;&#47732;&#50640; &#47582;&#52644;</span>
+        <input id="mindmapAutoFitInput" type="checkbox" />
+      </label>
+      <label class="option-field option-field-row">
+        <span>&#44256;&#44553; &#46020;&#44396; &#54364;&#49884;</span>
+        <input id="mindmapAdvancedToolsInput" type="checkbox" />
+      </label>
+    </div>
+  `;
+  const searchSection = els.searchExcludeInput?.closest(".option-node");
+  searchSection?.after(section) || els.optionsMenu.append(section);
+}
+
+function loadMindmapOptionsFromLocalStorage() {
+  const options = normalizeMindmapOptions({
+    layout: localStorage.getItem("obsidian-web-viewer-mindmap-layout"),
+    autoFit: localStorage.getItem("obsidian-web-viewer-mindmap-auto-fit"),
+    advancedTools: localStorage.getItem("obsidian-web-viewer-mindmap-advanced-tools"),
+  });
+  applyMindmapOptions(options, { persist: false, applyVisible: false });
+}
+
+function normalizeMindmapOptions(options = {}) {
+  const layouts = new Set(["mindMap", "logicalStructure", "logicalStructureLeft", "organizationStructure", "catalogOrganization", "timeline"]);
+  const previous = state.mindmapOptions || { layout: "mindMap", autoFit: true, advancedTools: true };
+  const layout = layouts.has(options.mindmapLayout) ? options.mindmapLayout : (layouts.has(options.layout) ? options.layout : previous.layout);
+  return {
+    layout: layout || "mindMap",
+    autoFit: normalizeStoredBoolean(options.mindmapAutoFit ?? options.autoFit, previous.autoFit),
+    advancedTools: normalizeStoredBoolean(options.mindmapAdvancedTools ?? options.advancedTools, previous.advancedTools),
+  };
+}
+
+function normalizeStoredBoolean(value, fallback) {
+  if (value === true || value === "true" || value === "1") return true;
+  if (value === false || value === "false" || value === "0") return false;
+  return Boolean(fallback);
+}
+
+function applyMindmapOptions(options = {}, { persist = true, applyVisible = true } = {}) {
+  state.mindmapOptions = normalizeMindmapOptions(options);
+  syncMindmapOptionInputs();
+  if (persist) persistMindmapOptions();
+  if (applyVisible) applyVisibleMindmapOptions();
+}
+
+function syncMindmapOptionInputs() {
+  const layout = document.getElementById("mindmapLayoutSelect");
+  const autoFit = document.getElementById("mindmapAutoFitInput");
+  const advancedTools = document.getElementById("mindmapAdvancedToolsInput");
+  if (layout) layout.value = state.mindmapOptions.layout;
+  if (autoFit) autoFit.checked = state.mindmapOptions.autoFit;
+  if (advancedTools) advancedTools.checked = state.mindmapOptions.advancedTools;
+}
+
+function persistMindmapOptions() {
+  localStorage.setItem("obsidian-web-viewer-mindmap-layout", state.mindmapOptions.layout);
+  localStorage.setItem("obsidian-web-viewer-mindmap-auto-fit", state.mindmapOptions.autoFit ? "1" : "0");
+  localStorage.setItem("obsidian-web-viewer-mindmap-advanced-tools", state.mindmapOptions.advancedTools ? "1" : "0");
+}
+
+function applyVisibleMindmapOptions() {
+  const jm = state.mindmapInstance;
+  if (!jm || els.mindmapShell?.hidden) return;
+  jm.setLayout?.(state.mindmapOptions.layout);
+  updateMindmapAdvancedToolVisibility();
+  if (state.mindmapOptions.autoFit) requestAnimationFrame(() => fitMindmapToView());
+}
+
+function updateMindmapAdvancedToolVisibility() {
+  els.mindmapShell?.querySelectorAll("[data-mindmap-advanced]").forEach((element) => {
+    element.hidden = !state.mindmapOptions.advancedTools;
+  });
+}
+
+function handleMindmapOptionInput() {
+  applyMindmapOptions({
+    layout: document.getElementById("mindmapLayoutSelect")?.value,
+    autoFit: document.getElementById("mindmapAutoFitInput")?.checked,
+    advancedTools: document.getElementById("mindmapAdvancedToolsInput")?.checked,
+  });
+  scheduleSettingsSave();
 }
 
 async function loadServerSettings() {
@@ -2582,6 +2693,7 @@ async function loadServerSettings() {
         localStorage.setItem("obsidian-web-viewer-search-exclude", settings.searchExclude);
       }
     }
+    applyMindmapOptions(settings, { persist: true, applyVisible: true });
     if (typeof settings.discordWebhookUrl === "string" && els.discordWebhookInput) {
       els.discordWebhookInput.value = settings.discordWebhookUrl;
     }
@@ -3195,6 +3307,9 @@ async function saveServerSettings() {
         discordFixedTimesTodo: getDiscordFixedTimes("todo"),
         discordFixedTimesEvent: getDiscordFixedTimes("event"),
         clipperRules: getClipperRules(),
+        mindmapLayout: state.mindmapOptions.layout,
+        mindmapAutoFit: state.mindmapOptions.autoFit,
+        mindmapAdvancedTools: state.mindmapOptions.advancedTools,
       }),
     });
   } catch {
@@ -3446,21 +3561,13 @@ function renderMindmapDocument() {
         <button type="button" data-mindmap-action="insert-sibling" data-edit-only aria-label="같은 단계 노드 추가" title="같은 단계 노드 추가">+→</button>
         <button type="button" data-mindmap-action="insert-parent" data-edit-only aria-label="부모 노드 추가" title="부모 노드 추가">+↑</button>
         <button type="button" data-mindmap-action="remove-node" data-edit-only aria-label="선택 노드 삭제" title="선택 노드 삭제">⌫</button>
-        <button type="button" data-mindmap-action="move-up" data-edit-only aria-label="위로 이동" title="위로 이동">↑</button>
-        <button type="button" data-mindmap-action="move-down" data-edit-only aria-label="아래로 이동" title="아래로 이동">↓</button>
-        <button type="button" data-mindmap-action="expand-all" aria-label="전체 펼치기" title="전체 펼치기">⊞</button>
-        <button type="button" data-mindmap-action="collapse-all" aria-label="전체 접기" title="전체 접기">⊟</button>
-        <button type="button" data-mindmap-action="collapse-level-2" aria-label="2단계까지만 펼치기" title="2단계까지만 펼치기">L2</button>
+        <button type="button" data-mindmap-action="move-up" data-mindmap-advanced data-edit-only aria-label="위로 이동" title="위로 이동">↑</button>
+        <button type="button" data-mindmap-action="move-down" data-mindmap-advanced data-edit-only aria-label="아래로 이동" title="아래로 이동">↓</button>
+        <button type="button" data-mindmap-action="expand-all" data-mindmap-advanced aria-label="전체 펼치기" title="전체 펼치기">⊞</button>
+        <button type="button" data-mindmap-action="collapse-all" data-mindmap-advanced aria-label="전체 접기" title="전체 접기">⊟</button>
+        <button type="button" data-mindmap-action="collapse-level-2" data-mindmap-advanced aria-label="2단계까지만 펼치기" title="2단계까지만 펼치기">L2</button>
         <button type="button" data-mindmap-action="fit" aria-label="화면에 맞춤" title="화면에 맞춤">⛶</button>
-        <button type="button" data-mindmap-action="reset-layout" aria-label="레이아웃 정리" title="레이아웃 정리">↺</button>
-        <select class="mindmap-layout-select" data-mindmap-layout aria-label="마인드맵 레이아웃" title="마인드맵 레이아웃">
-          <option value="mindMap">Mind</option>
-          <option value="logicalStructure">Logic</option>
-          <option value="logicalStructureLeft">Left</option>
-          <option value="organizationStructure">Org</option>
-          <option value="catalogOrganization">Catalog</option>
-          <option value="timeline">Timeline</option>
-        </select>
+        <button type="button" data-mindmap-action="reset-layout" data-mindmap-advanced aria-label="레이아웃 정리" title="레이아웃 정리">↺</button>
         <input class="mindmap-search-input" type="search" data-mindmap-search placeholder="검색" aria-label="마인드맵 내부 검색" />
         <button type="button" data-mindmap-action="search-prev" aria-label="이전 검색 결과" title="이전 검색 결과">‹</button>
         <button type="button" data-mindmap-action="search-next" aria-label="다음 검색 결과" title="다음 검색 결과">›</button>
@@ -3484,10 +3591,10 @@ function renderSimpleMindMapDocument(data, canvas) {
     el: canvas,
     data: legacyMindmapDataToSimpleMindMapData(data),
     readonly: !(state.editMode && canEditNode(state.currentNode)),
-    layout: "mindMap",
+    layout: state.mindmapOptions.layout,
     theme: "default",
     themeConfig: getMindmapThemeConfig(),
-    fit: true,
+    fit: state.mindmapOptions.autoFit,
     enableShortcutOnlyWhenMouseInSvg: true,
     enableAutoEnterTextEditWhenKeydown: true,
     selectTextOnEnterEditText: true,
@@ -3501,7 +3608,7 @@ function renderSimpleMindMapDocument(data, canvas) {
   bindMindmapToolbarControls();
   requestAnimationFrame(() => {
     mindMap.resize();
-    fitMindmapToView();
+    if (state.mindmapOptions.autoFit) fitMindmapToView();
   });
 }
 
@@ -3515,10 +3622,7 @@ function bindMindmapToolbarControls() {
       runMindmapToolbarAction(button.getAttribute("data-mindmap-action"));
     });
   });
-  els.mindmapShell?.querySelector("[data-mindmap-layout]")?.addEventListener("change", (event) => {
-    state.mindmapInstance?.setLayout?.(event.target.value);
-    fitMindmapToView();
-  });
+  updateMindmapAdvancedToolVisibility();
   els.mindmapShell?.querySelector("[data-mindmap-search]")?.addEventListener("input", (event) => {
     runMindmapSearch(event.target.value);
   });
