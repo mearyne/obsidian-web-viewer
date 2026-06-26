@@ -54,3 +54,4 @@
 - 2026-06-27: Let mindmap node Enter/Escape reach the library editor and make Ctrl+S exit edit mode after saving.
 - 2026-06-27: Enable `e` to enter mindmap document edit mode and edit selected node text.
 - 2026-06-27: Stabilize simple-mind-map document detection after save and use the library text edit API for selected nodes.
+- 2026-06-27: Replace codeblock-based mindmap detection with an OWV-specific frontmatter and hidden data-block format.

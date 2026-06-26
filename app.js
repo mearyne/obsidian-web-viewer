@@ -138,9 +138,8 @@ const state = {
 };
 
 const EXCALIDRAW_PREVIEW_ENABLED = false;
-const MINDMAP_DOCUMENT_TYPE = "simple-mind-map";
-const MINDMAP_CODE_BLOCK_LANGUAGE = "simple-mind-map";
-const MINDMAP_CODE_BLOCK_PATTERN = /```(simple-mind-map)\s*\n([\s\S]*?)\n```/gi;
+const MINDMAP_DOCUMENT_TYPE = "owv-mindmap";
+const MINDMAP_DATA_BLOCK_PATTERN = /<!--\s*owv-mindmap-data\s*\n([\s\S]*?)\n\s*owv-mindmap-data\s*-->/i;
 
 const MINDMAP_THEME_OPTIONS = [
   { value: "auto", label: "앱 테마 자동" },
@@ -3586,26 +3585,24 @@ function clearMindmapShell() {
 
 function isMindmapDocument(content) {
   const parsed = extractFrontmatter(String(content || "").replace(/\r\n/g, "\n"));
-  const block = findMindmapBlock(parsed.body);
-  if (!block) return false;
-  return true;
+  if (!isMindmapFrontmatter(parsed.frontmatter)) return false;
+  return Boolean(findMindmapDataBlock(parsed.body));
 }
 
 function extractMindmapData(content) {
-  return findMindmapBlock(String(content || ""))?.data || null;
+  return findMindmapDataBlock(extractFrontmatter(String(content || "")).body)?.data || null;
 }
 
-function findMindmapBlock(content) {
+function findMindmapDataBlock(content) {
   const source = String(content || "");
-  MINDMAP_CODE_BLOCK_PATTERN.lastIndex = 0;
-  for (const match of source.matchAll(MINDMAP_CODE_BLOCK_PATTERN)) {
-    try {
-      const data = JSON.parse(match[2]);
-      if (data?.format && data?.data && typeof data.data === "object") {
-        return { language: match[1], json: match[2], raw: match[0], data };
-      }
-    } catch {}
-  }
+  const match = source.match(MINDMAP_DATA_BLOCK_PATTERN);
+  if (!match) return null;
+  try {
+    const data = JSON.parse(match[1]);
+    if (data?.format && data?.data && typeof data.data === "object") {
+      return { json: match[1], raw: match[0], data };
+    }
+  } catch {}
   return null;
 }
 
@@ -3614,7 +3611,7 @@ function isMindmapFrontmatter(frontmatter) {
   return String(frontmatter)
     .split("\n")
     .some((line) => {
-      const match = line.match(/^\s*(?:type|documentType|document-type)\s*:\s*["']?([^"']+)["']?\s*$/i);
+      const match = line.match(/^\s*type\s*:\s*["']?([^"']+)["']?\s*$/i);
       if (!match) return false;
       const value = match[1].trim().toLowerCase();
       return value === MINDMAP_DOCUMENT_TYPE;
@@ -3643,7 +3640,7 @@ function createDefaultMindmapData(title) {
 
 function buildMindmapDocumentContent(data, previousContent = "") {
   const json = JSON.stringify(data, null, 2);
-  const block = "```" + MINDMAP_CODE_BLOCK_LANGUAGE + "\n" + json + "\n```";
+  const block = "<!-- owv-mindmap-data\n" + json + "\nowv-mindmap-data -->";
   const parsed = extractFrontmatter(String(previousContent || ""));
   const title = data?.data?.topic || data?.meta?.name || "마인드맵";
   return `${buildMindmapFrontmatter(parsed.frontmatter)}# ${title}\n\n${block}\n`;

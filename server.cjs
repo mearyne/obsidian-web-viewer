@@ -818,22 +818,22 @@ function getSearchableMarkdownContent(content) {
 
 function extractMindmapSearchText(content) {
   const topics = [];
-  const blocks = String(content || "").matchAll(/```simple-mind-map\s*\n([\s\S]*?)\n```/gi);
+  const blocks = String(content || "").matchAll(/<!--\s*owv-mindmap-data\s*\n([\s\S]*?)\n\s*owv-mindmap-data\s*-->/gi);
   for (const match of blocks) {
     try {
       const parsed = JSON.parse(match[1]);
-      collectLegacyMindmapTopics(parsed?.data, topics);
+      collectMindmapTopics(parsed?.data, topics);
     } catch {}
   }
   return topics.join("\n");
 }
 
-function collectLegacyMindmapTopics(node, topics) {
+function collectMindmapTopics(node, topics) {
   if (!node || typeof node !== "object") return;
   const topic = normalizeMindmapSearchText(node.topic);
   if (topic) topics.push(topic);
   if (Array.isArray(node.children)) {
-    node.children.forEach((child) => collectLegacyMindmapTopics(child, topics));
+    node.children.forEach((child) => collectMindmapTopics(child, topics));
   }
 }
 
