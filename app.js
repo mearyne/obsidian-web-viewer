@@ -633,7 +633,7 @@ function handleGlobalKeydown(event) {
     event.preventDefault();
     event.stopPropagation();
     event.stopImmediatePropagation?.();
-    void saveMindmapNow({ silent: false });
+    void saveMindmapFromShortcut();
     return;
   }
 
@@ -3891,7 +3891,7 @@ function renderSimpleMindMapDocument(data, canvas) {
     defaultInsertSecondLevelNodeText: "새 노드",
     defaultInsertBelowSecondLevelNodeText: "새 노드",
     enableShortcutOnlyWhenMouseInSvg: true,
-    customCheckEnableShortcut: (event) => !isMindmapTextEditingEvent(event),
+    customCheckEnableShortcut: shouldEnableMindmapShortcut,
     enableAutoEnterTextEditWhenKeydown: true,
     selectTextOnEnterEditText: true,
     errorHandler: handleMindmapError,
@@ -4084,6 +4084,11 @@ function isMindmapTextEditingEvent(event) {
   return isMindmapTextEditingTarget(event?.target) || isMindmapTextEditingTarget(document.activeElement);
 }
 
+function shouldEnableMindmapShortcut(event) {
+  if (!isMindmapTextEditingEvent(event)) return true;
+  return event?.key === "Enter" || event?.key === "NumpadEnter" || event?.key === "Escape";
+}
+
 function isMindmapTextEditingTarget(target) {
   const element = target?.nodeType === 1 ? target : target?.parentElement;
   if (!element?.closest) return false;
@@ -4263,6 +4268,19 @@ async function saveMindmapEdit() {
   state.mindmapInstance?.destroy?.();
   state.mindmapInstance = null;
   renderCurrentDocument();
+}
+
+async function saveMindmapFromShortcut() {
+  finishMindmapTextEditing();
+  await new Promise((resolve) => requestAnimationFrame(resolve));
+  await saveMindmapEdit();
+}
+
+function finishMindmapTextEditing() {
+  const active = document.activeElement;
+  if (isMindmapTextEditingTarget(active) && typeof active.blur === "function") {
+    active.blur();
+  }
 }
 
 async function saveMindmapNow({ silent = true } = {}) {
