@@ -3518,7 +3518,7 @@ function renderCurrentDocument(showOpenStep = null, diagnostics = null) {
   }
   els.markdownView.hidden = false;
 
-  if (state.markdownEnabled && isMindmapDocument(state.currentContent)) {
+  if (isMindmapDocument(state.currentContent)) {
     markRenderStep("마인드맵 렌더링 중");
     renderMindmapDocument();
     return;
@@ -4071,8 +4071,6 @@ function isMindmapTextEditingControlKey(event) {
   return [
     "Backspace",
     "Delete",
-    "Enter",
-    "Escape",
     "ArrowLeft",
     "ArrowRight",
     "ArrowUp",
@@ -4281,7 +4279,13 @@ async function saveMindmapNow({ silent = true } = {}) {
   const data = simpleMindMapDataToLegacyMindmapData(state.mindmapInstance.getData(), state.mindmapContext?.sourceData);
   const previousContent = context?.content ?? state.currentContent;
   const nextContent = buildMindmapDocumentContent(data, previousContent);
+  if (!isMindmapDocument(nextContent)) {
+    if (!silent) showAppToast("Mindmap document format is invalid.", "error");
+    return false;
+  }
   if (nextContent === previousContent) {
+    if (context) context.content = nextContent;
+    if (state.currentPath === node.path) state.currentContent = nextContent;
     if (!silent) showAppToast("변경 사항이 없습니다.", "info");
     return true;
   }
