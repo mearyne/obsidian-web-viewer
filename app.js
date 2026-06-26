@@ -271,6 +271,8 @@ const els = {
   expandHeadingLevelButton: document.querySelector("#expandHeadingLevelButton"),
   historyBackButton: document.querySelector("#historyBackButton"),
   historyForwardButton: document.querySelector("#historyForwardButton"),
+  statusUndoButton: null,
+  statusRedoButton: null,
   webEditButton: document.querySelector("#webEditButton"),
   saveEditButton: document.querySelector("#saveEditButton"),
   randomFileButton: document.querySelector("#randomFileButton"),
@@ -3640,6 +3642,7 @@ function handleEditorShortcut(event) {
 }
 
 function runEditorCommand(command) {
+  if (!state.editMode) return;
   focusEditor();
   document.execCommand(command);
   markEditorDirty();
@@ -3946,6 +3949,7 @@ function updateEditButtons() {
     els.saveEditButton.disabled = true;
   }
   if (els.editorImageButton) els.editorImageButton.hidden = !(state.editMode && state.serverVaultWritable);
+  updateStatusEditButtons();
 }
 
 function renderEditSaveButton() {
@@ -3991,7 +3995,7 @@ function arrangeChromeControls() {
     statusBar.setAttribute("aria-label", "History and sync status");
     const historyWrap = document.createElement("div");
     historyWrap.className = "status-history";
-    historyWrap.append(els.historyBackButton, els.historyForwardButton);
+    populateStatusHistory(historyWrap);
     const saveStatusEl = document.createElement("span");
     saveStatusEl.id = "bottomSaveStatus";
     saveStatusEl.className = "bottom-save-status";
@@ -4025,8 +4029,7 @@ function arrangeChromeControls() {
   }
   const historyWrap = statusBar.querySelector(".status-history") || document.createElement("div");
   historyWrap.className = "status-history";
-  if (els.historyBackButton && els.historyBackButton.parentElement !== historyWrap) historyWrap.append(els.historyBackButton);
-  if (els.historyForwardButton && els.historyForwardButton.parentElement !== historyWrap) historyWrap.append(els.historyForwardButton);
+  populateStatusHistory(historyWrap);
   if (!historyWrap.parentElement) statusBar.append(historyWrap);
   if (els.markdownToggleButton) {
     els.markdownToggleButton.classList.add("status-markdown-toggle");
@@ -4060,6 +4063,39 @@ function arrangeChromeControls() {
   } else if (els.syncStatus && els.syncStatus.parentElement !== statusBar) {
     statusBar.append(els.syncStatus);
   }
+}
+
+function createStatusEditButton(id, label, title, text, command) {
+  const button = document.createElement("button");
+  button.id = id;
+  button.className = "icon-button status-edit-button";
+  button.type = "button";
+  button.setAttribute("aria-label", label);
+  button.title = title;
+  button.textContent = text;
+  button.addEventListener("click", () => runEditorCommand(command));
+  return button;
+}
+
+function populateStatusHistory(historyWrap) {
+  if (!historyWrap) return;
+  if (!els.statusUndoButton) els.statusUndoButton = createStatusEditButton("statusUndoButton", "실행 취소", "실행 취소", "↶", "undo");
+  if (!els.statusRedoButton) els.statusRedoButton = createStatusEditButton("statusRedoButton", "다시 실행", "다시 실행", "↷", "redo");
+  let separator = historyWrap.querySelector(".status-history-separator");
+  if (!separator) {
+    separator = document.createElement("span");
+    separator.className = "status-history-separator";
+    separator.setAttribute("aria-hidden", "true");
+    separator.textContent = "|";
+  }
+  historyWrap.replaceChildren(els.historyBackButton, els.historyForwardButton, separator, els.statusUndoButton, els.statusRedoButton);
+  updateStatusEditButtons();
+}
+
+function updateStatusEditButtons() {
+  [els.statusUndoButton, els.statusRedoButton].forEach((button) => {
+    if (button) button.disabled = !state.editMode;
+  });
 }
 
 function openCurrentFileInObsidian() {

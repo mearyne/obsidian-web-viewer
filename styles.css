@@ -849,8 +849,22 @@ button:disabled {
 }
 
 .status-history {
+  align-items: center;
   display: flex;
-  gap: 8px;
+  gap: 6px;
+}
+
+.status-history-separator {
+  color: var(--muted);
+  line-height: 1;
+  padding: 0 2px;
+  user-select: none;
+}
+
+.status-edit-button {
+  height: 28px;
+  min-height: 28px;
+  width: 28px;
 }
 
 .status-markdown-toggle {
