@@ -17,3 +17,4 @@
 - 2026-06-26: Keep the embed refresh button visible on every embed card.
 - 2026-06-26: Change the sidebar recent-days filter into a button that increments by one day per click and resets with x.
 - 2026-06-26: Pull the latest changes from origin/main.
+- 2026-06-26: Replace local mindmap editing with a read-only preview and external markmap link.
