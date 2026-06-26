@@ -26,3 +26,4 @@
 - 2026-06-26: Restore local jsmind mindmap editing.
 - 2026-06-26: Add light and dark themes scoped to the jsmind mindmap view.
 - 2026-06-26: Research open-source projects and wrappers that use or relate to jsMind.
+- 2026-06-26: Clarify whether the identified jsMind-related projects are the most well-known options.
