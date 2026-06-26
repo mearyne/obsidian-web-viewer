@@ -5054,6 +5054,12 @@ button.calendar-more {
   position: absolute;
   right: 0;
 }
+.tab-mindmap-mark {
+  color: var(--accent-strong);
+  flex-shrink: 0;
+  font-size: 10px;
+  line-height: 1;
+}
 .tab-item.pinned .tab-pin { font-size: 13px; line-height: 1; }
 
 .tab-title {

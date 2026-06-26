@@ -56,3 +56,4 @@
 - 2026-06-27: Stabilize simple-mind-map document detection after save and use the library text edit API for selected nodes.
 - 2026-06-27: Replace codeblock-based mindmap detection with an OWV-specific frontmatter and hidden data-block format.
 - 2026-06-27: Refine mindmap arrow navigation, toolbar collapse width, embedded previews, per-mode themes, and branch-depth coloring.
+- 2026-06-27: Roll back mindmap arrow viewport override, preserve mindmap note content on save, mark mindmap tabs, retune branch-depth roots, and create root-only new mindmaps.

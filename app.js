@@ -128,7 +128,6 @@ const state = {
   mindmapOptions: { layout: "mindMap", lightTheme: "light", darkTheme: "dark", autoFit: true, advancedTools: true },
   mindmapKeyCaptureActive: false,
   mindmapToolbarDrag: null,
-  mindmapViewportBeforeArrow: null,
   mindmapDirectImagePasteAt: 0,
   lastGPressAt: 0,
   taskCreateSourceDate: "",
@@ -178,7 +177,7 @@ const MINDMAP_THEME_CONFIGS = {
   "branch-depth-light": {
     backgroundColor: "#f8fafc",
     lineColor: "#7f8da3",
-    root: { fillColor: "#293241", color: "#ffffff", borderColor: "#111827" },
+    root: { fillColor: "#334155", color: "#ffffff", borderColor: "#1e293b" },
     second: { fillColor: "#eef2f7", color: "#172033", borderColor: "#c9d4e3" },
     node: { fillColor: "#f8fafc", color: "#1f2937", borderColor: "#d4dce8" },
   },
@@ -206,7 +205,7 @@ const MINDMAP_THEME_CONFIGS = {
   "branch-depth-dark": {
     backgroundColor: "#111318",
     lineColor: "#627084",
-    root: { fillColor: "#e5e7eb", color: "#111827", borderColor: "#f8fafc" },
+    root: { fillColor: "#cbd5e1", color: "#0f172a", borderColor: "#e2e8f0" },
     second: { fillColor: "#252b35", color: "#f8fafc", borderColor: "#445266" },
     node: { fillColor: "#1b2029", color: "#e5e7eb", borderColor: "#364152" },
   },
@@ -3664,10 +3663,7 @@ function createDefaultMindmapData(title) {
     data: {
       id: "root",
       topic: rootTopic,
-      children: [
-        { id: "idea", topic: "아이디어", direction: "right", expanded: true },
-        { id: "todo", topic: "할 일", direction: "left", expanded: true },
-      ],
+      children: [],
     },
   };
 }
@@ -3675,9 +3671,16 @@ function createDefaultMindmapData(title) {
 function buildMindmapDocumentContent(data, previousContent = "") {
   const json = JSON.stringify(data, null, 2);
   const block = "<!-- owv-mindmap-data\n" + json + "\nowv-mindmap-data -->";
-  const parsed = extractFrontmatter(String(previousContent || ""));
+  const source = String(previousContent || "");
+  const parsed = extractFrontmatter(source);
   const title = data?.data?.topic || data?.meta?.name || "마인드맵";
-  return `${buildMindmapFrontmatter(parsed.frontmatter)}# ${title}\n\n${block}\n`;
+  if (!source) return `${buildMindmapFrontmatter("")}# ${title}\n\n${block}\n`;
+
+  const body = parsed.body || "";
+  const nextBody = MINDMAP_DATA_BLOCK_PATTERN.test(body)
+    ? body.replace(MINDMAP_DATA_BLOCK_PATTERN, block)
+    : `${body.replace(/\s*$/u, "") || `# ${title}`}\n\n${block}\n`;
+  return `${buildMindmapFrontmatter(parsed.frontmatter)}${nextBody.endsWith("\n") ? nextBody : `${nextBody}\n`}`;
 }
 
 function buildMindmapFrontmatter(frontmatter) {
@@ -3976,7 +3979,6 @@ function renderSimpleMindMapDocument(data, canvas) {
   });
   mindMap.on("node_active", () => {
     state.mindmapKeyCaptureActive = true;
-    restoreMindmapViewportAfterArrowNavigation(canvas);
   });
   mindMap.on("search_info_change", updateMindmapSearchStatus);
   bindMindmapToolbarControls();
@@ -4104,59 +4106,9 @@ function fitMindmapToView() {
   jm?.view?.fit?.();
 }
 
-function captureMindmapViewportBeforeArrowNavigation(event) {
-  if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
-  if (event.altKey || event.ctrlKey || event.metaKey || event.isComposing) return;
-  const target = event.target;
-  const targetInMindmap = target?.closest?.(".mindmap-shell");
-  const activeInMindmap = els.mindmapShell?.contains(document.activeElement);
-  if (!targetInMindmap && !activeInMindmap && !state.mindmapKeyCaptureActive) return;
-  const jm = state.mindmapInstance;
-  const view = jm?.view;
-  if (!view || !Number.isFinite(view.x) || !Number.isFinite(view.y) || !Number.isFinite(view.scale)) return;
-  state.mindmapViewportBeforeArrow = { x: view.x, y: view.y, scale: view.scale };
-  window.setTimeout(() => {
-    state.mindmapViewportBeforeArrow = null;
-  }, 180);
-}
-
-function restoreMindmapViewportAfterArrowNavigation(canvas) {
-  const previous = state.mindmapViewportBeforeArrow;
-  if (!previous) return;
-  state.mindmapViewportBeforeArrow = null;
-  const jm = state.mindmapInstance;
-  const view = jm?.view;
-  if (!view) return;
-  requestAnimationFrame(() => {
-    view.x = previous.x;
-    view.y = previous.y;
-    view.scale = previous.scale;
-    view.transform?.();
-    keepActiveMindmapNodeInView(canvas);
-  });
-}
-
-function keepActiveMindmapNodeInView(canvas) {
-  const jm = state.mindmapInstance;
-  const node = jm?.renderer?.activeNodeList?.[0];
-  const nodeElement = node?.group?.node;
-  if (!jm?.view || !canvas || !nodeElement?.getBoundingClientRect) return;
-  const nodeRect = nodeElement.getBoundingClientRect();
-  const canvasRect = canvas.getBoundingClientRect();
-  const padding = 28;
-  let dx = 0;
-  let dy = 0;
-  if (nodeRect.left < canvasRect.left + padding) dx = canvasRect.left + padding - nodeRect.left;
-  else if (nodeRect.right > canvasRect.right - padding) dx = canvasRect.right - padding - nodeRect.right;
-  if (nodeRect.top < canvasRect.top + padding) dy = canvasRect.top + padding - nodeRect.top;
-  else if (nodeRect.bottom > canvasRect.bottom - padding) dy = canvasRect.bottom - padding - nodeRect.bottom;
-  if (dx || dy) jm.view.translateXY?.(dx, dy);
-}
-
 function handleMindmapKeydown(event) {
   if (!state.mindmapInstance || els.mindmapShell?.hidden) return;
   if (isMindmapTextEditingEvent(event)) return;
-  captureMindmapViewportBeforeArrowNavigation(event);
   if (isPlainMindmapKey(event, "e")) {
     if (!state.editMode && canEditNode(state.currentNode)) {
       event.preventDefault();
@@ -10961,9 +10913,10 @@ function renderTabStrip() {
   const newStripHtml = sidebarToggleHtml + state.tabs.map((tab) => {
     const isActive = tab.id === state.activeTabId;
     const title = escapeHtml(tab.title || "새 탭");
+    const mindmapMark = isMindmapTab(tab) ? '<span class="tab-mindmap-mark" title="마인드맵">◆</span>' : "";
     const pinMark = tab.pinned ? '<span class="tab-pin">📌</span>' : "";
     return `<div class="tab-item${isActive ? " active" : ""}${tab.pinned ? " pinned" : ""}" data-tab-id="${escapeAttribute(tab.id)}" data-tab-path="${escapeAttribute(tab.path || "")}" title="${title}">
-      ${pinMark}<span class="tab-title">${title}</span>
+      ${mindmapMark}${pinMark}<span class="tab-title">${title}</span>
       <button class="tab-close" data-tab-id="${escapeAttribute(tab.id)}" title="${tab.pinned ? "핀 해제" : "탭 닫기"}" type="button">×</button>
     </div>`;
   }).join("") + `<button class="tab-new" type="button" title="새 탭 (T)">+</button>`;
@@ -11301,6 +11254,13 @@ function normalizePinnedTabs(pinned) {
 function pinnedTabKey(tab) {
   if (tab?.view === "calendar") return "view:calendar";
   return tab?.path ? `path:${tab.path}` : "";
+}
+
+function isMindmapTab(tab) {
+  if (!tab?.path) return false;
+  if (tab.path === state.currentPath && isMindmapDocument(state.currentContent)) return true;
+  const node = state.files.get(tab.path);
+  return typeof node?.content === "string" && isMindmapDocument(node.content);
 }
 
 function pinnedTabDefaultTitle(tab) {
