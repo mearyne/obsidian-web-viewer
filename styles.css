@@ -1012,6 +1012,7 @@ button:disabled {
 }
 
 .editing-mode #newNoteButton,
+.editing-mode #newMindmapButton,
 .editing-mode #randomFileButton,
 .editing-mode #calendarButton {
   display: none !important;
@@ -1070,6 +1071,10 @@ button:disabled {
 .view-controls button.active {
   background: var(--surface-3);
   border-color: var(--line-strong);
+}
+
+#newMindmapButton {
+  font-size: 17px;
 }
 
 .fullscreen-fallback .app-shell {
@@ -1959,6 +1964,95 @@ button:disabled {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--accent-contrast);
+}
+
+.mindmap-view {
+  display: grid;
+  gap: 10px;
+  margin: 0 auto;
+  max-width: min(100%, 1180px);
+  min-height: calc(100dvh - 150px);
+}
+
+.mindmap-toolbar {
+  align-items: center;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  min-height: 38px;
+  padding: 6px 8px 6px 12px;
+}
+
+.mindmap-toolbar span {
+  color: var(--muted);
+  font-size: 12px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mindmap-save-button {
+  background: var(--surface);
+  border-color: var(--line);
+  flex: 0 0 auto;
+  min-height: 30px;
+  padding: 0 12px;
+}
+
+.mindmap-canvas {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  height: max(560px, calc(100dvh - 210px));
+  min-height: 420px;
+  overflow: auto;
+  outline: none;
+  position: relative;
+}
+
+.mindmap-canvas:focus {
+  border-color: var(--accent);
+}
+
+.mindmap-canvas jmnode {
+  border-radius: 7px;
+  box-shadow: none;
+  font-family: inherit;
+  max-width: 240px;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.mindmap-canvas jmnode.root {
+  font-weight: 750;
+}
+
+.mindmap-canvas jmnode.selected {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+@media (max-width: 780px) {
+  .mindmap-view {
+    min-height: calc(100dvh - 118px);
+  }
+
+  .mindmap-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .mindmap-toolbar span {
+    white-space: normal;
+  }
+
+  .mindmap-canvas {
+    height: calc(100dvh - 190px);
+    min-height: 360px;
+  }
 }
 
 .editor-image-btn {

@@ -121,6 +121,8 @@ const state = {
   randomOldFirst: false,
   randomNoticeToast: null,
   customConfirmResolve: null,
+  mindmapInstance: null,
+  mindmapSaveTimer: null,
   lastGPressAt: 0,
   taskCreateSourceDate: "",
   selectedPaths: new Set(),
@@ -153,6 +155,7 @@ const els = {
   randomPathInput: document.querySelector("#randomPathInput"),
   dailyNotePathInput: document.querySelector("#dailyNotePathInput"),
   newNotePathInput: document.querySelector("#newNotePathInput"),
+  newMindmapButton: document.querySelector("#newMindmapButton"),
   imagePathInput: document.querySelector("#imagePathInput"),
   clipperFolderInput: document.querySelector("#clipperFolderInput"),
   clipperRuleList: document.querySelector("#clipperRuleList"),
@@ -467,6 +470,7 @@ els.discordTestBtn?.addEventListener("click", async () => {
   }
 });
 els.newNoteButton?.addEventListener("click", openNewNote);
+els.newMindmapButton?.addEventListener("click", openNewMindmap);
 els.randomFileButton.addEventListener("click", () => {
   void triggerRandomAction();
 });
@@ -555,6 +559,8 @@ function handleGlobalKeydown(event) {
     }
     return;
   }
+
+  if (event.target.closest?.(".mindmap-view")) return;
 
   if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && event.code === "KeyN") {
     event.preventDefault();
@@ -2655,6 +2661,20 @@ async function openNewNote() {
   await createAndOpenNote(title.trim() || defaultTitle);
 }
 
+async function openNewMindmap() {
+  if (!state.rootHandle && !state.serverVaultWritable) {
+    alert("vault를 먼저 열어야 마인드맵을 만들 수 있습니다.");
+    return;
+  }
+  const now = new Date();
+  const date = formatDate(now);
+  const time = now.toTimeString().slice(0, 5).replace(":", "");
+  const defaultTitle = `${date} ${time} 마인드맵`;
+  const title = await showNewNoteDialog(defaultTitle);
+  if (title === null) return;
+  await createAndOpenMindmap(title.trim() || defaultTitle);
+}
+
 function positionNewNoteDialog() {
   const dialog = els.newNoteDialog;
   if (!dialog || !isTouchPrimaryDevice()) return;
@@ -2754,6 +2774,51 @@ async function createAndOpenNote(title, dirPathOverride) {
   refreshRecentFilesCache();
   invalidateRandomMarkdownCache();
   await openCreatedNoteInEditMode(path, node, initialContent);
+}
+
+async function createAndOpenMindmap(title, dirPathOverride) {
+  const dirPath = dirPathOverride !== undefined
+    ? dirPathOverride
+    : normalizeVaultPath(state.newNotePath || els.newNotePathInput?.value || "");
+  const fileName = title.endsWith(".md") ? title : `${title}.md`;
+  const path = dirPath ? `${dirPath}/${fileName}` : fileName;
+  if (state.files.has(path)) {
+    await openFile(path);
+    return;
+  }
+
+  const cleanTitle = title.replace(/\.md$/i, "");
+  const initialContent = buildMindmapDocumentContent(createDefaultMindmapData(cleanTitle));
+
+  if (!state.rootHandle && state.serverVaultWritable) {
+    const metadata = await writeServerFile(path, initialContent, { backup: false });
+    if (dirPath) ensureDirectoryNodePath(dirPath);
+    const node = { name: fileName, path, content: initialContent, serverBacked: true, kind: "file", ...metadata };
+    state.files.set(path, node);
+    const dir = state.directories.get(dirPath || "");
+    if (dir) dir.children.set(node.name, node);
+    refreshDirectoryMetadataFrom(path);
+    renderTree();
+    refreshRecentFilesCache();
+    invalidateRandomMarkdownCache();
+    await openFile(path);
+    return;
+  }
+
+  const dirHandle = await getOrCreateDirectoryHandle(dirPath || "");
+  const handle = await dirHandle.getFileHandle(fileName, { create: true });
+  await writeFileHandle(handle, initialContent);
+  if (dirPath) ensureDirectoryNodePath(dirPath);
+  const metadata = await readFileMetadata(handle, path);
+  const node = { name: fileName, path, handle, dirHandle, kind: "file", ...metadata };
+  state.files.set(path, node);
+  const dir = state.directories.get(dirPath || "");
+  if (dir) dir.children.set(node.name, node);
+  refreshDirectoryMetadataFrom(path);
+  renderTree();
+  refreshRecentFilesCache();
+  invalidateRandomMarkdownCache();
+  await openFile(path);
 }
 
 async function openCreatedNoteInEditMode(path, node, content) {
@@ -3160,6 +3225,12 @@ function renderCurrentDocument(showOpenStep = null, diagnostics = null) {
   els.editorShell.hidden = true;
   els.markdownView.hidden = false;
 
+  if (state.markdownEnabled && isMindmapDocument(state.currentContent)) {
+    markRenderStep("마인드맵 렌더링 중");
+    renderMindmapDocument();
+    return;
+  }
+
   if (isExcalidrawDocument(state.currentPath || "")) {
     if (!EXCALIDRAW_PREVIEW_ENABLED) {
       markRenderStep("원문 표시 중");
@@ -3206,6 +3277,144 @@ function renderCurrentDocument(showOpenStep = null, diagnostics = null) {
 
   markRenderStep("원문 표시 중");
   renderPlainTextDocument(state.currentContent);
+}
+
+function isMindmapDocument(content) {
+  return /```jsmind\s*\n[\s\S]*?\n```/i.test(String(content || ""));
+}
+
+function extractMindmapData(content) {
+  const match = String(content || "").match(/```jsmind\s*\n([\s\S]*?)\n```/i);
+  if (!match) return null;
+  try {
+    const data = JSON.parse(match[1]);
+    if (data?.format && data?.data) return data;
+  } catch {}
+  return null;
+}
+
+function createDefaultMindmapData(title) {
+  const rootTopic = String(title || "새 마인드맵").trim() || "새 마인드맵";
+  return {
+    meta: {
+      name: rootTopic,
+      author: "obsidian-web-viewer",
+      version: "1.0",
+    },
+    format: "node_tree",
+    data: {
+      id: "root",
+      topic: rootTopic,
+      children: [
+        { id: "idea", topic: "아이디어", direction: "right", expanded: true },
+        { id: "todo", topic: "할 일", direction: "left", expanded: true },
+      ],
+    },
+  };
+}
+
+function buildMindmapDocumentContent(data, previousContent = "") {
+  const json = JSON.stringify(data, null, 2);
+  const block = "```jsmind\n" + json + "\n```";
+  if (isMindmapDocument(previousContent)) {
+    return String(previousContent).replace(/```jsmind\s*\n[\s\S]*?\n```/i, block);
+  }
+  const title = data?.data?.topic || data?.meta?.name || "마인드맵";
+  return `# ${title}\n\n${block}\n`;
+}
+
+function renderMindmapDocument() {
+  const data = extractMindmapData(state.currentContent) || createDefaultMindmapData(displayDocumentTitle(state.currentNode?.name || state.currentPath || "마인드맵"));
+  state.mindmapInstance = null;
+  window.clearTimeout(state.mindmapSaveTimer);
+  els.markdownView.innerHTML = `
+    <section class="mindmap-view">
+      <div class="mindmap-toolbar">
+        <span>Enter 형제 추가 · Tab 자식 추가 · F2 수정 · Delete 삭제</span>
+        <button type="button" class="mindmap-save-button">저장</button>
+      </div>
+      <div id="mindmapCanvas" class="mindmap-canvas" tabindex="0"></div>
+    </section>
+  `;
+  const canvas = els.markdownView.querySelector("#mindmapCanvas");
+  const saveButton = els.markdownView.querySelector(".mindmap-save-button");
+  if (!window.jsMind || !canvas) {
+    els.markdownView.innerHTML = "<p>마인드맵 라이브러리를 불러오지 못했습니다.</p>";
+    return;
+  }
+
+  const jm = new window.jsMind({
+    container: "mindmapCanvas",
+    editable: canEditNode(state.currentNode),
+    theme: "primary",
+    mode: "full",
+    view: {
+      engine: "canvas",
+      draggable: true,
+      hmargin: 80,
+      vmargin: 40,
+      line_width: 2,
+      line_color: getComputedStyle(document.documentElement).getPropertyValue("--line-strong").trim() || "#6b7280",
+    },
+    layout: { hspace: 42, vspace: 12, pspace: 12 },
+    shortcut: {
+      enable: true,
+      mapping: {
+        addchild: [9, 45, 4109],
+        addbrother: [13, 1033],
+        editnode: 113,
+        delnode: 46,
+        toggle: 32,
+        left: 37,
+        up: 38,
+        right: 39,
+        down: 40,
+      },
+    },
+  });
+  state.mindmapInstance = jm;
+  jm.show(data);
+  jm.select_node(firstMindmapEditableNodeId(data) || "root");
+  jm.add_event_listener((type) => {
+    if (type === window.jsMind.event_type.edit) scheduleMindmapSave();
+  });
+  canvas.addEventListener("click", () => canvas.focus());
+  saveButton?.addEventListener("click", () => void saveMindmapNow({ silent: false }));
+  requestAnimationFrame(() => {
+    canvas.focus();
+    jm.resize();
+  });
+}
+
+function firstMindmapEditableNodeId(data) {
+  return data?.data?.children?.[0]?.id || "";
+}
+
+function scheduleMindmapSave() {
+  window.clearTimeout(state.mindmapSaveTimer);
+  state.mindmapSaveTimer = window.setTimeout(() => {
+    state.mindmapSaveTimer = null;
+    void saveMindmapNow({ silent: true });
+  }, 350);
+}
+
+async function saveMindmapNow({ silent = true } = {}) {
+  if (!state.mindmapInstance || !canEditNode(state.currentNode)) return;
+  const data = state.mindmapInstance.get_data("node_tree");
+  const nextContent = buildMindmapDocumentContent(data, state.currentContent);
+  if (nextContent === state.currentContent) return;
+  try {
+    const metadata = await writeNodeContent(state.currentNode, nextContent, { backup: true, previousContent: state.currentContent });
+    Object.assign(state.currentNode, metadata);
+    state.currentNode.content = nextContent;
+    state.currentContent = nextContent;
+    refreshDirectoryMetadata();
+    refreshRecentFilesCache();
+    renderTree();
+    if (!silent) showAppToast("마인드맵 저장됨", "success");
+  } catch {
+    if (!silent) showAppToast("마인드맵 저장 실패", "error");
+  }
 }
 
 function renderPlainTextDocument(content) {
@@ -4145,6 +4354,7 @@ function updateEditButtons() {
   els.webEditButton.hidden = state.activeView !== "note";
   renderEditSaveButton();
   if (els.newNoteButton) els.newNoteButton.hidden = state.editMode;
+  if (els.newMindmapButton) els.newMindmapButton.hidden = state.editMode;
   if (els.randomFileButton) els.randomFileButton.hidden = state.editMode;
   if (els.calendarButton) els.calendarButton.hidden = false;
   if (els.matrixButton) els.matrixButton.hidden = false;
