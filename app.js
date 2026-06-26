@@ -3566,15 +3566,20 @@ function isMindmapDocument(content) {
   const normalized = extractFrontmatter(String(content || "").replace(/\r\n/g, "\n")).body.trim();
   const match = normalized.match(/```jsmind\s*\n([\s\S]*?)\n```/i);
   if (!match) return false;
-  const withoutBlock = normalized.replace(match[0], "").trim();
-  const withoutTitle = withoutBlock.replace(/^# .+$/m, "").trim();
-  if (withoutTitle) return false;
+  let data;
   try {
-    const data = JSON.parse(match[1]);
-    return Boolean(data?.format === "node_tree" && data?.data && typeof data.data === "object");
+    data = JSON.parse(match[1]);
   } catch {
     return false;
   }
+  if (!data?.format || !data?.data || typeof data.data !== "object") return false;
+  const withoutBlock = normalized.replace(match[0], "").trim();
+  if (!withoutBlock) return true;
+  return !withoutBlock
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .some((line) => !/^#{1,6}\s+/.test(line));
 }
 
 function extractMindmapData(content) {

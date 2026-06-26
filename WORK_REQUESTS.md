@@ -45,3 +45,4 @@
 - 2026-06-27: Add mindmap theme options, keyboard node creation fixes, collapsible toolbar, mindmap embeds, quick mindmap creation, and lazy image loading.
 - 2026-06-27: Refine mindmap toolbar grouping, save/read rendering, text-edit shortcuts, and document type detection.
 - 2026-06-27: Make the mindmap toolbar draggable, widen search controls, fix tab white screens, and reliably hydrate mindmap embeds.
+- 2026-06-27: Fix saved mindmap documents reopening as normal Markdown after tab close or revisit.
