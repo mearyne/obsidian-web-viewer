@@ -3411,6 +3411,9 @@ function renderMindmapDocument() {
     requestAnimationFrame(() => {
       jm.resize();
     });
+    window.setTimeout(() => {
+      jm.resize();
+    }, 120);
   });
 }
 

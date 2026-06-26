@@ -4532,8 +4532,15 @@ button.calendar-more {
   }
 
   .viewer-wrap:has(.mindmap-shell:not([hidden])) {
+    height: calc(100dvh - 88px);
+    min-height: calc(100dvh - 88px);
     overflow: hidden;
     padding: 0;
+  }
+
+  .mindmap-shell {
+    height: 100%;
+    min-height: 0;
   }
 
   .calendar-shell {
