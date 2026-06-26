@@ -124,7 +124,9 @@ const state = {
   customConfirmResolve: null,
   mindmapInstance: null,
   mindmapContext: null,
-  mindmapOptions: { layout: "mindMap", autoFit: true, advancedTools: true },
+  mindmapEmbedData: new Map(),
+  mindmapOptions: { layout: "mindMap", theme: "auto", autoFit: true, advancedTools: true },
+  mindmapKeyCaptureActive: false,
   mindmapDirectImagePasteAt: 0,
   lastGPressAt: 0,
   taskCreateSourceDate: "",
@@ -135,6 +137,61 @@ const state = {
 };
 
 const EXCALIDRAW_PREVIEW_ENABLED = false;
+
+const MINDMAP_THEME_OPTIONS = [
+  { value: "auto", label: "앱 테마 자동" },
+  { value: "light", label: "라이트 기본" },
+  { value: "light-blue", label: "라이트 블루" },
+  { value: "light-green", label: "라이트 그린" },
+  { value: "dark", label: "다크 기본" },
+  { value: "dark-slate", label: "다크 슬레이트" },
+  { value: "dark-green", label: "다크 그린" },
+];
+
+const MINDMAP_THEME_CONFIGS = {
+  light: {
+    backgroundColor: "#fbfcff",
+    lineColor: "#7a869a",
+    root: { fillColor: "#4056c8", color: "#ffffff", borderColor: "#3142a4" },
+    second: { fillColor: "#ffffff", color: "#1e293b", borderColor: "#c9d3e3" },
+    node: { fillColor: "#ffffff", color: "#1e293b", borderColor: "#c9d3e3" },
+  },
+  "light-blue": {
+    backgroundColor: "#f6fbff",
+    lineColor: "#6d8fb7",
+    root: { fillColor: "#2563eb", color: "#ffffff", borderColor: "#1d4ed8" },
+    second: { fillColor: "#eff6ff", color: "#172554", borderColor: "#93c5fd" },
+    node: { fillColor: "#ffffff", color: "#1e3a8a", borderColor: "#bfdbfe" },
+  },
+  "light-green": {
+    backgroundColor: "#f7fcf9",
+    lineColor: "#6b9483",
+    root: { fillColor: "#0f766e", color: "#ffffff", borderColor: "#115e59" },
+    second: { fillColor: "#ecfdf5", color: "#064e3b", borderColor: "#6ee7b7" },
+    node: { fillColor: "#ffffff", color: "#134e4a", borderColor: "#99f6e4" },
+  },
+  dark: {
+    backgroundColor: "#171a1f",
+    lineColor: "#687489",
+    root: { fillColor: "#69b7a5", color: "#10211f", borderColor: "#8fd1c4" },
+    second: { fillColor: "#252b35", color: "#e7edf6", borderColor: "#3f4a5c" },
+    node: { fillColor: "#252b35", color: "#e7edf6", borderColor: "#3f4a5c" },
+  },
+  "dark-slate": {
+    backgroundColor: "#101419",
+    lineColor: "#64748b",
+    root: { fillColor: "#38bdf8", color: "#082f49", borderColor: "#7dd3fc" },
+    second: { fillColor: "#1f2937", color: "#f8fafc", borderColor: "#475569" },
+    node: { fillColor: "#111827", color: "#e5e7eb", borderColor: "#374151" },
+  },
+  "dark-green": {
+    backgroundColor: "#101816",
+    lineColor: "#5d7f73",
+    root: { fillColor: "#34d399", color: "#052e2b", borderColor: "#6ee7b7" },
+    second: { fillColor: "#1c2a27", color: "#ecfdf5", borderColor: "#2f4f47" },
+    node: { fillColor: "#17211f", color: "#d1fae5", borderColor: "#2f4f47" },
+  },
+};
 
 const els = {
   sidebarPanel: document.querySelector("#sidebarPanel"),
@@ -444,7 +501,7 @@ els.clipperFolderInput?.addEventListener("input", () => {
 els.clipperRuleAddBtn?.addEventListener("click", () => { addClipperRuleRow("", "", ""); scheduleSettingsSave(); });
 els.searchExcludeInput?.addEventListener("input", handleSearchExcludeInput);
 els.optionsMenu?.addEventListener("change", (event) => {
-  if (event.target?.matches?.("#mindmapLayoutSelect, #mindmapAutoFitInput, #mindmapAdvancedToolsInput")) {
+  if (event.target?.matches?.("#mindmapLayoutSelect, #mindmapThemeSelect, #mindmapAutoFitInput, #mindmapAdvancedToolsInput")) {
     handleMindmapOptionInput();
   }
 });
@@ -492,6 +549,10 @@ els.optionsBackdrop.addEventListener("click", closeOptionsMenu);
 els.imageLightbox.addEventListener("click", closeImageLightbox);
 els.imageLightboxClose.addEventListener("click", closeImageLightbox);
 document.addEventListener("paste", handleMindmapPaste, true);
+document.addEventListener("keydown", handleMindmapKeydown, true);
+document.addEventListener("pointerdown", (event) => {
+  if (!event.target?.closest?.(".mindmap-shell")) state.mindmapKeyCaptureActive = false;
+}, true);
 els.recentSevenDaysQuickButton?.addEventListener("click", () => setRecentDaysFilter(7));
 els.themeButton.addEventListener("click", toggleTheme);
 els.sidebarResizeHandle.addEventListener("pointerdown", startSidebarResize);
@@ -604,6 +665,15 @@ function handleGlobalKeydown(event) {
   }
 
   if (isTypingTarget(event.target)) return;
+
+  if (!event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && event.code === "KeyM") {
+    if (canCreateLinkedMindmapFromCurrentNote()) {
+      event.preventDefault();
+      event.stopPropagation();
+      void createLinkedMindmapFromCurrentNote();
+      return;
+    }
+  }
 
   if (!event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && event.code === "KeyT") {
     event.preventDefault();
@@ -2565,6 +2635,12 @@ function ensureMindmapOptionsSection() {
           <option value="timeline">Timeline</option>
         </select>
       </label>
+      <label class="option-field">
+        <span>&#53580;&#47560;</span>
+        <select id="mindmapThemeSelect">
+          ${MINDMAP_THEME_OPTIONS.map((theme) => `<option value="${theme.value}">${theme.label}</option>`).join("")}
+        </select>
+      </label>
       <label class="option-field option-field-row">
         <span>&#47116;&#45908; &#54980; &#54868;&#47732;&#50640; &#47582;&#52644;</span>
         <input id="mindmapAutoFitInput" type="checkbox" />
@@ -2582,6 +2658,7 @@ function ensureMindmapOptionsSection() {
 function loadMindmapOptionsFromLocalStorage() {
   const options = normalizeMindmapOptions({
     layout: localStorage.getItem("obsidian-web-viewer-mindmap-layout"),
+    theme: localStorage.getItem("obsidian-web-viewer-mindmap-theme"),
     autoFit: localStorage.getItem("obsidian-web-viewer-mindmap-auto-fit"),
     advancedTools: localStorage.getItem("obsidian-web-viewer-mindmap-advanced-tools"),
   });
@@ -2590,10 +2667,13 @@ function loadMindmapOptionsFromLocalStorage() {
 
 function normalizeMindmapOptions(options = {}) {
   const layouts = new Set(["mindMap", "logicalStructure", "logicalStructureLeft", "organizationStructure", "catalogOrganization", "timeline"]);
-  const previous = state.mindmapOptions || { layout: "mindMap", autoFit: true, advancedTools: true };
+  const themes = new Set(MINDMAP_THEME_OPTIONS.map((theme) => theme.value));
+  const previous = state.mindmapOptions || { layout: "mindMap", theme: "auto", autoFit: true, advancedTools: true };
   const layout = layouts.has(options.mindmapLayout) ? options.mindmapLayout : (layouts.has(options.layout) ? options.layout : previous.layout);
+  const theme = themes.has(options.mindmapTheme) ? options.mindmapTheme : (themes.has(options.theme) ? options.theme : previous.theme);
   return {
     layout: layout || "mindMap",
+    theme: theme || "auto",
     autoFit: normalizeStoredBoolean(options.mindmapAutoFit ?? options.autoFit, previous.autoFit),
     advancedTools: normalizeStoredBoolean(options.mindmapAdvancedTools ?? options.advancedTools, previous.advancedTools),
   };
@@ -2614,15 +2694,18 @@ function applyMindmapOptions(options = {}, { persist = true, applyVisible = true
 
 function syncMindmapOptionInputs() {
   const layout = document.getElementById("mindmapLayoutSelect");
+  const theme = document.getElementById("mindmapThemeSelect");
   const autoFit = document.getElementById("mindmapAutoFitInput");
   const advancedTools = document.getElementById("mindmapAdvancedToolsInput");
   if (layout) layout.value = state.mindmapOptions.layout;
+  if (theme) theme.value = state.mindmapOptions.theme;
   if (autoFit) autoFit.checked = state.mindmapOptions.autoFit;
   if (advancedTools) advancedTools.checked = state.mindmapOptions.advancedTools;
 }
 
 function persistMindmapOptions() {
   localStorage.setItem("obsidian-web-viewer-mindmap-layout", state.mindmapOptions.layout);
+  localStorage.setItem("obsidian-web-viewer-mindmap-theme", state.mindmapOptions.theme);
   localStorage.setItem("obsidian-web-viewer-mindmap-auto-fit", state.mindmapOptions.autoFit ? "1" : "0");
   localStorage.setItem("obsidian-web-viewer-mindmap-advanced-tools", state.mindmapOptions.advancedTools ? "1" : "0");
 }
@@ -2631,6 +2714,7 @@ function applyVisibleMindmapOptions() {
   const jm = state.mindmapInstance;
   if (!jm || els.mindmapShell?.hidden) return;
   jm.setLayout?.(state.mindmapOptions.layout);
+  jm.setThemeConfig?.(getMindmapThemeConfig());
   updateMindmapAdvancedToolVisibility();
   if (state.mindmapOptions.autoFit) requestAnimationFrame(() => fitMindmapToView());
 }
@@ -2644,6 +2728,7 @@ function updateMindmapAdvancedToolVisibility() {
 function handleMindmapOptionInput() {
   applyMindmapOptions({
     layout: document.getElementById("mindmapLayoutSelect")?.value,
+    theme: document.getElementById("mindmapThemeSelect")?.value,
     autoFit: document.getElementById("mindmapAutoFitInput")?.checked,
     advancedTools: document.getElementById("mindmapAdvancedToolsInput")?.checked,
   });
@@ -2936,6 +3021,66 @@ async function createAndOpenMindmap(title, dirPathOverride) {
   refreshRecentFilesCache();
   invalidateRandomMarkdownCache();
   await openFile(path);
+}
+
+function canCreateLinkedMindmapFromCurrentNote() {
+  return state.activeView === "note"
+    && !state.editMode
+    && isMarkdownDocument(state.currentPath || "")
+    && !isMindmapDocument(state.currentContent)
+    && canEditNode(state.currentNode);
+}
+
+async function createLinkedMindmapFromCurrentNote() {
+  if (!canCreateLinkedMindmapFromCurrentNote()) return;
+  const granted = await ensureNodeWritePermission(state.currentNode);
+  if (!granted) {
+    alert("파일 편집 권한이 필요합니다.");
+    return;
+  }
+  const now = new Date();
+  const pad = (value) => String(value).padStart(2, "0");
+  const currentDir = state.currentPath?.includes("/") ? state.currentPath.split("/").slice(0, -1).join("/") : "";
+  const currentTitle = displayDocumentTitle(state.currentNode?.name || state.currentPath || "노트");
+  const safeBase = `${currentTitle} 마인드맵 ${formatDate(now)} ${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
+    .replace(/[/\\:*?"<>|]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const fileName = `${safeBase}.md`;
+  const path = currentDir ? `${currentDir}/${fileName}` : fileName;
+  const initialContent = buildMindmapDocumentContent(createDefaultMindmapData(safeBase));
+
+  let mindmapNode;
+  if (!state.rootHandle && state.serverVaultWritable) {
+    const metadata = await writeServerFile(path, initialContent, { backup: false });
+    if (currentDir) ensureDirectoryNodePath(currentDir);
+    mindmapNode = { name: fileName, path, content: initialContent, serverBacked: true, kind: "file", ...metadata };
+  } else {
+    const dirHandle = await getOrCreateDirectoryHandle(currentDir || "");
+    const handle = await dirHandle.getFileHandle(fileName, { create: true });
+    await writeFileHandle(handle, initialContent);
+    if (currentDir) ensureDirectoryNodePath(currentDir);
+    const metadata = await readFileMetadata(handle, path);
+    mindmapNode = { name: fileName, path, handle, dirHandle, kind: "file", ...metadata };
+  }
+
+  state.files.set(path, mindmapNode);
+  const dir = state.directories.get(currentDir || "");
+  if (dir) dir.children.set(mindmapNode.name, mindmapNode);
+
+  const embedTarget = path;
+  const nextContent = `${state.currentContent.replace(/\s*$/u, "")}\n\n![[${embedTarget}]]\n`;
+  const metadata = await writeNodeContent(state.currentNode, nextContent, { previousContent: state.currentContent });
+  Object.assign(state.currentNode, metadata);
+  state.currentNode.content = nextContent;
+  state.currentContent = nextContent;
+  updateTasksForFile(state.currentNode.path, nextContent);
+  refreshDirectoryMetadataFrom(path);
+  refreshDirectoryMetadataFrom(state.currentNode.path);
+  renderTree();
+  refreshRecentFilesCache();
+  invalidateRandomMarkdownCache();
+  renderCurrentDocument();
 }
 
 async function openCreatedNoteInEditMode(path, node, content) {
@@ -3310,6 +3455,7 @@ async function saveServerSettings() {
         discordFixedTimesEvent: getDiscordFixedTimes("event"),
         clipperRules: getClipperRules(),
         mindmapLayout: state.mindmapOptions.layout,
+        mindmapTheme: state.mindmapOptions.theme,
         mindmapAutoFit: state.mindmapOptions.autoFit,
         mindmapAdvancedTools: state.mindmapOptions.advancedTools,
       }),
@@ -3379,6 +3525,7 @@ function renderCurrentDocument(showOpenStep = null, diagnostics = null) {
       return;
     }
     markRenderStep("Markdown 변환 중");
+    state.mindmapEmbedData = new Map();
     els.markdownView.innerHTML = renderMarkdown(state.currentContent, { path: state.currentPath || "" });
     markRenderStep("체크박스 연결 중");
     bindRenderedTaskCheckboxes(els.markdownView);
@@ -3392,6 +3539,7 @@ function renderCurrentDocument(showOpenStep = null, diagnostics = null) {
     bindImageLightbox(els.markdownView);
     markRenderStep("이미지 준비 중");
     hydrateVaultImages(els.markdownView);
+    hydrateMindmapEmbeds(els.markdownView);
     markRenderStep("임베드 준비 중");
     hydrateEmbeddedDocuments(els.markdownView);
     if (EXCALIDRAW_PREVIEW_ENABLED) hydrateExcalidrawPackagePreviews(els.markdownView);
@@ -3455,7 +3603,15 @@ function getMindmapLineColor() {
   return getMindmapCssValue("--mindmap-line", getComputedStyle(document.documentElement).getPropertyValue("--line-strong").trim() || "#6b7280");
 }
 
+function selectedMindmapThemeName() {
+  const selected = state.mindmapOptions?.theme || "auto";
+  if (selected !== "auto") return selected;
+  return document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+}
+
 function getMindmapThemeConfig() {
+  const selectedTheme = MINDMAP_THEME_CONFIGS[selectedMindmapThemeName()];
+  if (selectedTheme) return JSON.parse(JSON.stringify(selectedTheme));
   return {
     backgroundColor: getMindmapCssValue("--mindmap-bg", "#fbfcff"),
     lineColor: getMindmapLineColor(),
@@ -3530,7 +3686,9 @@ function simpleMindMapNodeToLegacyMindmapNode(node, isRoot = false) {
 }
 
 function copyMindmapImageData(source, target) {
-  if (typeof source?.image === "string" && source.image) target.image = source.image;
+  const image = typeof source?.fullImage === "string" && source.fullImage ? source.fullImage : source?.image;
+  if (typeof image === "string" && image) target.image = image;
+  if (typeof source?.fullImage === "string" && source.fullImage) target.fullImage = source.fullImage;
   if (typeof source?.imageTitle === "string") target.imageTitle = source.imageTitle;
   if (source?.imageSize && typeof source.imageSize === "object") {
     const width = Number(source.imageSize.width);
@@ -3546,7 +3704,36 @@ function copyMindmapImageData(source, target) {
 }
 
 function legacyMindmapDataToSimpleMindMapData(data) {
-  return legacyMindmapNodeToSimpleMindMapNode(data?.data || createDefaultMindmapData("마인드맵").data);
+  return prepareMindmapImagesForPreview(legacyMindmapNodeToSimpleMindMapNode(data?.data || createDefaultMindmapData("마인드맵").data));
+}
+
+function prepareMindmapImagesForPreview(node) {
+  const data = node?.data;
+  if (data?.image) {
+    const fullImage = data.fullImage || data.image;
+    const previewImage = mindmapImagePreviewUrl(fullImage);
+    if (previewImage !== fullImage) {
+      data.image = previewImage;
+      data.fullImage = fullImage;
+    }
+  }
+  if (Array.isArray(node?.children)) node.children.forEach(prepareMindmapImagesForPreview);
+  return node;
+}
+
+function mindmapImagePreviewUrl(image) {
+  const path = vaultPathFromMindmapImageUrl(image);
+  return path ? getThumbnailUrl(path) : image;
+}
+
+function vaultPathFromMindmapImageUrl(image) {
+  const value = String(image || "");
+  try {
+    const url = new URL(value, window.location.origin);
+    return url.pathname === "/api/vault-file" ? url.searchParams.get("path") || "" : "";
+  } catch {
+    return "";
+  }
 }
 
 function simpleMindMapDataToLegacyMindmapData(data, previousData) {
@@ -3573,9 +3760,12 @@ function renderMindmapDocument() {
   els.calendarView.hidden = true;
   if (!els.mindmapShell) return;
   els.mindmapShell.hidden = false;
+  state.mindmapKeyCaptureActive = false;
   els.mindmapShell.innerHTML = `
     <section class="mindmap-view">
-      ${canEdit ? `<div class="mindmap-toolbar" aria-label="마인드맵 도구">
+      ${canEdit ? `<details class="mindmap-toolbar-panel" open>
+        <summary class="mindmap-toolbar-toggle" aria-label="마인드맵 도구 접기/펼치기" title="마인드맵 도구">☰</summary>
+        <div class="mindmap-toolbar" aria-label="마인드맵 도구">
         <button type="button" data-mindmap-action="back" aria-label="실행 취소" title="실행 취소">↶</button>
         <button type="button" data-mindmap-action="forward" aria-label="다시 실행" title="다시 실행">↷</button>
         <button type="button" data-mindmap-action="insert-child" data-edit-only aria-label="하위 노드 추가" title="하위 노드 추가">+↓</button>
@@ -3594,11 +3784,16 @@ function renderMindmapDocument() {
         <button type="button" data-mindmap-action="search-next" aria-label="다음 검색 결과" title="다음 검색 결과">›</button>
         <button type="button" data-mindmap-action="search-clear" aria-label="검색 해제" title="검색 해제">×</button>
         <span class="mindmap-search-status" data-mindmap-search-status></span>
-      </div>` : ""}
+        </div>
+      </details>` : ""}
       <div id="mindmapCanvas" class="mindmap-canvas" tabindex="0"></div>
     </section>
   `;
   const canvas = els.mindmapShell.querySelector("#mindmapCanvas");
+  canvas?.addEventListener("pointerdown", () => {
+    state.mindmapKeyCaptureActive = true;
+    canvas.focus({ preventScroll: true });
+  });
   if (!window.SimpleMindMap || !canvas) {
     els.mindmapShell.innerHTML = "<p>마인드맵 라이브러리를 불러오지 못했습니다.</p>";
     return;
@@ -3617,6 +3812,8 @@ function renderSimpleMindMapDocument(data, canvas) {
     themeConfig: getMindmapThemeConfig(),
     fit: state.mindmapOptions.autoFit,
     handleNodePasteImg: handleMindmapNodePasteImage,
+    defaultInsertSecondLevelNodeText: "새 노드",
+    defaultInsertBelowSecondLevelNodeText: "새 노드",
     enableShortcutOnlyWhenMouseInSvg: true,
     enableAutoEnterTextEditWhenKeydown: true,
     selectTextOnEnterEditText: true,
@@ -3626,11 +3823,15 @@ function renderSimpleMindMapDocument(data, canvas) {
   mindMap.on("data_change", () => {
     if (state.editMode && canEditNode(state.currentNode)) state.editorDirty = true;
   });
+  mindMap.on("node_active", () => {
+    state.mindmapKeyCaptureActive = true;
+  });
   mindMap.on("search_info_change", updateMindmapSearchStatus);
   bindMindmapToolbarControls();
   requestAnimationFrame(() => {
     mindMap.resize();
     if (state.mindmapOptions.autoFit) fitMindmapToView();
+    enableMindmapLazyImages(canvas);
   });
 }
 
@@ -3677,6 +3878,30 @@ function fitMindmapToView() {
   jm?.view?.fit?.();
 }
 
+function handleMindmapKeydown(event) {
+  if (!state.mindmapInstance || els.mindmapShell?.hidden) return;
+  if (!(state.editMode && canEditNode(state.currentNode))) return;
+  if (event.altKey || event.ctrlKey || event.metaKey || event.isComposing) return;
+  if (event.key !== "Tab" && event.key !== "Enter") return;
+  const target = event.target;
+  if (target?.closest?.(".mindmap-toolbar")) return;
+  if (target?.matches?.("input, textarea, select") || target?.isContentEditable) return;
+  const targetInMindmap = target?.closest?.(".mindmap-shell");
+  const activeInMindmap = els.mindmapShell.contains(document.activeElement);
+  const activeNodes = state.mindmapInstance.renderer?.activeNodeList || [];
+  if (!targetInMindmap && !activeInMindmap && !state.mindmapKeyCaptureActive) return;
+  if (!activeNodes.length) return;
+  event.preventDefault();
+  event.stopPropagation();
+  event.stopImmediatePropagation?.();
+  if (event.key === "Tab") {
+    state.mindmapInstance.execCommand?.("INSERT_CHILD_NODE");
+    return;
+  }
+  const activeNode = activeNodes[0];
+  state.mindmapInstance.execCommand?.(activeNode?.isRoot ? "INSERT_CHILD_NODE" : "INSERT_NODE");
+}
+
 async function handleMindmapPaste(event) {
   if (!state.mindmapInstance || els.mindmapShell?.hidden) return;
   if (!(state.editMode && canEditNode(state.currentNode))) return;
@@ -3710,6 +3935,9 @@ async function pasteImageToActiveMindmapNodes(blob) {
         width: imageData.size.width,
         height: imageData.size.height,
       });
+      if (imageData.fullUrl && imageData.fullUrl !== imageData.url) {
+        jm.execCommand?.("SET_NODE_DATA", node, { fullImage: imageData.fullUrl });
+      }
     });
   } catch {
     showAppToast("마인드맵 이미지 붙여넣기에 실패했습니다.", "error");
@@ -3722,8 +3950,10 @@ async function handleMindmapNodePasteImage(blob, options = {}) {
   }
   const size = await getImageBlobSize(blob);
   if (!state.serverVaultWritable) {
+    const dataUrl = await blobToDataUrl(blob);
     return {
-      url: await blobToDataUrl(blob),
+      url: dataUrl,
+      fullUrl: dataUrl,
       size,
     };
   }
@@ -3735,8 +3965,10 @@ async function handleMindmapNodePasteImage(blob, options = {}) {
   });
   if (!response.ok) throw new Error("mindmap image upload failed");
   registerUploadedFileInVault(filePath, blob.size || 0);
+  const fullUrl = `/api/vault-file?path=${encodeURIComponent(filePath)}`;
   return {
-    url: `/api/vault-file?path=${encodeURIComponent(filePath)}`,
+    url: getThumbnailUrl(filePath) || fullUrl,
+    fullUrl,
     size,
   };
 }
@@ -9538,7 +9770,24 @@ function renderWikiLink(rawTarget) {
 function renderEmbeddedDocumentContent(path, content) {
   if (isExcalidrawDocument(path) && !EXCALIDRAW_PREVIEW_ENABLED) return renderDisabledExcalidrawEmbed(path);
   if (isExcalidrawDocument(path)) return renderExcalidrawPreview(content, path, { embedded: true });
+  if (isMindmapDocument(content)) return renderMindmapEmbedPreview(content, path);
   return renderMarkdown(content, { path });
+}
+
+function renderMindmapEmbedPreview(content, path) {
+  const data = extractMindmapData(content);
+  const title = displayDocumentTitle(path.split("/").pop() || path);
+  if (!data) return `<a class="wiki-link" href="#" data-wiki="${escapeAttribute(path)}">${escapeHtml(title)}</a>`;
+  const id = `mindmap_embed_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  state.mindmapEmbedData.set(id, { data, path });
+  return `
+    <div class="mindmap-embed-preview">
+      <div class="mindmap-embed-header">
+        <button type="button" class="mindmap-embed-open" data-wiki="${escapeAttribute(path)}">${escapeHtml(title)}</button>
+      </div>
+      <div class="mindmap-embed-canvas" data-mindmap-embed-id="${escapeAttribute(id)}"></div>
+    </div>
+  `;
 }
 
 function renderDisabledExcalidrawEmbed(path) {
@@ -9567,10 +9816,67 @@ async function hydrateEmbeddedDocuments(root) {
       bindWikiLinks(embed);
       bindRenderedTaskCheckboxes(embed);
       hydrateVaultImages(embed);
+      hydrateMindmapEmbeds(embed);
       hydrateEmbeddedDocuments(embed);
       if (EXCALIDRAW_PREVIEW_ENABLED) hydrateExcalidrawPackagePreviews(embed);
     }),
   );
+}
+
+function hydrateMindmapEmbeds(root) {
+  if (!window.SimpleMindMap) return;
+  root.querySelectorAll("[data-mindmap-embed-id]").forEach((canvas) => {
+    if (canvas.dataset.mindmapHydrated === "true") return;
+    const id = canvas.getAttribute("data-mindmap-embed-id");
+    const entry = state.mindmapEmbedData.get(id);
+    if (!entry?.data) return;
+    canvas.dataset.mindmapHydrated = "true";
+    const mindMap = new window.SimpleMindMap({
+      el: canvas,
+      data: legacyMindmapDataToSimpleMindMapData(entry.data),
+      readonly: true,
+      layout: state.mindmapOptions.layout,
+      theme: "default",
+      themeConfig: getMindmapThemeConfig(),
+      fit: true,
+      enableShortcutOnlyWhenMouseInSvg: false,
+      errorHandler: () => {},
+    });
+    canvas._mindmapPreviewInstance = mindMap;
+    requestAnimationFrame(() => {
+      mindMap.resize();
+      mindMap.view?.fit?.();
+      enableMindmapLazyImages(canvas);
+    });
+  });
+}
+
+function enableMindmapLazyImages(root) {
+  if (!root || root.dataset.mindmapLazyImagesBound === "true") return;
+  root.dataset.mindmapLazyImagesBound = "true";
+  root.addEventListener("click", (event) => {
+    const image = event.target?.closest?.("image");
+    if (!image || !root.contains(image)) return;
+    const href = image.getAttribute("href") || image.getAttribute("xlink:href") || "";
+    const full = fullMindmapImageUrlFromPreview(href);
+    if (!full || full === href) return;
+    event.preventDefault();
+    event.stopPropagation();
+    image.setAttribute("href", full);
+    image.setAttribute("xlink:href", full);
+  });
+}
+
+function fullMindmapImageUrlFromPreview(url) {
+  const value = String(url || "");
+  try {
+    const parsed = new URL(value, window.location.origin);
+    if (parsed.pathname !== "/api/vault-image-thumb") return "";
+    const path = parsed.searchParams.get("path") || "";
+    return path ? `/api/vault-file?path=${encodeURIComponent(path)}` : "";
+  } catch {
+    return "";
+  }
 }
 
 function ensureExcalidrawPreviewModule() {
