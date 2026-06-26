@@ -31,3 +31,4 @@
 - 2026-06-26: Assess whether `wanglin2/mind-map` can be used quickly in the browser for preview and editing.
 - 2026-06-26: Prototype `wanglin2/mind-map` (`simple-mind-map`) as the browser mindmap renderer while preserving local saveback.
 - 2026-06-26: Fix hidden or overlapped text in the new `simple-mind-map` mindmap renderer.
+- 2026-06-26: Remove paragraph margins inside `simple-mind-map` rich text nodes so node labels remain visible.

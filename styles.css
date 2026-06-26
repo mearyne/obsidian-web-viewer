@@ -2037,6 +2037,10 @@ button:disabled {
   width: 100%;
 }
 
+.mindmap-canvas .smm-richtext-node-wrap p {
+  margin: 0;
+}
+
 .mindmap-canvas:focus {
   border-color: var(--accent);
 }
