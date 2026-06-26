@@ -624,6 +624,8 @@ async function lockPreferredOrientation() {
 }
 
 function handleGlobalKeydown(event) {
+  if (isMindmapTextEditingTarget(event.target)) return;
+
   if (!els.optionsMenu.hidden) {
     if (event.key === "Escape") {
       event.preventDefault();
@@ -3486,6 +3488,8 @@ function renderCurrentDocument(showOpenStep = null, diagnostics = null) {
     showOpenStep?.(step);
   };
   markRenderStep("렌더 영역 초기화 중");
+  state.mindmapInstance?.destroy?.();
+  state.mindmapInstance = null;
   els.markdownView.classList.remove("empty-state", "plain-text-mode", "code-document");
   els.editorShell.hidden = true;
   if (els.mindmapShell) {
@@ -3551,7 +3555,18 @@ function renderCurrentDocument(showOpenStep = null, diagnostics = null) {
 }
 
 function isMindmapDocument(content) {
-  return /```jsmind\s*\n[\s\S]*?\n```/i.test(String(content || ""));
+  const normalized = extractFrontmatter(String(content || "").replace(/\r\n/g, "\n")).body.trim();
+  const match = normalized.match(/```jsmind\s*\n([\s\S]*?)\n```/i);
+  if (!match) return false;
+  const withoutBlock = normalized.replace(match[0], "").trim();
+  const withoutTitle = withoutBlock.replace(/^# .+$/m, "").trim();
+  if (withoutTitle) return false;
+  try {
+    const data = JSON.parse(match[1]);
+    return Boolean(data?.format === "node_tree" && data?.data && typeof data.data === "object");
+  } catch {
+    return false;
+  }
 }
 
 function extractMindmapData(content) {
@@ -3766,24 +3781,36 @@ function renderMindmapDocument() {
       ${canEdit ? `<details class="mindmap-toolbar-panel" open>
         <summary class="mindmap-toolbar-toggle" aria-label="마인드맵 도구 접기/펼치기" title="마인드맵 도구">☰</summary>
         <div class="mindmap-toolbar" aria-label="마인드맵 도구">
-        <button type="button" data-mindmap-action="back" aria-label="실행 취소" title="실행 취소">↶</button>
-        <button type="button" data-mindmap-action="forward" aria-label="다시 실행" title="다시 실행">↷</button>
-        <button type="button" data-mindmap-action="insert-child" data-edit-only aria-label="하위 노드 추가" title="하위 노드 추가">+↓</button>
-        <button type="button" data-mindmap-action="insert-sibling" data-edit-only aria-label="같은 단계 노드 추가" title="같은 단계 노드 추가">+→</button>
-        <button type="button" data-mindmap-action="insert-parent" data-edit-only aria-label="부모 노드 추가" title="부모 노드 추가">+↑</button>
-        <button type="button" data-mindmap-action="remove-node" data-edit-only aria-label="선택 노드 삭제" title="선택 노드 삭제">⌫</button>
-        <button type="button" data-mindmap-action="move-up" data-mindmap-advanced data-edit-only aria-label="위로 이동" title="위로 이동">↑</button>
-        <button type="button" data-mindmap-action="move-down" data-mindmap-advanced data-edit-only aria-label="아래로 이동" title="아래로 이동">↓</button>
-        <button type="button" data-mindmap-action="expand-all" data-mindmap-advanced aria-label="전체 펼치기" title="전체 펼치기">⊞</button>
-        <button type="button" data-mindmap-action="collapse-all" data-mindmap-advanced aria-label="전체 접기" title="전체 접기">⊟</button>
-        <button type="button" data-mindmap-action="collapse-level-2" data-mindmap-advanced aria-label="2단계까지만 펼치기" title="2단계까지만 펼치기">L2</button>
-        <button type="button" data-mindmap-action="fit" aria-label="화면에 맞춤" title="화면에 맞춤">⛶</button>
-        <button type="button" data-mindmap-action="reset-layout" data-mindmap-advanced aria-label="레이아웃 정리" title="레이아웃 정리">↺</button>
-        <input class="mindmap-search-input" type="search" data-mindmap-search placeholder="검색" aria-label="마인드맵 내부 검색" />
-        <button type="button" data-mindmap-action="search-prev" aria-label="이전 검색 결과" title="이전 검색 결과">‹</button>
-        <button type="button" data-mindmap-action="search-next" aria-label="다음 검색 결과" title="다음 검색 결과">›</button>
-        <button type="button" data-mindmap-action="search-clear" aria-label="검색 해제" title="검색 해제">×</button>
-        <span class="mindmap-search-status" data-mindmap-search-status></span>
+          <div class="mindmap-toolbar-row">
+            <button type="button" data-mindmap-action="back" aria-label="실행 취소" title="실행 취소">↶</button>
+            <button type="button" data-mindmap-action="forward" aria-label="다시 실행" title="다시 실행">↷</button>
+          </div>
+          <div class="mindmap-toolbar-row">
+            <button type="button" data-mindmap-action="insert-child" data-edit-only aria-label="하위 노드 추가" title="하위 노드 추가">+↓</button>
+            <button type="button" data-mindmap-action="insert-sibling" data-edit-only aria-label="같은 단계 노드 추가" title="같은 단계 노드 추가">+→</button>
+            <button type="button" data-mindmap-action="insert-parent" data-edit-only aria-label="부모 노드 추가" title="부모 노드 추가">+↑</button>
+          </div>
+          <div class="mindmap-toolbar-row">
+            <button type="button" data-mindmap-action="remove-node" data-edit-only aria-label="선택 노드 삭제" title="선택 노드 삭제">⌫</button>
+            <button type="button" data-mindmap-action="move-up" data-mindmap-advanced data-edit-only aria-label="위로 이동" title="위로 이동">↑</button>
+            <button type="button" data-mindmap-action="move-down" data-mindmap-advanced data-edit-only aria-label="아래로 이동" title="아래로 이동">↓</button>
+          </div>
+          <div class="mindmap-toolbar-row">
+            <button type="button" data-mindmap-action="expand-all" data-mindmap-advanced aria-label="전체 펼치기" title="전체 펼치기">⊞</button>
+            <button type="button" data-mindmap-action="collapse-all" data-mindmap-advanced aria-label="전체 접기" title="전체 접기">⊟</button>
+            <button type="button" data-mindmap-action="collapse-level-2" data-mindmap-advanced aria-label="2단계까지만 펼치기" title="2단계까지만 펼치기">L2</button>
+          </div>
+          <div class="mindmap-toolbar-row">
+            <button type="button" data-mindmap-action="fit" aria-label="화면에 맞춤" title="화면에 맞춤">⛶</button>
+            <button type="button" data-mindmap-action="reset-layout" data-mindmap-advanced aria-label="레이아웃 정리" title="레이아웃 정리">↺</button>
+          </div>
+          <div class="mindmap-toolbar-row mindmap-toolbar-search-row">
+            <input class="mindmap-search-input" type="search" data-mindmap-search placeholder="검색" aria-label="마인드맵 내부 검색" />
+            <button type="button" data-mindmap-action="search-prev" aria-label="이전 검색 결과" title="이전 검색 결과">‹</button>
+            <button type="button" data-mindmap-action="search-next" aria-label="다음 검색 결과" title="다음 검색 결과">›</button>
+            <button type="button" data-mindmap-action="search-clear" aria-label="검색 해제" title="검색 해제">×</button>
+            <span class="mindmap-search-status" data-mindmap-search-status></span>
+          </div>
         </div>
       </details>` : ""}
       <div id="mindmapCanvas" class="mindmap-canvas" tabindex="0"></div>
@@ -3815,6 +3842,7 @@ function renderSimpleMindMapDocument(data, canvas) {
     defaultInsertSecondLevelNodeText: "새 노드",
     defaultInsertBelowSecondLevelNodeText: "새 노드",
     enableShortcutOnlyWhenMouseInSvg: true,
+    customCheckEnableShortcut: (event) => !isMindmapTextEditingTarget(event.target),
     enableAutoEnterTextEditWhenKeydown: true,
     selectTextOnEnterEditText: true,
     errorHandler: handleMindmapError,
@@ -3881,6 +3909,7 @@ function fitMindmapToView() {
 function handleMindmapKeydown(event) {
   if (!state.mindmapInstance || els.mindmapShell?.hidden) return;
   if (!(state.editMode && canEditNode(state.currentNode))) return;
+  if (isMindmapTextEditingTarget(event.target)) return;
   if (event.altKey || event.ctrlKey || event.metaKey || event.isComposing) return;
   if (event.key !== "Tab" && event.key !== "Enter") return;
   const target = event.target;
@@ -3900,6 +3929,10 @@ function handleMindmapKeydown(event) {
   }
   const activeNode = activeNodes[0];
   state.mindmapInstance.execCommand?.(activeNode?.isRoot ? "INSERT_CHILD_NODE" : "INSERT_NODE");
+}
+
+function isMindmapTextEditingTarget(target) {
+  return Boolean(target?.closest?.(".smm-node-edit-wrap, .smm-richtext-node-edit-wrap, .associative-line-text-edit-wrap, .outer-frame-text-edit-wrap"));
 }
 
 async function handleMindmapPaste(event) {
@@ -4071,6 +4104,8 @@ async function saveMindmapEdit() {
   if (!saved) return;
   state.editMode = false;
   updateEditButtons();
+  state.mindmapInstance?.destroy?.();
+  state.mindmapInstance = null;
   renderCurrentDocument();
 }
 

@@ -2036,7 +2036,27 @@ button:disabled {
   max-height: min(72vh, 620px);
   overflow: auto;
   padding: 4px;
-  width: 44px;
+  width: 118px;
+}
+
+.mindmap-toolbar-row {
+  display: grid;
+  gap: 4px;
+  grid-template-columns: repeat(3, 1fr);
+  width: 100%;
+}
+
+.mindmap-toolbar-row:first-child,
+.mindmap-toolbar-row:nth-child(5) {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.mindmap-toolbar-search-row {
+  grid-template-columns: 1fr repeat(3, 26px);
+}
+
+.mindmap-toolbar-search-row .mindmap-search-status {
+  grid-column: 1 / -1;
 }
 
 .mindmap-toolbar button {
@@ -2074,13 +2094,11 @@ button:disabled {
 .mindmap-search-input {
   min-width: 0;
   padding: 0 7px;
-  width: 34px;
-  writing-mode: vertical-rl;
+  width: 100%;
 }
 
 .mindmap-search-input:focus {
-  width: 150px;
-  writing-mode: horizontal-tb;
+  width: 100%;
 }
 
 .mindmap-search-status {

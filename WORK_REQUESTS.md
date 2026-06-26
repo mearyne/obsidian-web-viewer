@@ -43,3 +43,4 @@
 - 2026-06-26: Hide the mindmap edit toolbar in read mode and preserve pasted node images.
 - 2026-06-26: Fix mindmap node image paste by handling browser paste events directly.
 - 2026-06-27: Add mindmap theme options, keyboard node creation fixes, collapsible toolbar, mindmap embeds, quick mindmap creation, and lazy image loading.
+- 2026-06-27: Refine mindmap toolbar grouping, save/read rendering, text-edit shortcuts, and document type detection.
