@@ -64,6 +64,7 @@ const types = {
   ".jpeg": "image/jpeg",
   ".gif": "image/gif",
   ".svg": "image/svg+xml",
+  ".ico": "image/x-icon",
   ".webmanifest": "application/manifest+json; charset=utf-8",
   ".webp": "image/webp",
   ".woff2": "font/woff2",
@@ -236,7 +237,7 @@ const server = http.createServer((req, res) => {
       if (!remoteUrl || typeof remoteUrl !== "string") { sendJsonCors(res, 400, { error: "remoteUrl required" }); return; }
       if (!savePath || typeof savePath !== "string") { sendJsonCors(res, 400, { error: "savePath required" }); return; }
       const safePath = normalizeVaultPath(savePath);
-      if (!safePath || !/\.(png|jpe?g|gif|webp|bmp|svg|avif)$/i.test(safePath)) {
+      if (!safePath || !/\.(png|jpe?g|gif|webp|bmp|svg|avif|ico)$/i.test(safePath)) {
         sendJsonCors(res, 400, { error: "Invalid image path" }); return;
       }
       const filePath = resolveVaultFilePath(safePath);
@@ -314,7 +315,7 @@ const server = http.createServer((req, res) => {
   }
 
   if (requestPath === "/api/url-meta") {
-    fetchUrlMeta(url.searchParams.get("url") || "", res);
+    fetchUrlMeta(url.searchParams.get("url") || "", res, url.searchParams.get("refresh") === "1");
     return;
   }
 
@@ -1332,14 +1333,79 @@ function sendJsonNoStore(res, status, value) {
   res.end(JSON.stringify(value));
 }
 
-function sendUrlMeta(res, data, targetUrl) {
+async function sendUrlMeta(res, data, targetUrl) {
   if (!data.favicon && targetUrl) {
     try { data.favicon = new URL(targetUrl).origin + "/favicon.ico"; } catch {}
   }
+  data = await localizeUrlMetaAssets(data, targetUrl);
   if (targetUrl) {
     urlMetaCache.set(targetUrl, { data, expires: Date.now() + URL_META_TTL });
   }
   sendJsonCors(res, 200, data);
+}
+
+async function localizeUrlMetaAssets(data, targetUrl) {
+  if (readOnly || !data) return data;
+  const next = { ...data };
+  if (next.image) next.image = await downloadMetaAsset(next.image, targetUrl, "image");
+  if (next.favicon) next.favicon = await downloadMetaAsset(next.favicon, targetUrl, "favicon");
+  return next;
+}
+
+async function downloadMetaAsset(assetUrl, pageUrl, kind) {
+  if (!/^https?:\/\//i.test(assetUrl || "")) return assetUrl || "";
+  let parsed;
+  try { parsed = new URL(assetUrl); } catch { return assetUrl; }
+  try {
+    const fetchRes = await fetch(assetUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        ...(pageUrl ? { "Referer": pageUrl } : {}),
+      },
+      redirect: "follow",
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!fetchRes.ok) return assetUrl;
+    const contentType = (fetchRes.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+    if (!contentType.startsWith("image/")) return assetUrl;
+    const arrayBuf = await fetchRes.arrayBuffer();
+    const buffer = Buffer.from(arrayBuf);
+    if (!buffer.length) return assetUrl;
+    const ext = metaAssetExtension(parsed.pathname, contentType);
+    const settings = readSettingsFile();
+    const baseDir = normalizeVaultPath(settings.imagePath || "");
+    const dir = baseDir ? `${baseDir}/clipping` : "clipping";
+    const host = parsed.hostname.replace(/^www\./, "").replace(/[^a-z0-9.-]+/gi, "-").slice(0, 48) || "asset";
+    const hash = crypto.createHash("sha1").update(assetUrl).digest("hex").slice(0, 12);
+    const safePath = normalizeVaultPath(`${dir}/${host}-${kind}-${hash}.${ext}`);
+    const filePath = resolveVaultFilePath(safePath);
+    if (!filePath) return assetUrl;
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, buffer);
+    broadcastVaultEvent("file-changed", { path: safePath, updatedAt: Date.now(), isNew: true });
+    return safePath;
+  } catch {
+    return assetUrl;
+  }
+}
+
+function metaAssetExtension(pathname, contentType) {
+  const fromPath = pathname.match(/\.(png|jpe?g|gif|webp|bmp|svg|avif|ico)$/i)?.[1];
+  if (fromPath) return fromPath.toLowerCase().replace("jpeg", "jpg");
+  if (contentType === "image/jpeg") return "jpg";
+  if (contentType === "image/svg+xml") return "svg";
+  if (contentType === "image/x-icon" || contentType === "image/vnd.microsoft.icon") return "ico";
+  const fromType = contentType.match(/^image\/([a-z0-9.+-]+)$/i)?.[1];
+  return fromType && /^[a-z0-9]+$/i.test(fromType) ? fromType.toLowerCase() : "jpg";
+}
+
+function readSettingsFile() {
+  try {
+    return normalizeSettings(JSON.parse(fs.readFileSync(settingsFilePath(), "utf8")));
+  } catch {
+    return normalizeSettings({});
+  }
 }
 
 // oEmbed 프로바이더 목록 (URL 패턴 → oEmbed 엔드포인트)
@@ -1389,7 +1455,7 @@ function isGenericTitle(title, targetUrl) {
   return false;
 }
 
-async function fetchUrlMeta(targetUrl, res) {
+async function fetchUrlMeta(targetUrl, res, refresh = false) {
   if (!targetUrl) { sendJsonCors(res, 400, { error: "url required" }); return; }
   let parsed;
   try { parsed = new URL(targetUrl); } catch {
@@ -1400,11 +1466,12 @@ async function fetchUrlMeta(targetUrl, res) {
   }
   // 0차: 결과 캐시
   const cached = urlMetaCache.get(targetUrl);
-  if (cached && cached.expires > Date.now()) { sendJsonCors(res, 200, cached.data); return; }
+  if (!refresh && cached && cached.expires > Date.now()) { sendJsonCors(res, 200, cached.data); return; }
+  if (refresh) urlMetaCache.delete(targetUrl);
   // 1차: oEmbed 지원 플랫폼은 공식 API로 바로 처리
   try {
     const meta = await fetchMetaWithOEmbed(targetUrl);
-    if (meta?.title) { sendUrlMeta(res, meta, targetUrl); return; }
+    if (meta?.title) { await sendUrlMeta(res, meta, targetUrl); return; }
   } catch {}
   // 2차: MicroLink + Jina AI 병렬 실행, 먼저 성공한 결과 사용
   const tryMicrolink = async () => {
@@ -1425,15 +1492,16 @@ async function fetchUrlMeta(targetUrl, res) {
     const jinaPromise = fetchMetaWithJina(targetUrl);
     const meta = await Promise.any([microlinkPromise, jinaPromise]);
     if (meta?.title) {
-      sendUrlMeta(res, meta, targetUrl);
+      await sendUrlMeta(res, meta, targetUrl);
       // 나중에 도착하는 결과에서 favicon/image가 있으면 캐시 보완
       Promise.any([
         microlinkPromise.then(m => m === meta ? Promise.reject() : m),
         jinaPromise.then(m => m === meta ? Promise.reject() : m),
-      ]).then((other) => {
+      ]).then(async (other) => {
         if (!other?.title) return;
         const cached = urlMetaCache.get(targetUrl);
         if (!cached) return;
+        other = await localizeUrlMetaAssets(other, targetUrl);
         let updated = false;
         if (other.favicon && !cached.data.favicon) { cached.data.favicon = other.favicon; updated = true; }
         if (other.image && !cached.data.image) { cached.data.image = other.image; updated = true; }
@@ -1499,7 +1567,7 @@ async function fetchUrlMeta(targetUrl, res) {
       : rawImage ? new URL(rawImage, targetUrl).href
       : "";
     const description = unescape(ogDescription || "");
-    sendUrlMeta(res, { title, description, image, favicon: "" }, title ? targetUrl : null);
+    await sendUrlMeta(res, { title, description, image, favicon: "" }, title ? targetUrl : null);
   } catch {
     sendJsonCors(res, 200, { title: "", description: "", image: "", favicon: "" });
   }

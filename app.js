@@ -105,8 +105,6 @@ const state = {
   matrixTaskDrag: null,
   calendarTaskPendingStates: new Map(),
   calendarTaskWriteQueues: new Map(),
-  noteTitlePressTimer: null,
-  noteTitleDeleteSuppressedUntil: 0,
   calendarSwipe: null,
   calendarWheelAt: 0,
   calendarTaskOpenSuppressedUntil: 0,
@@ -258,6 +256,7 @@ const els = {
   editorRedoButton: document.querySelector("#editorRedoButton"),
   editorIndentButton: document.querySelector("#editorIndentButton"),
   editorOutdentButton: document.querySelector("#editorOutdentButton"),
+  editorTitleButton: document.querySelector("#editorTitleButton"),
   editorHeadingButton: document.querySelector("#editorHeadingButton"),
   editorBulletButton: document.querySelector("#editorBulletButton"),
   editorTableButton: document.querySelector("#editorTableButton"),
@@ -418,6 +417,7 @@ els.editorUndoButton?.addEventListener("click", () => runEditorCommand("undo"));
 els.editorRedoButton?.addEventListener("click", () => runEditorCommand("redo"));
 els.editorIndentButton?.addEventListener("click", () => handleEditorToolbarIndent(false));
 els.editorOutdentButton?.addEventListener("click", () => handleEditorToolbarIndent(true));
+els.editorTitleButton?.addEventListener("click", showTitleEditDialog);
 els.editorHeadingButton?.addEventListener("click", () => prefixSelectedEditorLines("# "));
 els.editorBulletButton?.addEventListener("click", () => prefixSelectedEditorLines("- "));
 els.editorTableButton?.addEventListener("click", insertEditorTable);
@@ -485,7 +485,6 @@ els.recentSevenDaysQuickButton?.addEventListener("click", () => setRecentDaysFil
 els.themeButton.addEventListener("click", toggleTheme);
 els.sidebarResizeHandle.addEventListener("pointerdown", startSidebarResize);
 els.noteTitle?.addEventListener("click", showFullCurrentTitle);
-els.noteTitle?.addEventListener("pointerdown", startNoteTitleLongPress);
 els.notePath?.addEventListener("click", (e) => {
   if (!state.currentPath) return;
   document.querySelector(".path-popup")?.remove();
@@ -504,9 +503,6 @@ els.notePath?.addEventListener("click", (e) => {
   const dismiss = (ev) => { if (!popup.contains(ev.target) && ev.target !== els.notePath) { popup.remove(); document.removeEventListener("pointerdown", dismiss, true); } };
   setTimeout(() => document.addEventListener("pointerdown", dismiss, true), 0);
 });
-els.noteTitle?.addEventListener("pointerup", clearNoteTitleLongPress);
-els.noteTitle?.addEventListener("pointerleave", clearNoteTitleLongPress);
-els.noteTitle?.addEventListener("pointercancel", clearNoteTitleLongPress);
 window.addEventListener("keydown", handleGlobalKeydown, true);
 document.addEventListener("pointerdown", closeSidebarFromOutside);
 document.addEventListener("pointerup", clearCalendarDragIfActive);
@@ -2322,68 +2318,59 @@ function scrollViewerByPageFraction(direction) {
 }
 
 function showFullCurrentTitle() {
-  if (Date.now() < state.noteTitleDeleteSuppressedUntil) return;
   if (!state.currentPath) return;
-  // PC(마우스)에서는 인라인 편집, 모바일에서는 기존 alert
-  const isPointerFine = window.matchMedia("(pointer: fine)").matches;
-  if (isPointerFine && state.currentNode?.serverBacked) {
-    startInlineTitleEdit();
-    return;
-  }
   alert(`${displayDocumentTitle(state.currentNode?.name || state.currentPath)}\n${state.currentPath}`);
 }
 
-function startInlineTitleEdit() {
-  const h2 = els.noteTitle;
-  if (!h2 || h2.querySelector("input")) return;
+function showTitleEditDialog() {
+  if (!state.editMode || !state.currentNode?.serverBacked) return;
+  document.querySelector(".title-edit-backdrop")?.remove();
   const currentTitle = displayDocumentTitle(state.currentNode?.name || state.currentPath);
-  const input = document.createElement("input");
-  input.type = "text";
-  input.value = currentTitle;
-  input.className = "note-title-edit-input";
-  input.setAttribute("aria-label", "제목 편집");
-  h2.textContent = "";
-  h2.appendChild(input);
-  input.focus();
-  input.select();
+  const backdrop = document.createElement("div");
+  backdrop.className = "title-edit-backdrop";
+  backdrop.innerHTML = `
+    <section class="title-edit-dialog" role="dialog" aria-modal="true" aria-labelledby="titleEditDialogTitle">
+      <h2 id="titleEditDialogTitle">제목 수정</h2>
+      <input class="title-edit-input" type="text" autocomplete="off" aria-label="제목" value="${escapeAttribute(currentTitle)}" />
+      <div class="title-edit-actions">
+        <button type="button" class="title-edit-cancel">취소</button>
+        <button type="button" class="title-edit-confirm">저장</button>
+      </div>
+    </section>
+  `;
+  document.body.append(backdrop);
+  const input = backdrop.querySelector(".title-edit-input");
+  const confirm = backdrop.querySelector(".title-edit-confirm");
+  const close = () => backdrop.remove();
   const commit = async () => {
     const newTitle = input.value.trim();
-    h2.textContent = currentTitle;
-    if (newTitle && newTitle !== currentTitle) await renameCurrentFile(newTitle);
+    if (!newTitle || newTitle === currentTitle) {
+      close();
+      return;
+    }
+    confirm.disabled = true;
+    await renameCurrentFile(newTitle);
+    close();
   };
-  const cancel = () => { h2.textContent = currentTitle; };
-  input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") { e.preventDefault(); input.blur(); }
-    if (e.key === "Escape") { input.removeEventListener("blur", commit); h2.textContent = currentTitle; }
+  backdrop.querySelector(".title-edit-cancel")?.addEventListener("click", close);
+  confirm?.addEventListener("click", () => void commit());
+  backdrop.addEventListener("click", (event) => { if (event.target === backdrop) close(); });
+  backdrop.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") close();
+    if (event.key === "Enter") {
+      event.preventDefault();
+      void commit();
+    }
   });
-  input.addEventListener("blur", commit, { once: true });
+  input?.focus();
+  input?.select();
 }
 
-function startNoteTitleLongPress() {
-  clearNoteTitleLongPress();
-  state.noteTitlePressTimer = window.setTimeout(async () => {
-    state.noteTitlePressTimer = null;
-    state.noteTitleDeleteSuppressedUntil = Date.now() + 1000;
-    await confirmDeleteCurrentFile();
-  }, 700);
-}
-
-function clearNoteTitleLongPress() {
-  if (!state.noteTitlePressTimer) return;
-  window.clearTimeout(state.noteTitlePressTimer);
-  state.noteTitlePressTimer = null;
-}
-
-async function confirmDeleteCurrentFile() {
-  const node = state.currentNode;
-  if (!node || !state.currentPath) return;
-  if (!canDeleteNode(node)) {
-    alert("현재 문서는 웹에서 삭제할 수 없습니다.");
-    return;
-  }
-  const ok = await appConfirm(`파일을 삭제하시겠습니까?\n${state.currentPath}`, "파일 삭제");
-  if (!ok) return;
-  await deleteCurrentFileNode(node);
+function updateEditorTitleButton() {
+  if (!els.editorTitleButton) return;
+  const title = displayDocumentTitle(state.currentNode?.name || state.currentPath || "");
+  els.editorTitleButton.textContent = title || "제목";
+  els.editorTitleButton.disabled = !state.editMode || !state.currentNode?.serverBacked;
 }
 
 function canDeleteNode(node) {
@@ -3518,9 +3505,10 @@ async function downloadRemoteImageToEditor(remoteUrl) {
   }
 }
 
-async function fetchLinkMeta(url) {
+async function fetchLinkMeta(url, options = {}) {
   try {
-    const res = await fetch(`/api/url-meta?url=${encodeURIComponent(url)}`);
+    const refresh = options.refresh ? "&refresh=1" : "";
+    const res = await fetch(`/api/url-meta?url=${encodeURIComponent(url)}${refresh}`);
     if (!res.ok) return { title: "", description: "", image: "", favicon: "" };
     const data = await res.json();
     return {
@@ -4167,6 +4155,7 @@ function updateEditButtons() {
     els.saveEditButton.disabled = true;
   }
   if (els.editorImageButton) els.editorImageButton.hidden = !(state.editMode && state.serverVaultWritable);
+  updateEditorTitleButton();
   updateStatusEditButtons();
 }
 
@@ -8569,7 +8558,7 @@ function bindEmbedRefreshButtons(root) {
       btn.textContent = "⏳";
       btn.disabled = true;
       try {
-        const metaRes = await fetch(`/api/url-meta?url=${encodeURIComponent(embedUrl)}`);
+        const metaRes = await fetch(`/api/url-meta?url=${encodeURIComponent(embedUrl)}&refresh=1`);
         if (!metaRes.ok) throw new Error("meta fetch failed");
         const meta = await metaRes.json();
         const fullBlock = buildEmbedBlock(meta, embedUrl);
@@ -8642,9 +8631,9 @@ function renderEmbedBlock(code) {
   const toggleExpanded = noVisual ? "false" : "true";
   let visualHtml = "";
   if (image) {
-    visualHtml = `<div class="link-embed-image" style="background-image:url('${escapeAttribute(image)}')"></div>`;
+    visualHtml = `<div class="link-embed-image" style="background-image:url('${escapeAttribute(embedAssetUrl(image))}')"></div>`;
   } else if (favicon) {
-    visualHtml = `<div class="link-embed-favicon-image"><img src="${escapeAttribute(favicon)}" alt="" aria-hidden="true" onerror="this.parentElement.style.display='none'"></div>`;
+    visualHtml = `<div class="link-embed-favicon-image"><img src="${escapeAttribute(embedAssetUrl(favicon))}" alt="" aria-hidden="true" onerror="this.parentElement.style.display='none'"></div>`;
   }
   return `<div class="link-embed-wrap${collapsed}">` +
     `<button class="link-embed-toggle" type="button" title="${toggleLabel}" aria-expanded="${toggleExpanded}">${toggleIcon}</button>` +
@@ -8656,6 +8645,11 @@ function renderEmbedBlock(code) {
     (description ? `<div class="link-embed-description">${escapeHtml(description)}</div>` : "") +
     `<div class="link-embed-url"><span>${escapeHtml(url)}</span></div>` +
     `</div></a></div>`;
+}
+
+function embedAssetUrl(value) {
+  if (!value || /^(https?:|data:|blob:|\/)/i.test(value)) return value;
+  return `/api/vault-file?path=${encodeURIComponent(value)}`;
 }
 
 function renderCodeBlock(code, language, depth) {
@@ -9582,6 +9576,12 @@ function renderTabStrip() {
       if (Date.now() < state.tabDragSuppressUntil) return;
       void switchTab(el.dataset.tabId);
     });
+    el.addEventListener("auxclick", (e) => {
+      if (e.button !== 1 || e.target.closest(".tab-close")) return;
+      e.preventDefault();
+      e.stopPropagation();
+      void closeTab(el.dataset.tabId);
+    });
     el.addEventListener("pointerdown", (e) => startTabPointerDrag(e, el));
     el.addEventListener("contextmenu", (e) => {
       e.preventDefault();
@@ -10198,6 +10198,7 @@ async function renameCurrentFile(newTitle) {
       void savePinnedTabsOrderToVault();
     }
     els.noteTitle.textContent = displayDocumentTitle(newName);
+    updateEditorTitleButton();
     if (els.notePath) els.notePath.textContent = node.path;
     renderTabStrip();
     renderTree();
