@@ -40,3 +40,4 @@
 - 2026-06-26: Break down `simple-mind-map` feature implementation scope so future work can be selected selectively.
 - 2026-06-26: Implement the first three selected `simple-mind-map` feature groups and include mindmap node text in global search.
 - 2026-06-26: Remove the mindmap canvas focus border and move mindmap-specific settings into options.
+- 2026-06-26: Hide the mindmap edit toolbar in read mode and preserve pasted node images.

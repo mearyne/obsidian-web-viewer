@@ -3506,6 +3506,7 @@ function legacyMindmapNodeToSimpleMindMapNode(node) {
     expand: node?.expanded !== false,
   };
   if (node?.direction === "left" || node?.direction === "right") data.dir = node.direction;
+  copyMindmapImageData(node, data);
   return {
     data,
     children: Array.isArray(node?.children) ? node.children.map(legacyMindmapNodeToSimpleMindMapNode) : [],
@@ -3520,9 +3521,26 @@ function simpleMindMapNodeToLegacyMindmapNode(node, isRoot = false) {
     expanded: rawData.expand !== false,
   };
   if (!isRoot && (rawData.dir === "left" || rawData.dir === "right")) result.direction = rawData.dir;
+  copyMindmapImageData(rawData, result);
   const children = Array.isArray(node?.children) ? node.children.map((child) => simpleMindMapNodeToLegacyMindmapNode(child, false)) : [];
   if (children.length) result.children = children;
   return result;
+}
+
+function copyMindmapImageData(source, target) {
+  if (typeof source?.image === "string" && source.image) target.image = source.image;
+  if (typeof source?.imageTitle === "string") target.imageTitle = source.imageTitle;
+  if (source?.imageSize && typeof source.imageSize === "object") {
+    const width = Number(source.imageSize.width);
+    const height = Number(source.imageSize.height);
+    if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) {
+      target.imageSize = {
+        width,
+        height,
+        custom: Boolean(source.imageSize.custom),
+      };
+    }
+  }
 }
 
 function legacyMindmapDataToSimpleMindMapData(data) {
@@ -3544,6 +3562,7 @@ function simpleMindMapDataToLegacyMindmapData(data, previousData) {
 
 function renderMindmapDocument() {
   const data = extractMindmapData(state.currentContent) || createDefaultMindmapData(displayDocumentTitle(state.currentNode?.name || state.currentPath || "마인드맵"));
+  const canEdit = state.editMode && canEditNode(state.currentNode);
   state.mindmapInstance?.destroy?.();
   state.mindmapInstance = null;
   state.mindmapContext = { path: state.currentPath, node: state.currentNode, content: state.currentContent, sourceData: data };
@@ -3554,7 +3573,7 @@ function renderMindmapDocument() {
   els.mindmapShell.hidden = false;
   els.mindmapShell.innerHTML = `
     <section class="mindmap-view">
-      <div class="mindmap-toolbar" aria-label="마인드맵 도구">
+      ${canEdit ? `<div class="mindmap-toolbar" aria-label="마인드맵 도구">
         <button type="button" data-mindmap-action="back" aria-label="실행 취소" title="실행 취소">↶</button>
         <button type="button" data-mindmap-action="forward" aria-label="다시 실행" title="다시 실행">↷</button>
         <button type="button" data-mindmap-action="insert-child" data-edit-only aria-label="하위 노드 추가" title="하위 노드 추가">+↓</button>
@@ -3573,7 +3592,7 @@ function renderMindmapDocument() {
         <button type="button" data-mindmap-action="search-next" aria-label="다음 검색 결과" title="다음 검색 결과">›</button>
         <button type="button" data-mindmap-action="search-clear" aria-label="검색 해제" title="검색 해제">×</button>
         <span class="mindmap-search-status" data-mindmap-search-status></span>
-      </div>
+      </div>` : ""}
       <div id="mindmapCanvas" class="mindmap-canvas" tabindex="0"></div>
     </section>
   `;
@@ -3595,10 +3614,11 @@ function renderSimpleMindMapDocument(data, canvas) {
     theme: "default",
     themeConfig: getMindmapThemeConfig(),
     fit: state.mindmapOptions.autoFit,
+    handleNodePasteImg: handleMindmapNodePasteImage,
     enableShortcutOnlyWhenMouseInSvg: true,
     enableAutoEnterTextEditWhenKeydown: true,
     selectTextOnEnterEditText: true,
-    errorHandler: () => {},
+    errorHandler: handleMindmapError,
   });
   state.mindmapInstance = mindMap;
   mindMap.on("data_change", () => {
@@ -3653,6 +3673,71 @@ function runMindmapToolbarAction(action) {
 function fitMindmapToView() {
   const jm = state.mindmapInstance;
   jm?.view?.fit?.();
+}
+
+async function handleMindmapNodePasteImage(blob) {
+  const size = await getImageBlobSize(blob);
+  if (!state.serverVaultWritable) {
+    return {
+      url: await blobToDataUrl(blob),
+      size,
+    };
+  }
+  const filePath = buildPastedImagePath(blob.type || "image/png");
+  const response = await fetch(`/api/vault-binary-file?path=${encodeURIComponent(filePath)}`, {
+    method: "PUT",
+    headers: { "Content-Type": blob.type || "image/png" },
+    body: blob,
+  });
+  if (!response.ok) throw new Error("mindmap image upload failed");
+  registerUploadedFileInVault(filePath, blob.size || 0);
+  return {
+    url: `/api/vault-file?path=${encodeURIComponent(filePath)}`,
+    size,
+  };
+}
+
+function buildPastedImagePath(mimeType) {
+  const now = new Date();
+  const pad = (value) => String(value).padStart(2, "0");
+  const dateStr = formatDate(now);
+  const timeStr = `${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
+  const rand = Math.random().toString(36).slice(2, 7);
+  const ext = mimeType === "image/png" ? "png" : mimeType === "image/gif" ? "gif" : mimeType === "image/webp" ? "webp" : "jpg";
+  const filename = `${dateStr} ${timeStr} ${rand}.${ext}`;
+  const dir = normalizeVaultPath(state.imageSavePath || els.imagePathInput?.value || "");
+  return dir ? `${dir}/${filename}` : filename;
+}
+
+function getImageBlobSize(blob) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(blob);
+    const image = new Image();
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve({ width: image.naturalWidth || image.width || 1, height: image.naturalHeight || image.height || 1 });
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("image load failed"));
+    };
+    image.src = url;
+  });
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("image read failed"));
+    reader.readAsDataURL(blob);
+  });
+}
+
+function handleMindmapError(type) {
+  if (type === "load_clipboard_image_error") {
+    showAppToast("마인드맵 이미지 붙여넣기에 실패했습니다.", "error");
+  }
 }
 
 function currentMindmapSearchText() {
