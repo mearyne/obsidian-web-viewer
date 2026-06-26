@@ -2042,9 +2042,6 @@ button:disabled {
   border-radius: 7px;
   box-shadow: none;
   font-family: inherit;
-  max-width: 240px;
-  white-space: normal;
-  word-break: break-word;
 }
 
 .mindmap-canvas jmnode.root {

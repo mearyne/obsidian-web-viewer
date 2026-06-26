@@ -3408,6 +3408,9 @@ function renderMindmapDocument() {
   requestAnimationFrame(() => {
     jm.resize();
     focusMindmap();
+    requestAnimationFrame(() => {
+      jm.resize();
+    });
   });
 }
 
@@ -3426,11 +3429,21 @@ function scheduleMindmapSave() {
 async function saveMindmapNow({ silent = true } = {}) {
   const context = state.mindmapContext;
   const node = context?.node || state.currentNode;
-  if (!state.mindmapInstance || !canEditNode(node)) return;
+  if (!state.mindmapInstance) {
+    if (!silent) showAppToast("저장할 마인드맵이 없습니다.", "error");
+    return;
+  }
+  if (!canEditNode(node)) {
+    if (!silent) showAppToast("현재 마인드맵은 저장할 수 없습니다.", "error");
+    return;
+  }
   const data = state.mindmapInstance.get_data("node_tree");
   const previousContent = context?.content ?? state.currentContent;
   const nextContent = buildMindmapDocumentContent(data, previousContent);
-  if (nextContent === previousContent) return;
+  if (nextContent === previousContent) {
+    if (!silent) showAppToast("변경 사항이 없습니다.", "info");
+    return;
+  }
   try {
     const metadata = await writeNodeContent(node, nextContent, { backup: true, previousContent });
     Object.assign(node, metadata);
