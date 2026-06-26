@@ -1985,7 +1985,7 @@ button:disabled {
   width: 100%;
 }
 
-.mindmap-zoom-controls {
+.mindmap-toolbar {
   align-items: center;
   background: color-mix(in srgb, var(--surface) 92%, transparent);
   border: 1px solid var(--line);
@@ -1999,20 +1999,27 @@ button:disabled {
   z-index: 3;
 }
 
-.mindmap-zoom-controls button {
+.mindmap-toolbar button {
   background: var(--surface);
   border-color: var(--line);
   border-radius: 5px;
   color: var(--muted);
   height: 26px;
+  min-width: 26px;
   padding: 0;
-  width: 26px;
+  width: auto;
 }
 
-.mindmap-zoom-controls button.active {
+.mindmap-toolbar button:hover:not(:disabled),
+.mindmap-toolbar button:focus-visible {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--accent-contrast);
+}
+
+.mindmap-toolbar button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .mindmap-canvas {
@@ -2098,7 +2105,8 @@ button:disabled {
     padding: 8px 8px 52px;
   }
 
-  .mindmap-zoom-controls {
+  .mindmap-toolbar {
+    flex-wrap: wrap;
     right: 14px;
     top: 14px;
   }

@@ -3447,8 +3447,14 @@ function renderMindmapDocument() {
   els.mindmapShell.hidden = false;
   els.mindmapShell.innerHTML = `
     <section class="mindmap-view">
-      <div class="mindmap-zoom-controls" aria-label="마인드맵 줌 단계">
-        ${MINDMAP_ZOOM_LEVELS.map((_, index) => `<button type="button" data-mindmap-zoom="${index}" aria-label="줌 ${index + 1}단계">${index + 1}</button>`).join("")}
+      <div class="mindmap-toolbar" aria-label="마인드맵 도구">
+        <button type="button" data-mindmap-action="back" aria-label="실행 취소" title="실행 취소">↶</button>
+        <button type="button" data-mindmap-action="forward" aria-label="다시 실행" title="다시 실행">↷</button>
+        <button type="button" data-mindmap-action="insert-child" data-edit-only aria-label="하위 노드 추가" title="하위 노드 추가">+↓</button>
+        <button type="button" data-mindmap-action="insert-sibling" data-edit-only aria-label="같은 단계 노드 추가" title="같은 단계 노드 추가">+→</button>
+        <button type="button" data-mindmap-action="remove-node" data-edit-only aria-label="선택 노드 삭제" title="선택 노드 삭제">⌫</button>
+        <button type="button" data-mindmap-action="fit" aria-label="화면에 맞춤" title="화면에 맞춤">⛶</button>
+        <button type="button" data-mindmap-action="reset-layout" aria-label="레이아웃 정리" title="레이아웃 정리">↺</button>
       </div>
       <div id="mindmapCanvas" class="mindmap-canvas" tabindex="0"></div>
     </section>
@@ -3485,7 +3491,7 @@ function renderSimpleMindMapDocument(data, canvas) {
   mindMap.on("data_change", () => {
     if (state.editMode && canEditNode(state.currentNode)) state.editorDirty = true;
   });
-  bindMindmapZoomControls();
+  bindMindmapToolbarControls();
   requestAnimationFrame(() => {
     mindMap.resize();
     fitMindmapToView();
@@ -3532,7 +3538,7 @@ function renderJsmindDocument(data, canvas) {
     panel.focus();
   };
   canvas.addEventListener("click", focusMindmap);
-  bindMindmapZoomControls();
+  bindMindmapToolbarControls();
   requestAnimationFrame(() => {
     jm.resize();
     fitMindmapToView();
@@ -3550,22 +3556,51 @@ function renderJsmindDocument(data, canvas) {
 
 const MINDMAP_ZOOM_LEVELS = [0.5, 0.75, 1, 1.25, 1.5];
 
-function bindMindmapZoomControls() {
-  els.mindmapShell?.querySelectorAll("[data-mindmap-zoom]").forEach((button) => {
+function bindMindmapToolbarControls() {
+  const canEdit = state.editMode && canEditNode(state.currentNode);
+  els.mindmapShell?.querySelectorAll("[data-edit-only]").forEach((button) => {
+    button.disabled = !canEdit;
+  });
+  els.mindmapShell?.querySelectorAll("[data-mindmap-action]").forEach((button) => {
     button.addEventListener("click", () => {
-      const level = Number(button.getAttribute("data-mindmap-zoom"));
-      if (!Number.isInteger(level)) return;
-      applyMindmapZoom(level);
+      runMindmapToolbarAction(button.getAttribute("data-mindmap-action"));
     });
   });
-  updateMindmapZoomControls();
+}
+
+function runMindmapToolbarAction(action) {
+  const jm = state.mindmapInstance;
+  if (!jm) return;
+  const canEdit = state.editMode && canEditNode(state.currentNode);
+  if (state.mindmapContext?.engine === "simple-mind-map") {
+    if (action === "back") jm.execCommand?.("BACK");
+    if (action === "forward") jm.execCommand?.("FORWARD");
+    if (canEdit && action === "insert-child") jm.execCommand?.("INSERT_CHILD_NODE");
+    if (canEdit && action === "insert-sibling") jm.execCommand?.("INSERT_NODE");
+    if (canEdit && action === "remove-node") jm.execCommand?.("REMOVE_NODE");
+    if (action === "fit") jm.view?.fit?.();
+    if (action === "reset-layout") jm.execCommand?.("RESET_LAYOUT");
+    return;
+  }
+  if (action === "fit") {
+    fitMindmapToView();
+    return;
+  }
+  if (action === "reset-layout") {
+    jm.resize?.();
+    fitMindmapToView();
+    return;
+  }
+  if (!canEdit) return;
+  if (action === "insert-child") jm.shortcut?.handler?.addchild?.();
+  if (action === "insert-sibling") jm.shortcut?.handler?.addbrother?.();
+  if (action === "remove-node") jm.shortcut?.handler?.delnode?.();
 }
 
 function fitMindmapToView() {
   const jm = state.mindmapInstance;
   if (state.mindmapContext?.engine === "simple-mind-map") {
     jm?.view?.fit?.();
-    updateMindmapZoomControls();
     return;
   }
   if (!jm?.view?.e_panel || !jm?.layout?.bounds) return;
@@ -3587,7 +3622,6 @@ function applyMindmapZoom(level) {
     const index = Math.max(0, Math.min(MINDMAP_ZOOM_LEVELS.length - 1, Number(level) || 0));
     state.mindmapZoomLevel = index;
     jm?.view?.setScale?.(MINDMAP_ZOOM_LEVELS[index]);
-    updateMindmapZoomControls();
     return;
   }
   if (!jm?.view?.set_zoom) return;
@@ -3595,13 +3629,6 @@ function applyMindmapZoom(level) {
   state.mindmapZoomLevel = index;
   jm.view.set_zoom(MINDMAP_ZOOM_LEVELS[index]);
   jm.scroll_node_to_center?.("root");
-  updateMindmapZoomControls();
-}
-
-function updateMindmapZoomControls() {
-  els.mindmapShell?.querySelectorAll("[data-mindmap-zoom]").forEach((button) => {
-    button.classList.toggle("active", Number(button.getAttribute("data-mindmap-zoom")) === state.mindmapZoomLevel);
-  });
 }
 
 async function saveMindmapEdit() {

@@ -33,3 +33,4 @@
 - 2026-06-26: Fix hidden or overlapped text in the new `simple-mind-map` mindmap renderer.
 - 2026-06-26: Remove paragraph margins inside `simple-mind-map` rich text nodes so node labels remain visible.
 - 2026-06-26: Normalize `simple-mind-map` rich text HTML to plain node labels so `<p>` tags are not shown as text.
+- 2026-06-26: Replace the mindmap 1-5 zoom buttons with basic `simple-mind-map` toolbar actions.
