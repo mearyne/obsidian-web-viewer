@@ -812,13 +812,13 @@ function searchVaultContent(query, limitStr, res) {
 }
 
 function getSearchableMarkdownContent(content) {
-  const mindmapText = extractLegacyMindmapSearchText(content);
+  const mindmapText = extractMindmapSearchText(content);
   return mindmapText ? `${mindmapText}\n${content}` : content;
 }
 
-function extractLegacyMindmapSearchText(content) {
+function extractMindmapSearchText(content) {
   const topics = [];
-  const blocks = String(content || "").matchAll(/```jsmind\s*\n([\s\S]*?)\n```/gi);
+  const blocks = String(content || "").matchAll(/```(?:simple-mind-map|mindmap|jsmind)\s*\n([\s\S]*?)\n```/gi);
   for (const match of blocks) {
     try {
       const parsed = JSON.parse(match[1]);
