@@ -49,3 +49,4 @@
 - 2026-06-27: Switch mindmap documents from legacy `jsmind` persistence to frontmatter-marked `simple-mind-map` files.
 - 2026-06-27: Remove legacy `jsmind` mindmap compatibility and polish the mindmap editing toolbar.
 - 2026-06-27: Fix mindmap text-edit key handling, Ctrl+S save behavior, embedded-note tab opening, and embedded mindmap text clipping.
+- 2026-06-27: Preserve Backspace, Ctrl+A, Enter, and arrow-key behavior while editing mindmap node text.

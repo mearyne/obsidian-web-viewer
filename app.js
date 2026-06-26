@@ -554,6 +554,7 @@ els.imageLightbox.addEventListener("click", closeImageLightbox);
 els.imageLightboxClose.addEventListener("click", closeImageLightbox);
 document.addEventListener("paste", handleMindmapPaste, true);
 document.addEventListener("keydown", handleMindmapKeydown, true);
+document.addEventListener("keydown", guardMindmapTextEditingKeydown);
 document.addEventListener("pointerdown", (event) => {
   if (!event.target?.closest?.(".mindmap-shell")) state.mindmapKeyCaptureActive = false;
 }, true);
@@ -636,7 +637,7 @@ function handleGlobalKeydown(event) {
     return;
   }
 
-  if (isMindmapTextEditingTarget(event.target)) return;
+  if (isMindmapTextEditingEvent(event)) return;
 
   if (!els.optionsMenu.hidden) {
     if (event.key === "Escape") {
@@ -3890,7 +3891,7 @@ function renderSimpleMindMapDocument(data, canvas) {
     defaultInsertSecondLevelNodeText: "새 노드",
     defaultInsertBelowSecondLevelNodeText: "새 노드",
     enableShortcutOnlyWhenMouseInSvg: true,
-    customCheckEnableShortcut: (event) => !isMindmapTextEditingTarget(event.target),
+    customCheckEnableShortcut: (event) => !isMindmapTextEditingEvent(event),
     enableAutoEnterTextEditWhenKeydown: true,
     selectTextOnEnterEditText: true,
     errorHandler: handleMindmapError,
@@ -4031,7 +4032,7 @@ function fitMindmapToView() {
 function handleMindmapKeydown(event) {
   if (!state.mindmapInstance || els.mindmapShell?.hidden) return;
   if (!(state.editMode && canEditNode(state.currentNode))) return;
-  if (isMindmapTextEditingTarget(event.target)) return;
+  if (isMindmapTextEditingEvent(event)) return;
   if (event.altKey || event.ctrlKey || event.metaKey || event.isComposing) return;
   if (event.key !== "Tab" && event.key !== "Enter") return;
   const target = event.target;
@@ -4051,6 +4052,38 @@ function handleMindmapKeydown(event) {
   }
   const activeNode = activeNodes[0];
   state.mindmapInstance.execCommand?.(activeNode?.isRoot ? "INSERT_CHILD_NODE" : "INSERT_NODE");
+}
+
+function guardMindmapTextEditingKeydown(event) {
+  if (!isMindmapTextEditingEvent(event)) return;
+  if (isMindmapSaveShortcut(event)) return;
+  if (!isMindmapTextEditingControlKey(event)) return;
+  event.stopPropagation();
+  event.stopImmediatePropagation?.();
+}
+
+function isMindmapTextEditingControlKey(event) {
+  if (event.isComposing) return false;
+  if (event.ctrlKey || event.metaKey) {
+    const key = event.key.toLowerCase();
+    return ["a", "c", "x", "v", "z", "y"].includes(key);
+  }
+  return [
+    "Backspace",
+    "Delete",
+    "Enter",
+    "Escape",
+    "ArrowLeft",
+    "ArrowRight",
+    "ArrowUp",
+    "ArrowDown",
+    "Home",
+    "End",
+  ].includes(event.key);
+}
+
+function isMindmapTextEditingEvent(event) {
+  return isMindmapTextEditingTarget(event?.target) || isMindmapTextEditingTarget(document.activeElement);
 }
 
 function isMindmapTextEditingTarget(target) {
