@@ -8,3 +8,4 @@
 - 2026-06-26: Add a sidebar button that shows documents created or updated in the last seven days.
 - 2026-06-26: List all requested implementations from this session and verify whether each one is implemented.
 - 2026-06-26: Make the sidebar recent seven days button filter the tree and make Ctrl+, open the options dialog.
+- 2026-06-26: Ensure clicking a sidebar folder toggles its collapsed and expanded state.

@@ -1835,6 +1835,7 @@ function renderDirChildren(dir, parent, matcher, folderPaths, excludePaths = [])
       row.classList.add("selected");
       if (node.kind !== "directory") row.classList.add("active");
       if (node.kind === "directory") {
+        if (matcher) state.searchTreeAutoExpand = false;
         node.collapsed = !node.collapsed;
         renderTree();
       } else if (isOpenableDocument(node.name)) {
