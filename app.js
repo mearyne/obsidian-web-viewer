@@ -2,6 +2,7 @@ const TASKS_DIRTY_KEY = "obsidian-web-viewer-tasks-dirty";
 const EDITOR_AUTO_SAVE_INTERVAL = 30 * 1000;
 const DOCUMENT_OPEN_SLOW_STEP_MS = 120;
 const DOCUMENT_OPEN_SLOW_TOTAL_MS = 500;
+const CONTENT_HISTORY_LIMIT = 50;
 function setTasksDirty() { try { localStorage.setItem(TASKS_DIRTY_KEY, "1"); } catch {} }
 function clearTasksDirty() { try { localStorage.removeItem(TASKS_DIRTY_KEY); } catch {} }
 function isTasksDirty() { try { return localStorage.getItem(TASKS_DIRTY_KEY) === "1"; } catch { return false; } }
@@ -84,6 +85,9 @@ const state = {
   tabs: [{ id: "main", path: null, title: "새 탭", pinned: false, scrollTop: 0 }],
   navigationHistories: new Map(),
   navigatingHistory: false,
+  contentUndoStack: [],
+  contentRedoStack: [],
+  applyingContentHistory: false,
   lightboxImages: [],
   lightboxIndex: -1,
   treeSortMode: "created",
@@ -3642,7 +3646,10 @@ function handleEditorShortcut(event) {
 }
 
 function runEditorCommand(command) {
-  if (!state.editMode) return;
+  if (!state.editMode) {
+    if (command === "undo" || command === "redo") void applyContentHistory(command);
+    return;
+  }
   focusEditor();
   document.execCommand(command);
   markEditorDirty();
@@ -3897,17 +3904,90 @@ async function writeFileHandle(handle, content) {
 }
 
 async function writeNodeContent(node, content, { backup = true, previousContent = state.currentContent } = {}) {
+  let metadata;
   if (node.handle) {
     if (backup) await writeBackupFile(node, previousContent);
     await writeFileHandle(node.handle, content);
-    return preserveCreatedAt(node, await readFileMetadata(node.handle, node.path));
+    metadata = preserveCreatedAt(node, await readFileMetadata(node.handle, node.path));
+  } else if (node.serverBacked && state.serverVaultWritable) {
+    metadata = preserveCreatedAt(node, await writeServerFile(node.path, content, { backup }));
+  } else {
+    throw new Error("File is not writable");
   }
 
-  if (node.serverBacked && state.serverVaultWritable) {
-    return preserveCreatedAt(node, await writeServerFile(node.path, content, { backup }));
+  recordContentHistory(node, previousContent, content);
+  return metadata;
+}
+
+function recordContentHistory(node, beforeContent, afterContent) {
+  if (state.applyingContentHistory || !node?.path || beforeContent === afterContent) return;
+  state.contentUndoStack.push({
+    path: node.path,
+    beforeContent: String(beforeContent ?? ""),
+    afterContent: String(afterContent ?? ""),
+  });
+  if (state.contentUndoStack.length > CONTENT_HISTORY_LIMIT) state.contentUndoStack.shift();
+  state.contentRedoStack = [];
+  updateStatusEditButtons();
+}
+
+async function applyContentHistory(direction) {
+  if (state.applyingContentHistory) return;
+  const sourceStack = direction === "redo" ? state.contentRedoStack : state.contentUndoStack;
+  const targetStack = direction === "redo" ? state.contentUndoStack : state.contentRedoStack;
+  const entry = sourceStack.pop();
+  if (!entry) {
+    updateStatusEditButtons();
+    return;
   }
 
-  throw new Error("File is not writable");
+  state.applyingContentHistory = true;
+  updateStatusEditButtons();
+  const node = state.files.get(entry.path);
+  if (!canEditNode(node)) {
+    sourceStack.push(entry);
+    state.applyingContentHistory = false;
+    updateStatusEditButtons();
+    alert("되돌릴 수 있는 파일을 찾을 수 없습니다.");
+    return;
+  }
+
+  const granted = await ensureNodeWritePermission(node);
+  if (!granted) {
+    sourceStack.push(entry);
+    state.applyingContentHistory = false;
+    updateStatusEditButtons();
+    alert("파일 편집 권한이 필요합니다.");
+    return;
+  }
+
+  const nextContent = direction === "redo" ? entry.afterContent : entry.beforeContent;
+  const previousContent = direction === "redo" ? entry.beforeContent : entry.afterContent;
+  try {
+    const metadata = await writeNodeContent(node, nextContent, { backup: false, previousContent });
+    Object.assign(node, metadata);
+    node.content = nextContent;
+    refreshDirectoryMetadata();
+    updateTasksForFile(entry.path, nextContent);
+    if (state.currentPath === entry.path) {
+      state.currentContent = nextContent;
+      if (state.editMode) {
+        setEditorValue(nextContent);
+        markEditorDirty();
+      } else if (state.activeView === "note") {
+        renderCurrentDocument();
+      }
+    }
+    if (state.activeView === "calendar" && isTaskCalendarKind()) renderCalendar();
+    targetStack.push(entry);
+  } catch (error) {
+    sourceStack.push(entry);
+    console.error("Content history restore failed", error);
+    alert("되돌리기에 실패했습니다.");
+  } finally {
+    state.applyingContentHistory = false;
+    updateStatusEditButtons();
+  }
 }
 
 function preserveCreatedAt(node, metadata) {
@@ -4093,9 +4173,8 @@ function populateStatusHistory(historyWrap) {
 }
 
 function updateStatusEditButtons() {
-  [els.statusUndoButton, els.statusRedoButton].forEach((button) => {
-    if (button) button.disabled = !state.editMode;
-  });
+  if (els.statusUndoButton) els.statusUndoButton.disabled = state.applyingContentHistory || (!state.editMode && state.contentUndoStack.length === 0);
+  if (els.statusRedoButton) els.statusRedoButton.disabled = state.applyingContentHistory || (!state.editMode && state.contentRedoStack.length === 0);
 }
 
 function openCurrentFileInObsidian() {
