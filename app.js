@@ -3404,7 +3404,7 @@ function renderMindmapDocument() {
     panel.focus();
   };
   canvas.addEventListener("click", focusMindmap);
-  saveButton?.addEventListener("click", () => void saveMindmapNow({ silent: false }));
+  saveButton?.addEventListener("click", () => void saveMindmapNow({ silent: false, backup: true, refreshTree: true }));
   requestAnimationFrame(() => {
     jm.resize();
     focusMindmap();
@@ -3425,11 +3425,11 @@ function scheduleMindmapSave() {
   window.clearTimeout(state.mindmapSaveTimer);
   state.mindmapSaveTimer = window.setTimeout(() => {
     state.mindmapSaveTimer = null;
-    void saveMindmapNow({ silent: true });
-  }, 350);
+    void saveMindmapNow({ silent: true, backup: false, refreshTree: false });
+  }, 2000);
 }
 
-async function saveMindmapNow({ silent = true } = {}) {
+async function saveMindmapNow({ silent = true, backup = false, refreshTree = false } = {}) {
   const context = state.mindmapContext;
   const node = context?.node || state.currentNode;
   if (!state.mindmapInstance) {
@@ -3448,14 +3448,16 @@ async function saveMindmapNow({ silent = true } = {}) {
     return;
   }
   try {
-    const metadata = await writeNodeContent(node, nextContent, { backup: true, previousContent });
+    const metadata = await writeNodeContent(node, nextContent, { backup, previousContent });
     Object.assign(node, metadata);
     node.content = nextContent;
     if (context) context.content = nextContent;
     if (state.currentPath === node.path) state.currentContent = nextContent;
-    refreshDirectoryMetadata();
-    refreshRecentFilesCache();
-    renderTree();
+    if (refreshTree) {
+      refreshDirectoryMetadata();
+      refreshRecentFilesCache();
+      renderTree();
+    }
     if (!silent) showAppToast("마인드맵 저장됨", "success");
   } catch {
     if (!silent) showAppToast("마인드맵 저장 실패", "error");
