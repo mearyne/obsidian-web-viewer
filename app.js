@@ -628,6 +628,14 @@ async function lockPreferredOrientation() {
 }
 
 function handleGlobalKeydown(event) {
+  if (isMindmapSaveShortcut(event)) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation?.();
+    void saveMindmapNow({ silent: false });
+    return;
+  }
+
   if (isMindmapTextEditingTarget(event.target)) return;
 
   if (!els.optionsMenu.hidden) {
@@ -851,6 +859,16 @@ function handleGlobalKeydown(event) {
 
 function isTypingTarget(target) {
   return Boolean(target?.closest?.("input, textarea, select, [contenteditable='true']"));
+}
+
+function isMindmapSaveShortcut(event) {
+  if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey) return false;
+  if (event.code !== "KeyS" && event.key.toLowerCase() !== "s") return false;
+  if (!state.mindmapInstance || els.mindmapShell?.hidden) return false;
+  if (!(state.editMode && canEditNode(state.currentNode))) return false;
+  const targetInMindmap = event.target?.closest?.(".mindmap-shell");
+  const activeInMindmap = els.mindmapShell.contains(document.activeElement);
+  return Boolean(targetInMindmap || activeInMindmap || state.mindmapKeyCaptureActive);
 }
 
 function triggerRandomAction() {
@@ -4036,7 +4054,10 @@ function handleMindmapKeydown(event) {
 }
 
 function isMindmapTextEditingTarget(target) {
-  return Boolean(target?.closest?.(".smm-node-edit-wrap, .smm-richtext-node-edit-wrap, .associative-line-text-edit-wrap, .outer-frame-text-edit-wrap"));
+  const element = target?.nodeType === 1 ? target : target?.parentElement;
+  if (!element?.closest) return false;
+  if (element.closest(".smm-node-edit-wrap, .smm-richtext-node-edit-wrap, .associative-line-text-edit-wrap, .outer-frame-text-edit-wrap")) return true;
+  return Boolean(element.closest(".mindmap-shell") && element.closest("input, textarea, [contenteditable='true']"));
 }
 
 async function handleMindmapPaste(event) {
@@ -9873,9 +9894,9 @@ function renderEmbed(rawTarget) {
   if (isOpenableDocument(path)) {
     const node = state.files.get(path);
     if (typeof node?.content === "string") {
-      return `<div class="embedded-note">${renderEmbeddedDocumentContent(path, node.content)}</div>`;
+      return `<div class="embedded-note" data-embed-wiki="${escapeAttribute(path)}">${renderEmbeddedDocumentContent(path, node.content)}</div>`;
     }
-    return `<div class="embedded-note embedded-note-loading" data-embed-path="${escapeAttribute(path)}">Preview loading...</div>`;
+    return `<div class="embedded-note embedded-note-loading" data-embed-path="${escapeAttribute(path)}" data-embed-wiki="${escapeAttribute(path)}">Preview loading...</div>`;
   }
 
   return `<a class="wiki-link" href="#" data-wiki="${escapeAttribute(path)}">${escapeHtml(target)}</a>`;
@@ -10250,11 +10271,23 @@ function resolveVaultPath(target) {
 }
 
 function bindWikiLinks(root) {
+  root.querySelectorAll("[data-embed-wiki]").forEach((embed) => {
+    embed.addEventListener("click", async (event) => {
+      if (event.defaultPrevented) return;
+      if (event.target?.closest?.("a, button, input, textarea, select, [contenteditable='true']")) return;
+      event.preventDefault();
+      const path = embed.getAttribute("data-embed-wiki");
+      if (path && isOpenableDocument(path)) await openFileInNewTab(path);
+    });
+  });
+
   root.querySelectorAll("[data-wiki]").forEach((link) => {
     link.addEventListener("click", async (event) => {
       event.preventDefault();
       const path = link.getAttribute("data-wiki");
-      if (path && isOpenableDocument(path)) await openFile(path);
+      if (!path || !isOpenableDocument(path)) return;
+      if (link.closest(".embedded-note")) await openFileInNewTab(path);
+      else await openFile(path);
     });
   });
 

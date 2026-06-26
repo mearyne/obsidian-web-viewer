@@ -2151,7 +2151,8 @@ button:disabled {
   width: 100%;
 }
 
-.mindmap-canvas .smm-richtext-node-wrap p {
+.mindmap-canvas .smm-richtext-node-wrap p,
+.mindmap-embed-canvas .smm-richtext-node-wrap p {
   margin: 0;
 }
 
