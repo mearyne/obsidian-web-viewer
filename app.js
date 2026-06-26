@@ -7496,6 +7496,7 @@ function handleTaskTitleEnter(event, confirmButton) {
 
 function handleTaskCreateSubItemsEnter(event) {
   if (event.target.readOnly) return;
+  if (handleTaskSubItemsBackspace(event)) return;
   if (event.key === "Tab" && !event.ctrlKey && !event.metaKey && !event.altKey && !event.isComposing) {
     event.preventDefault();
     adjustTaskCreateSubItemDepth(event.shiftKey);
@@ -7518,6 +7519,7 @@ function handleTaskCreateSubItemsEnter(event) {
 
 function handleTaskSubItemsEnter(event) {
   if (event.target.readOnly) return;
+  if (handleTaskSubItemsBackspace(event)) return;
   if (event.key === "Tab" && !event.ctrlKey && !event.metaKey && !event.altKey && !event.isComposing) {
     event.preventDefault();
     adjustTaskEditSubItemDepth(event.shiftKey);
@@ -7536,6 +7538,24 @@ function handleTaskSubItemsEnter(event) {
   textarea.value = `${value.slice(0, selectionStart)}${insertion}${value.slice(selectionEnd)}`;
   const next = selectionStart + insertion.length;
   textarea.setSelectionRange(next, next);
+}
+
+function handleTaskSubItemsBackspace(event) {
+  if (event.key !== "Backspace") return false;
+  if (event.isComposing || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return false;
+  const textarea = event.currentTarget;
+  const { selectionStart, selectionEnd, value } = textarea;
+  if (selectionStart !== selectionEnd) return false;
+  const line = currentEditorLine(value, selectionStart);
+  if (line.start === 0) return false;
+  const linePrefix = value.slice(line.start, selectionStart);
+  if (!/^[ \t]*[-*+]\s*$/.test(linePrefix)) return false;
+
+  event.preventDefault();
+  const nextCursor = line.start - 1;
+  textarea.value = value.slice(0, nextCursor) + value.slice(selectionStart);
+  textarea.setSelectionRange(nextCursor, nextCursor);
+  return true;
 }
 
 function ensureTaskEditSubItemBullet(event) {
