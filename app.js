@@ -81,6 +81,7 @@ const state = {
   sidebarResize: null,
   sidebarPinned: false,
   tabDrag: null,
+  tabStripScroll: null,
   tabDragSuppressUntil: 0,
   activeTabId: "main",
   tabs: [{ id: "main", path: null, title: "새 탭", pinned: false, scrollTop: 0 }],
@@ -9853,8 +9854,7 @@ function renderTabStrip() {
     const isActive = tab.id === state.activeTabId;
     const title = escapeHtml(tab.title || "새 탭");
     const pinMark = tab.pinned ? '<span class="tab-pin">📌</span>' : "";
-    const draggable = (tab.path && !isMobile) ? ' draggable="true"' : "";
-    return `<div class="tab-item${isActive ? " active" : ""}${tab.pinned ? " pinned" : ""}" data-tab-id="${escapeAttribute(tab.id)}" data-tab-path="${escapeAttribute(tab.path || "")}" title="${title}"${draggable}>
+    return `<div class="tab-item${isActive ? " active" : ""}${tab.pinned ? " pinned" : ""}" data-tab-id="${escapeAttribute(tab.id)}" data-tab-path="${escapeAttribute(tab.path || "")}" title="${title}">
       ${pinMark}<span class="tab-title">${title}</span>
       <button class="tab-close" data-tab-id="${escapeAttribute(tab.id)}" title="${tab.pinned ? "핀 해제" : "탭 닫기"}" type="button">×</button>
     </div>`;
@@ -9869,6 +9869,10 @@ function renderTabStrip() {
     strip.appendChild(els.viewControlsOverlay);
   }
 
+  if (strip.dataset.scrollDragBound !== "true") {
+    strip.addEventListener("pointerdown", startTabStripScroll);
+    strip.dataset.scrollDragBound = "true";
+  }
   strip.querySelectorAll(".tab-item").forEach((el) => {
     el.addEventListener("click", (e) => {
       if (e.target.closest(".tab-close")) return;
@@ -9886,26 +9890,6 @@ function renderTabStrip() {
       e.preventDefault();
       showTabContextMenu(e.clientX, e.clientY, el.dataset.tabId);
     });
-    let longPressTimer = null;
-    el.addEventListener("touchstart", (e) => {
-      longPressTimer = setTimeout(() => {
-        longPressTimer = null;
-        const touch = e.touches[0];
-        showTabContextMenu(touch.clientX, touch.clientY, el.dataset.tabId);
-      }, 500);
-    }, { passive: true });
-    el.addEventListener("touchend", () => { clearTimeout(longPressTimer); longPressTimer = null; });
-    el.addEventListener("touchmove", () => { clearTimeout(longPressTimer); longPressTimer = null; });
-    if (el.draggable) {
-      el.addEventListener("dragstart", (e) => {
-        e.dataTransfer.setData("text/plain", el.dataset.tabPath);
-        e.dataTransfer.effectAllowed = "copy";
-        document.querySelector(".app-shell")?.classList.add("dragging-tab");
-      });
-      el.addEventListener("dragend", () => {
-        document.querySelector(".app-shell")?.classList.remove("dragging-tab");
-      });
-    }
   });
   strip.querySelectorAll(".tab-close").forEach((btn) => {
     btn.addEventListener("click", (e) => {
@@ -9930,16 +9914,35 @@ function renderTabStrip() {
 }
 
 function startTabPointerDrag(event, element) {
-  if (event.pointerType === "mouse" || event.target.closest(".tab-close")) return;
+  if (event.button !== 0 || event.target.closest(".tab-close")) return;
   const tab = state.tabs.find((item) => item.id === element.dataset.tabId);
   if (!tab) return;
+  const strip = element.closest(".tab-strip");
+  if (!strip) return;
+  if (state.tabDrag) clearTabDragTimer(state.tabDrag);
+  const timer = window.setTimeout(() => {
+    const drag = state.tabDrag;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    drag.longPressed = true;
+    drag.mode = "press";
+    element.classList.add("pressing");
+  }, 420);
   state.tabDrag = {
     pointerId: event.pointerId,
     tabId: tab.id,
+    element,
+    strip,
     startX: event.clientX,
     startY: event.clientY,
+    lastX: event.clientX,
+    lastY: event.clientY,
+    scrollLeft: strip?.scrollLeft || 0,
+    timer,
+    mode: "pending",
+    longPressed: false,
     dragging: false,
   };
+  element.setPointerCapture?.(event.pointerId);
   window.addEventListener("pointermove", handleTabPointerMove, { passive: false });
   window.addEventListener("pointerup", stopTabPointerDrag, { passive: false });
   window.addEventListener("pointercancel", stopTabPointerDrag, { passive: false });
@@ -9948,9 +9951,23 @@ function startTabPointerDrag(event, element) {
 function handleTabPointerMove(event) {
   const drag = state.tabDrag;
   if (!drag || event.pointerId !== drag.pointerId) return;
-  const distance = Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY);
-  if (!drag.dragging && distance < 10) return;
+  drag.lastX = event.clientX;
+  drag.lastY = event.clientY;
+  const dx = event.clientX - drag.startX;
+  const dy = event.clientY - drag.startY;
+  const distance = Math.hypot(dx, dy);
+  if (!drag.longPressed) {
+    if (distance < 8) return;
+    clearTabDragTimer(drag);
+    drag.mode = "scroll";
+    drag.strip.scrollLeft = drag.scrollLeft - dx;
+    event.preventDefault();
+    return;
+  }
+  if (!drag.dragging && distance < 8) return;
   drag.dragging = true;
+  drag.mode = "reorder";
+  drag.element?.classList.add("dragging");
   event.preventDefault();
   reorderDraggedTab(event.clientX, event.clientY);
 }
@@ -9958,11 +9975,64 @@ function handleTabPointerMove(event) {
 function stopTabPointerDrag(event) {
   const drag = state.tabDrag;
   if (!drag || event.pointerId !== drag.pointerId) return;
-  if (drag.dragging) state.tabDragSuppressUntil = Date.now() + 350;
+  clearTabDragTimer(drag);
+  drag.element?.classList.remove("pressing", "dragging");
+  drag.element?.releasePointerCapture?.(event.pointerId);
+  if (drag.mode === "press" && drag.longPressed && !drag.dragging) {
+    state.tabDragSuppressUntil = Date.now() + 350;
+    showTabContextMenu(event.clientX, event.clientY, drag.tabId);
+  } else if (drag.mode === "scroll" || drag.dragging) {
+    state.tabDragSuppressUntil = Date.now() + 350;
+  }
   state.tabDrag = null;
   window.removeEventListener("pointermove", handleTabPointerMove);
   window.removeEventListener("pointerup", stopTabPointerDrag);
   window.removeEventListener("pointercancel", stopTabPointerDrag);
+}
+
+function clearTabDragTimer(drag) {
+  if (!drag?.timer) return;
+  window.clearTimeout(drag.timer);
+  drag.timer = null;
+}
+
+function startTabStripScroll(event) {
+  if (event.button !== 0 || event.target.closest(".tab-item, button")) return;
+  const strip = event.currentTarget;
+  strip.classList.add("scrolling");
+  state.tabStripScroll = {
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    scrollLeft: strip.scrollLeft,
+    moved: false,
+    strip,
+  };
+  strip.setPointerCapture?.(event.pointerId);
+  window.addEventListener("pointermove", handleTabStripScroll, { passive: false });
+  window.addEventListener("pointerup", stopTabStripScroll, { passive: false });
+  window.addEventListener("pointercancel", stopTabStripScroll, { passive: false });
+}
+
+function handleTabStripScroll(event) {
+  const drag = state.tabStripScroll;
+  if (!drag || event.pointerId !== drag.pointerId) return;
+  const dx = event.clientX - drag.startX;
+  if (Math.abs(dx) < 4) return;
+  drag.moved = true;
+  drag.strip.scrollLeft = drag.scrollLeft - dx;
+  event.preventDefault();
+}
+
+function stopTabStripScroll(event) {
+  const drag = state.tabStripScroll;
+  if (!drag || event.pointerId !== drag.pointerId) return;
+  drag.strip.releasePointerCapture?.(event.pointerId);
+  drag.strip.classList.remove("scrolling");
+  if (drag.moved) state.tabDragSuppressUntil = Date.now() + 250;
+  state.tabStripScroll = null;
+  window.removeEventListener("pointermove", handleTabStripScroll);
+  window.removeEventListener("pointerup", stopTabStripScroll);
+  window.removeEventListener("pointercancel", stopTabStripScroll);
 }
 
 function reorderDraggedTab(x, y) {

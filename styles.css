@@ -4799,9 +4799,12 @@ button.calendar-more {
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
+  cursor: grab;
+  touch-action: pan-y;
   user-select: none;
 }
 
+.tab-strip.scrolling { cursor: grabbing; }
 .tab-strip::-webkit-scrollbar { display: none; }
 
 .tab-item {
@@ -4823,6 +4826,15 @@ button.calendar-more {
 
 .tab-item:hover { background: var(--surface-2); }
 .tab-item.active { background: var(--surface-2); font-weight: 500; }
+.tab-item.pressing,
+.tab-item.dragging {
+  background: var(--surface-3);
+}
+
+.tab-item.dragging {
+  opacity: 0.78;
+}
+
 .tab-item.active::after {
   background: var(--accent-strong);
   bottom: 0;
