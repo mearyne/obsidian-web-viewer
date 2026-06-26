@@ -3345,8 +3345,8 @@ function renderMindmapDocument() {
   els.mindmapShell.innerHTML = `
     <section class="mindmap-view">
       <div class="mindmap-toolbar">
-        <span>Enter 형제 추가 · Tab 자식 추가 · F2 수정 · Delete 삭제</span>
-        <button type="button" class="mindmap-save-button">저장</button>
+        <span>${state.editMode ? "Enter 형제 추가 · Tab 자식 추가 · F2 수정 · Delete 삭제" : "읽기 전용 · 편집을 누르면 노드를 추가/수정할 수 있습니다"}</span>
+        <button type="button" class="mindmap-save-button"${state.editMode ? "" : " hidden"}>저장</button>
       </div>
       <div id="mindmapCanvas" class="mindmap-canvas" tabindex="0"></div>
     </section>
@@ -3360,7 +3360,7 @@ function renderMindmapDocument() {
 
   const jm = new window.jsMind({
     container: "mindmapCanvas",
-    editable: canEditNode(state.currentNode),
+    editable: state.editMode && canEditNode(state.currentNode),
     theme: "primary",
     mode: "full",
     view: {
@@ -3396,7 +3396,7 @@ function renderMindmapDocument() {
     panel.focus();
   };
   canvas.addEventListener("click", focusMindmap);
-  saveButton?.addEventListener("click", () => void saveMindmapNow({ silent: false }));
+  saveButton?.addEventListener("click", () => void saveMindmapEdit());
   requestAnimationFrame(() => {
     jm.resize();
     focusMindmap();
@@ -3409,6 +3409,14 @@ function renderMindmapDocument() {
   });
 }
 
+async function saveMindmapEdit() {
+  const saved = await saveMindmapNow({ silent: false });
+  if (!saved) return;
+  state.editMode = false;
+  updateEditButtons();
+  renderCurrentDocument();
+}
+
 function firstMindmapEditableNodeId(data) {
   return data?.data?.children?.[0]?.id || "";
 }
@@ -3418,18 +3426,18 @@ async function saveMindmapNow({ silent = true } = {}) {
   const node = context?.node || state.currentNode;
   if (!state.mindmapInstance) {
     if (!silent) showAppToast("저장할 마인드맵이 없습니다.", "error");
-    return;
+    return false;
   }
   if (!canEditNode(node)) {
     if (!silent) showAppToast("현재 마인드맵은 저장할 수 없습니다.", "error");
-    return;
+    return false;
   }
   const data = state.mindmapInstance.get_data("node_tree");
   const previousContent = context?.content ?? state.currentContent;
   const nextContent = buildMindmapDocumentContent(data, previousContent);
   if (nextContent === previousContent) {
     if (!silent) showAppToast("변경 사항이 없습니다.", "info");
-    return;
+    return true;
   }
   try {
     const metadata = await writeNodeContent(node, nextContent, { backup: true, previousContent });
@@ -3441,8 +3449,10 @@ async function saveMindmapNow({ silent = true } = {}) {
     refreshRecentFilesCache();
     renderTree();
     if (!silent) showAppToast("마인드맵 저장됨", "success");
+    return true;
   } catch {
     if (!silent) showAppToast("마인드맵 저장 실패", "error");
+    return false;
   }
 }
 
@@ -3535,6 +3545,12 @@ async function enterEditMode() {
   holdViewerHeightDuringTransition();
   state.editMode = true;
   state.editorDirty = false;
+  if (isMindmapDocument(state.currentContent)) {
+    stopAutoSave();
+    renderCurrentDocument();
+    updateEditButtons();
+    return true;
+  }
   setEditorValue(state.currentContent);
   els.markdownView.hidden = true;
   if (els.mindmapShell) els.mindmapShell.hidden = true;
@@ -3561,6 +3577,10 @@ async function saveCurrentEdit() {
 
 async function handleEditSaveButton() {
   if (state.editMode) {
+    if (isMindmapDocument(state.currentContent)) {
+      await saveMindmapEdit();
+      return;
+    }
     await saveCurrentEdit();
     return;
   }
