@@ -41,3 +41,4 @@
 - 2026-06-26: Implement the first three selected `simple-mind-map` feature groups and include mindmap node text in global search.
 - 2026-06-26: Remove the mindmap canvas focus border and move mindmap-specific settings into options.
 - 2026-06-26: Hide the mindmap edit toolbar in read mode and preserve pasted node images.
+- 2026-06-26: Fix mindmap node image paste by handling browser paste events directly.

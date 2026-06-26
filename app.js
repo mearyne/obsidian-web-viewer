@@ -125,6 +125,7 @@ const state = {
   mindmapInstance: null,
   mindmapContext: null,
   mindmapOptions: { layout: "mindMap", autoFit: true, advancedTools: true },
+  mindmapDirectImagePasteAt: 0,
   lastGPressAt: 0,
   taskCreateSourceDate: "",
   selectedPaths: new Set(),
@@ -490,6 +491,7 @@ els.optionsCloseButton.addEventListener("click", closeOptionsMenu);
 els.optionsBackdrop.addEventListener("click", closeOptionsMenu);
 els.imageLightbox.addEventListener("click", closeImageLightbox);
 els.imageLightboxClose.addEventListener("click", closeImageLightbox);
+document.addEventListener("paste", handleMindmapPaste, true);
 els.recentSevenDaysQuickButton?.addEventListener("click", () => setRecentDaysFilter(7));
 els.themeButton.addEventListener("click", toggleTheme);
 els.sidebarResizeHandle.addEventListener("pointerdown", startSidebarResize);
@@ -3675,7 +3677,49 @@ function fitMindmapToView() {
   jm?.view?.fit?.();
 }
 
-async function handleMindmapNodePasteImage(blob) {
+async function handleMindmapPaste(event) {
+  if (!state.mindmapInstance || els.mindmapShell?.hidden) return;
+  if (!(state.editMode && canEditNode(state.currentNode))) return;
+  const targetInMindmap = event.target?.closest?.(".mindmap-shell");
+  const activeInMindmap = els.mindmapShell.contains(document.activeElement);
+  if (!targetInMindmap && !activeInMindmap) return;
+  const imageItem = Array.from(event.clipboardData?.items || []).find((item) => item.type.startsWith("image/"));
+  if (!imageItem) return;
+  const blob = imageItem.getAsFile();
+  if (!blob) return;
+  event.preventDefault();
+  event.stopPropagation();
+  event.stopImmediatePropagation?.();
+  state.mindmapDirectImagePasteAt = Date.now();
+  await pasteImageToActiveMindmapNodes(blob);
+}
+
+async function pasteImageToActiveMindmapNodes(blob) {
+  const jm = state.mindmapInstance;
+  const nodes = jm?.renderer?.activeNodeList || [];
+  if (!jm || !nodes.length) {
+    showAppToast("이미지를 붙여넣을 마인드맵 노드를 먼저 선택하세요.", "error");
+    return;
+  }
+  try {
+    const imageData = await handleMindmapNodePasteImage(blob, { direct: true });
+    nodes.forEach((node) => {
+      jm.execCommand?.("SET_NODE_IMAGE", node, {
+        url: imageData.url,
+        title: "",
+        width: imageData.size.width,
+        height: imageData.size.height,
+      });
+    });
+  } catch {
+    showAppToast("마인드맵 이미지 붙여넣기에 실패했습니다.", "error");
+  }
+}
+
+async function handleMindmapNodePasteImage(blob, options = {}) {
+  if (!options.direct && Date.now() - state.mindmapDirectImagePasteAt < 1200) {
+    throw new Error("direct paste already handled");
+  }
   const size = await getImageBlobSize(blob);
   if (!state.serverVaultWritable) {
     return {
@@ -3734,7 +3778,8 @@ function blobToDataUrl(blob) {
   });
 }
 
-function handleMindmapError(type) {
+function handleMindmapError(type, error) {
+  if (error?.message === "direct paste already handled") return;
   if (type === "load_clipboard_image_error") {
     showAppToast("마인드맵 이미지 붙여넣기에 실패했습니다.", "error");
   }
