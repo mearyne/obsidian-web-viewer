@@ -23,3 +23,4 @@
 - 2026-06-26: Evaluate implementing markmap locally for mindmap preview and editing.
 - 2026-06-26: Compare jsmind and markmap for local mindmap support.
 - 2026-06-26: Clarify whether direct in-mindmap editing and saveback are possible.
+- 2026-06-26: Restore local jsmind mindmap editing.

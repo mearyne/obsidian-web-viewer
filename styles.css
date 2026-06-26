@@ -1945,103 +1945,71 @@ button:disabled {
 }
 
 .mindmap-view {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
   height: 100%;
   min-height: 0;
   padding: 8px 16px 12px;
+  position: relative;
   width: 100%;
 }
 
-.mindmap-preview-toolbar {
+.mindmap-zoom-controls {
   align-items: center;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  border: 1px solid var(--line);
+  border-radius: 7px;
   display: flex;
-  justify-content: flex-end;
-  min-height: 34px;
+  gap: 4px;
+  padding: 4px;
+  position: absolute;
+  right: 24px;
+  top: 16px;
+  z-index: 3;
 }
 
-.mindmap-external-link {
-  align-items: center;
+.mindmap-zoom-controls button {
+  background: var(--surface);
+  border-color: var(--line);
+  border-radius: 5px;
+  color: var(--muted);
+  height: 26px;
+  padding: 0;
+  width: 26px;
+}
+
+.mindmap-zoom-controls button.active {
   background: var(--accent);
-  border: 1px solid var(--accent);
-  border-radius: 6px;
+  border-color: var(--accent);
   color: var(--accent-contrast);
-  display: inline-flex;
-  font-size: 13px;
-  font-weight: 650;
-  min-height: 34px;
-  padding: 0 12px;
-  text-decoration: none;
 }
 
-.mindmap-external-link:hover {
-  filter: brightness(1.04);
-}
-
-.mindmap-preview-panel {
+.mindmap-canvas {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 8px;
-  flex: 1 1 auto;
+  height: 100%;
   min-height: 0;
   overflow: auto;
-  padding: 18px;
+  outline: none;
+  position: relative;
   width: 100%;
 }
 
-.mindmap-preview-heading {
-  border-bottom: 1px solid var(--line);
-  margin-bottom: 14px;
-  padding-bottom: 12px;
+.mindmap-canvas:focus {
+  border-color: var(--accent);
 }
 
-.mindmap-preview-label {
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 650;
-  margin-bottom: 4px;
+.mindmap-canvas jmnode {
+  border-radius: 7px;
+  box-shadow: none;
+  font-family: inherit;
 }
 
-.mindmap-preview-heading h2 {
-  color: var(--text);
-  font-size: 20px;
-  line-height: 1.25;
-  margin: 0;
+.mindmap-canvas jmnode.root {
+  font-weight: 750;
 }
 
-.mindmap-preview-tree,
-.mindmap-preview-tree ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.mindmap-preview-tree ul {
-  border-left: 1px solid var(--line);
-  margin-left: 10px;
-  padding-left: 18px;
-}
-
-.mindmap-preview-tree li {
-  margin: 8px 0;
-}
-
-.mindmap-preview-tree span {
-  background: var(--surface-raised);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  color: var(--text);
-  display: inline-block;
-  line-height: 1.4;
-  max-width: 100%;
-  padding: 6px 9px;
-  word-break: break-word;
-}
-
-.mindmap-preview-empty {
-  color: var(--muted);
-  margin: 0;
+.mindmap-canvas jmnode.selected {
+  box-shadow: 0 0 0 2px var(--accent);
 }
 
 @media (max-width: 780px) {
@@ -2049,18 +2017,12 @@ button:disabled {
     padding: 8px 8px 52px;
   }
 
-  .mindmap-preview-toolbar {
-    justify-content: stretch;
+  .mindmap-zoom-controls {
+    right: 14px;
+    top: 14px;
   }
 
-  .mindmap-external-link {
-    justify-content: center;
-    width: 100%;
-  }
-
-  .mindmap-preview-panel {
-    padding: 12px;
-  }
+  .mindmap-canvas { min-height: 0; }
 }
 
 .editor-image-btn {

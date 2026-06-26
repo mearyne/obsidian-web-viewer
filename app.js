@@ -122,6 +122,9 @@ const state = {
   randomOldFirst: false,
   randomNoticeToast: null,
   customConfirmResolve: null,
+  mindmapInstance: null,
+  mindmapContext: null,
+  mindmapZoomLevel: 2,
   lastGPressAt: 0,
   taskCreateSourceDate: "",
   selectedPaths: new Set(),
@@ -3328,8 +3331,8 @@ function buildMindmapDocumentContent(data, previousContent = "") {
 
 function renderMindmapDocument() {
   const data = extractMindmapData(state.currentContent) || createDefaultMindmapData(displayDocumentTitle(state.currentNode?.name || state.currentPath || "마인드맵"));
-  const outlineMarkdown = mindmapDataToMarkdown(data);
-  const externalUrl = buildMindmapExternalUrl(outlineMarkdown);
+  state.mindmapInstance = null;
+  state.mindmapContext = { path: state.currentPath, node: state.currentNode, content: state.currentContent };
   els.markdownView.hidden = true;
   els.editorShell.hidden = true;
   els.calendarView.hidden = true;
@@ -3337,51 +3340,161 @@ function renderMindmapDocument() {
   els.mindmapShell.hidden = false;
   els.mindmapShell.innerHTML = `
     <section class="mindmap-view">
-      <div class="mindmap-preview-toolbar">
-        <a class="mindmap-external-link" href="${escapeAttribute(externalUrl)}" target="_blank" rel="noopener noreferrer">markmap에서 열기</a>
+      <div class="mindmap-zoom-controls" aria-label="마인드맵 줌 단계">
+        ${MINDMAP_ZOOM_LEVELS.map((_, index) => `<button type="button" data-mindmap-zoom="${index}" aria-label="줌 ${index + 1}단계">${index + 1}</button>`).join("")}
       </div>
-      <div class="mindmap-preview-panel">
-        <div class="mindmap-preview-heading">
-          <div class="mindmap-preview-label">마인드맵 미리보기</div>
-          <h2>${escapeHtml(data?.data?.topic || data?.meta?.name || "Mindmap")}</h2>
-        </div>
-        ${renderMindmapPreviewTree(data?.data)}
-      </div>
+      <div id="mindmapCanvas" class="mindmap-canvas" tabindex="0"></div>
     </section>
   `;
+  const canvas = els.mindmapShell.querySelector("#mindmapCanvas");
+  if (!window.jsMind || !canvas) {
+    els.mindmapShell.innerHTML = "<p>마인드맵 라이브러리를 불러오지 못했습니다.</p>";
+    return;
+  }
+
+  const jm = new window.jsMind({
+    container: "mindmapCanvas",
+    editable: state.editMode && canEditNode(state.currentNode),
+    theme: "primary",
+    mode: "full",
+    view: {
+      engine: "canvas",
+      draggable: true,
+      hmargin: 80,
+      vmargin: 40,
+      line_width: 2,
+      line_color: getComputedStyle(document.documentElement).getPropertyValue("--line-strong").trim() || "#6b7280",
+    },
+    layout: { hspace: 42, vspace: 12, pspace: 12 },
+    shortcut: {
+      enable: true,
+      mapping: {
+        addchild: [9, 45, 4109],
+        addbrother: [13, 1033],
+        editnode: 113,
+        delnode: 46,
+        toggle: 32,
+        left: 37,
+        up: 38,
+        right: 39,
+        down: 40,
+      },
+    },
+  });
+  state.mindmapInstance = jm;
+  jm.show(data);
+  jm.select_node(firstMindmapEditableNodeId(data) || "root");
+  const focusMindmap = () => {
+    const panel = jm.view?.e_panel || canvas;
+    panel.tabIndex = 0;
+    panel.focus();
+  };
+  canvas.addEventListener("click", focusMindmap);
+  bindMindmapZoomControls();
+  requestAnimationFrame(() => {
+    jm.resize();
+    fitMindmapToView();
+    focusMindmap();
+    requestAnimationFrame(() => {
+      jm.resize();
+      applyMindmapZoom(state.mindmapZoomLevel);
+    });
+    window.setTimeout(() => {
+      jm.resize();
+      applyMindmapZoom(state.mindmapZoomLevel);
+    }, 120);
+  });
 }
 
-function buildMindmapExternalUrl(markdown) {
-  const dataUrl = `data:text/markdown;charset=utf-8,${encodeURIComponent(markdown || "# Mindmap")}`;
-  return `https://markmap.js.org/repl#?d=${encodeURIComponent(dataUrl)}`;
+const MINDMAP_ZOOM_LEVELS = [0.5, 0.75, 1, 1.25, 1.5];
+
+function bindMindmapZoomControls() {
+  els.mindmapShell?.querySelectorAll("[data-mindmap-zoom]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const level = Number(button.getAttribute("data-mindmap-zoom"));
+      if (!Number.isInteger(level)) return;
+      applyMindmapZoom(level);
+    });
+  });
+  updateMindmapZoomControls();
 }
 
-function mindmapDataToMarkdown(data) {
-  const root = data?.data || { topic: data?.meta?.name || "Mindmap" };
-  return mindmapNodeToMarkdown(root).trim() + "\n";
+function fitMindmapToView() {
+  const jm = state.mindmapInstance;
+  if (!jm?.view?.e_panel || !jm?.layout?.bounds) return;
+  const rect = jm.view.e_panel.getBoundingClientRect();
+  const bounds = jm.layout.bounds;
+  const mapWidth = Math.max(1, bounds.e - bounds.w + 160);
+  const mapHeight = Math.max(1, bounds.s - bounds.n + 120);
+  const fit = Math.min(rect.width / mapWidth, rect.height / mapHeight);
+  let level = 0;
+  for (let index = 0; index < MINDMAP_ZOOM_LEVELS.length; index += 1) {
+    if (MINDMAP_ZOOM_LEVELS[index] <= fit) level = index;
+  }
+  applyMindmapZoom(level);
 }
 
-function mindmapNodeToMarkdown(node, depth = 0) {
-  if (!node) return "";
-  const topic = String(node.topic || "Untitled").trim() || "Untitled";
-  const line = depth === 0 ? `# ${topic}` : `${"  ".repeat(Math.max(0, depth - 1))}- ${topic}`;
-  const children = Array.isArray(node.children) ? node.children : [];
-  return [line, ...children.map((child) => mindmapNodeToMarkdown(child, depth + 1)).filter(Boolean)].join("\n");
+function applyMindmapZoom(level) {
+  const jm = state.mindmapInstance;
+  if (!jm?.view?.set_zoom) return;
+  const index = Math.max(0, Math.min(MINDMAP_ZOOM_LEVELS.length - 1, Number(level) || 0));
+  state.mindmapZoomLevel = index;
+  jm.view.set_zoom(MINDMAP_ZOOM_LEVELS[index]);
+  jm.scroll_node_to_center?.("root");
+  updateMindmapZoomControls();
 }
 
-function renderMindmapPreviewTree(root) {
-  if (!root) return '<p class="mindmap-preview-empty">No mindmap data.</p>';
-  return `<ul class="mindmap-preview-tree">${renderMindmapPreviewNode(root)}</ul>`;
+function updateMindmapZoomControls() {
+  els.mindmapShell?.querySelectorAll("[data-mindmap-zoom]").forEach((button) => {
+    button.classList.toggle("active", Number(button.getAttribute("data-mindmap-zoom")) === state.mindmapZoomLevel);
+  });
 }
 
-function renderMindmapPreviewNode(node) {
-  const children = Array.isArray(node?.children) ? node.children : [];
-  return `
-    <li>
-      <span>${escapeHtml(String(node?.topic || "Untitled"))}</span>
-      ${children.length ? `<ul>${children.map(renderMindmapPreviewNode).join("")}</ul>` : ""}
-    </li>
-  `;
+async function saveMindmapEdit() {
+  const saved = await saveMindmapNow({ silent: false });
+  if (!saved) return;
+  state.editMode = false;
+  updateEditButtons();
+  renderCurrentDocument();
+}
+
+function firstMindmapEditableNodeId(data) {
+  return data?.data?.children?.[0]?.id || "";
+}
+
+async function saveMindmapNow({ silent = true } = {}) {
+  const context = state.mindmapContext;
+  const node = context?.node || state.currentNode;
+  if (!state.mindmapInstance) {
+    if (!silent) showAppToast("저장할 마인드맵이 없습니다.", "error");
+    return false;
+  }
+  if (!canEditNode(node)) {
+    if (!silent) showAppToast("현재 마인드맵은 저장할 수 없습니다.", "error");
+    return false;
+  }
+  const data = state.mindmapInstance.get_data("node_tree");
+  const previousContent = context?.content ?? state.currentContent;
+  const nextContent = buildMindmapDocumentContent(data, previousContent);
+  if (nextContent === previousContent) {
+    if (!silent) showAppToast("변경 사항이 없습니다.", "info");
+    return true;
+  }
+  try {
+    const metadata = await writeNodeContent(node, nextContent, { backup: true, previousContent });
+    Object.assign(node, metadata);
+    node.content = nextContent;
+    if (context) context.content = nextContent;
+    if (state.currentPath === node.path) state.currentContent = nextContent;
+    refreshDirectoryMetadata();
+    refreshRecentFilesCache();
+    renderTree();
+    if (!silent) showAppToast("마인드맵 저장됨", "success");
+    return true;
+  } catch {
+    if (!silent) showAppToast("마인드맵 저장 실패", "error");
+    return false;
+  }
 }
 
 function renderPlainTextDocument(content) {
@@ -3473,6 +3586,12 @@ async function enterEditMode() {
   holdViewerHeightDuringTransition();
   state.editMode = true;
   state.editorDirty = false;
+  if (isMindmapDocument(state.currentContent)) {
+    stopAutoSave();
+    renderCurrentDocument();
+    updateEditButtons();
+    return true;
+  }
   setEditorValue(state.currentContent);
   els.markdownView.hidden = true;
   if (els.mindmapShell) els.mindmapShell.hidden = true;
@@ -3498,6 +3617,10 @@ async function saveCurrentEdit() {
 
 async function handleEditSaveButton() {
   if (state.editMode) {
+    if (isMindmapDocument(state.currentContent)) {
+      await saveMindmapEdit();
+      return;
+    }
     await saveCurrentEdit();
     return;
   }
