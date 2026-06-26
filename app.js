@@ -123,6 +123,7 @@ const state = {
   customConfirmResolve: null,
   mindmapInstance: null,
   mindmapContext: null,
+  mindmapZoomLevel: 2,
   lastGPressAt: 0,
   taskCreateSourceDate: "",
   selectedPaths: new Set(),
@@ -260,7 +261,6 @@ const els = {
   editorRedoButton: document.querySelector("#editorRedoButton"),
   editorIndentButton: document.querySelector("#editorIndentButton"),
   editorOutdentButton: document.querySelector("#editorOutdentButton"),
-  editorTitleButton: document.querySelector("#editorTitleButton"),
   editorHeadingButton: document.querySelector("#editorHeadingButton"),
   editorBulletButton: document.querySelector("#editorBulletButton"),
   editorTableButton: document.querySelector("#editorTableButton"),
@@ -270,7 +270,6 @@ const els = {
   editorGoodEmojiButton: document.querySelector("#editorGoodEmojiButton"),
   editorBadEmojiButton: document.querySelector("#editorBadEmojiButton"),
   calendarView: document.querySelector("#calendarView"),
-  noteTitleArea: document.querySelector("#noteTitleArea"),
   headingControlsOverlay: document.querySelector("#headingControlsOverlay"),
   viewControlsOverlay: document.querySelector("#viewControlsOverlay"),
   loadingOverlay: document.querySelector("#loadingOverlay"),
@@ -421,7 +420,6 @@ els.editorUndoButton?.addEventListener("click", () => runEditorCommand("undo"));
 els.editorRedoButton?.addEventListener("click", () => runEditorCommand("redo"));
 els.editorIndentButton?.addEventListener("click", () => handleEditorToolbarIndent(false));
 els.editorOutdentButton?.addEventListener("click", () => handleEditorToolbarIndent(true));
-els.editorTitleButton?.addEventListener("click", showTitleEditDialog);
 els.editorHeadingButton?.addEventListener("click", () => prefixSelectedEditorLines("# "));
 els.editorBulletButton?.addEventListener("click", () => prefixSelectedEditorLines("- "));
 els.editorTableButton?.addEventListener("click", insertEditorTable);
@@ -492,6 +490,11 @@ els.sidebarResizeHandle.addEventListener("pointerdown", startSidebarResize);
 els.noteTitle?.addEventListener("click", showFullCurrentTitle);
 els.notePath?.addEventListener("click", (e) => {
   if (!state.currentPath) return;
+  if (window.matchMedia("(pointer: fine)").matches && state.currentNode?.serverBacked) {
+    e.preventDefault();
+    showTitleEditDialog();
+    return;
+  }
   document.querySelector(".path-popup")?.remove();
   const popup = document.createElement("div");
   popup.className = "path-popup";
@@ -1404,7 +1407,7 @@ function hydrateUnavailableVault(message) {
   if (els.mindmapShell) els.mindmapShell.hidden = true;
   els.calendarView.hidden = true;
   els.notePath.textContent = "server vault";
-  els.noteTitle.textContent = "Vault unavailable";
+  if (els.noteTitle) els.noteTitle.textContent = "Vault unavailable";
   els.markdownView.innerHTML = `<h3>Vault unavailable</h3><p>${escapeHtml(message)}</p>`;
   renderTree();
 }
@@ -2125,7 +2128,7 @@ async function openFile(path) {
     els.notePath.textContent = displayDocumentTitle(node.name);
     els.notePath.title = path;
     if (els.mobileDocTitle) els.mobileDocTitle.textContent = displayDocumentTitle(node.name);
-    els.noteTitle.textContent = displayDocumentTitle(node.name);
+    if (els.noteTitle) els.noteTitle.textContent = displayDocumentTitle(node.name);
     const curTab = activeTab();
     const pinnedTabChanged = curTab?.pinned && (curTab.path !== path || curTab.title !== displayDocumentTitle(node.name));
     if (curTab && curTab.path === null && !curTab.view) {
@@ -2335,7 +2338,7 @@ function showFullCurrentTitle() {
 }
 
 function showTitleEditDialog() {
-  if (!state.editMode || !state.currentNode?.serverBacked) return;
+  if (!state.currentNode?.serverBacked) return;
   document.querySelector(".title-edit-backdrop")?.remove();
   const currentTitle = displayDocumentTitle(state.currentNode?.name || state.currentPath);
   const backdrop = document.createElement("div");
@@ -2378,13 +2381,6 @@ function showTitleEditDialog() {
   input?.select();
 }
 
-function updateEditorTitleButton() {
-  if (!els.editorTitleButton) return;
-  const title = displayDocumentTitle(state.currentNode?.name || state.currentPath || "");
-  els.editorTitleButton.textContent = title || "제목";
-  els.editorTitleButton.disabled = !state.editMode || !state.currentNode?.serverBacked;
-}
-
 function canDeleteNode(node) {
   return Boolean(node?.handle || (node?.serverBacked && state.serverVaultWritable));
 }
@@ -2414,7 +2410,7 @@ async function deleteCurrentFileNode(node) {
     refreshRecentFilesCache();
     els.notePath.textContent = "문서를 선택하세요";
     if (els.mobileDocTitle) els.mobileDocTitle.textContent = "";
-    els.noteTitle.textContent = "Obsidian Markdown Viewer";
+    if (els.noteTitle) els.noteTitle.textContent = "Obsidian Markdown Viewer";
     els.markdownView.classList.add("empty-state");
     els.markdownView.innerHTML = "<p>문서를 선택하세요.</p>";
     showNoteView();
@@ -2840,13 +2836,12 @@ async function openCreatedNoteInEditMode(path, node, content) {
   els.notePath.textContent = displayDocumentTitle(node.name);
   els.notePath.title = path;
   if (els.mobileDocTitle) els.mobileDocTitle.textContent = displayDocumentTitle(node.name);
-  els.noteTitle.textContent = displayDocumentTitle(node.name);
+  if (els.noteTitle) els.noteTitle.textContent = displayDocumentTitle(node.name);
   const curTab = activeTab();
   if (curTab) { curTab.path = path; curTab.title = displayDocumentTitle(node.name); curTab.view = null; }
   renderTabStrip();
   pushRecentlyOpened(path, displayDocumentTitle(node.name));
   if (els.newTabPage) els.newTabPage.hidden = true;
-  if (els.noteTitleArea) els.noteTitleArea.hidden = true;
   if (els.headingControlsOverlay) els.headingControlsOverlay.hidden = true;
   await enterEditMode();
 }
@@ -3344,15 +3339,13 @@ function renderMindmapDocument() {
   els.mindmapShell.hidden = false;
   els.mindmapShell.innerHTML = `
     <section class="mindmap-view">
-      <div class="mindmap-toolbar">
-        <span>${state.editMode ? "Enter 형제 추가 · Tab 자식 추가 · F2 수정 · Delete 삭제" : "읽기 전용 · 편집을 누르면 노드를 추가/수정할 수 있습니다"}</span>
-        <button type="button" class="mindmap-save-button"${state.editMode ? "" : " hidden"}>저장</button>
+      <div class="mindmap-zoom-controls" aria-label="마인드맵 줌 단계">
+        ${MINDMAP_ZOOM_LEVELS.map((_, index) => `<button type="button" data-mindmap-zoom="${index}" aria-label="줌 ${index + 1}단계">${index + 1}</button>`).join("")}
       </div>
       <div id="mindmapCanvas" class="mindmap-canvas" tabindex="0"></div>
     </section>
   `;
   const canvas = els.mindmapShell.querySelector("#mindmapCanvas");
-  const saveButton = els.mindmapShell.querySelector(".mindmap-save-button");
   if (!window.jsMind || !canvas) {
     els.mindmapShell.innerHTML = "<p>마인드맵 라이브러리를 불러오지 못했습니다.</p>";
     return;
@@ -3396,16 +3389,63 @@ function renderMindmapDocument() {
     panel.focus();
   };
   canvas.addEventListener("click", focusMindmap);
-  saveButton?.addEventListener("click", () => void saveMindmapEdit());
+  bindMindmapZoomControls();
   requestAnimationFrame(() => {
     jm.resize();
+    fitMindmapToView();
     focusMindmap();
     requestAnimationFrame(() => {
       jm.resize();
+      applyMindmapZoom(state.mindmapZoomLevel);
     });
     window.setTimeout(() => {
       jm.resize();
+      applyMindmapZoom(state.mindmapZoomLevel);
     }, 120);
+  });
+}
+
+const MINDMAP_ZOOM_LEVELS = [0.5, 0.75, 1, 1.25, 1.5];
+
+function bindMindmapZoomControls() {
+  els.mindmapShell?.querySelectorAll("[data-mindmap-zoom]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const level = Number(button.getAttribute("data-mindmap-zoom"));
+      if (!Number.isInteger(level)) return;
+      applyMindmapZoom(level);
+    });
+  });
+  updateMindmapZoomControls();
+}
+
+function fitMindmapToView() {
+  const jm = state.mindmapInstance;
+  if (!jm?.view?.e_panel || !jm?.layout?.bounds) return;
+  const rect = jm.view.e_panel.getBoundingClientRect();
+  const bounds = jm.layout.bounds;
+  const mapWidth = Math.max(1, bounds.e - bounds.w + 160);
+  const mapHeight = Math.max(1, bounds.s - bounds.n + 120);
+  const fit = Math.min(rect.width / mapWidth, rect.height / mapHeight);
+  let level = 0;
+  for (let index = 0; index < MINDMAP_ZOOM_LEVELS.length; index += 1) {
+    if (MINDMAP_ZOOM_LEVELS[index] <= fit) level = index;
+  }
+  applyMindmapZoom(level);
+}
+
+function applyMindmapZoom(level) {
+  const jm = state.mindmapInstance;
+  if (!jm?.view?.set_zoom) return;
+  const index = Math.max(0, Math.min(MINDMAP_ZOOM_LEVELS.length - 1, Number(level) || 0));
+  state.mindmapZoomLevel = index;
+  jm.view.set_zoom(MINDMAP_ZOOM_LEVELS[index]);
+  jm.scroll_node_to_center?.("root");
+  updateMindmapZoomControls();
+}
+
+function updateMindmapZoomControls() {
+  els.mindmapShell?.querySelectorAll("[data-mindmap-zoom]").forEach((button) => {
+    button.classList.toggle("active", Number(button.getAttribute("data-mindmap-zoom")) === state.mindmapZoomLevel);
   });
 }
 
@@ -3556,7 +3596,6 @@ async function enterEditMode() {
   if (els.mindmapShell) els.mindmapShell.hidden = true;
   els.calendarView.hidden = true;
   els.editorShell.hidden = false;
-  if (els.noteTitleArea) els.noteTitleArea.hidden = false;
   requestAnimationFrame(() => {
     resizeEditorToContent();
     const len = els.markdownEditor.value.length;
@@ -4415,7 +4454,6 @@ function updateEditButtons() {
     els.saveEditButton.disabled = true;
   }
   if (els.editorImageButton) els.editorImageButton.hidden = !(state.editMode && state.serverVaultWritable);
-  updateEditorTitleButton();
   updateStatusEditButtons();
 }
 
@@ -5091,7 +5129,6 @@ function showNoteView() {
   if (els.mindmapShell) els.mindmapShell.hidden = true;
   els.editorShell.hidden = true;
   els.calendarView.hidden = true;
-  if (els.noteTitleArea) els.noteTitleArea.hidden = true;
   if (els.headingControlsOverlay) els.headingControlsOverlay.hidden = false;
   if (els.viewControlsOverlay) els.viewControlsOverlay.hidden = false;
   els.calendarButton.classList.remove("active");
@@ -5121,7 +5158,6 @@ function showCalendarView() {
   els.editorShell.hidden = true;
   els.calendarView.hidden = false;
   els.viewerWrap.scrollTop = 0;
-  if (els.noteTitleArea) els.noteTitleArea.hidden = true;
   if (els.headingControlsOverlay) els.headingControlsOverlay.hidden = true;
   if (els.viewControlsOverlay) els.viewControlsOverlay.hidden = false;
   els.calendarButton.classList.add("active");
@@ -5154,13 +5190,13 @@ function updateCalendarTitle() {
   document.documentElement.classList.toggle("matrix-mode", state.activeView === "calendar" && state.calendarKind === "matrix");
   if (state.calendarKind === "tasks") {
     els.notePath.textContent = pathPrefixes.length ? `calendar: ${pathPrefixes.join(", ")}` : "calendar: vault";
-    els.noteTitle.textContent = "Tasks Calendar";
+    if (els.noteTitle) els.noteTitle.textContent = "Tasks Calendar";
   } else if (state.calendarKind === "matrix") {
     els.notePath.textContent = pathPrefixes.length ? `matrix: ${pathPrefixes.join(", ")}` : "matrix: vault";
-    els.noteTitle.textContent = "아이젠하워 매트릭스";
+    if (els.noteTitle) els.noteTitle.textContent = "아이젠하워 매트릭스";
   } else {
     els.notePath.textContent = `calendar: ${calendarTitle()}`;
-    els.noteTitle.textContent = state.calendarKind === "created" ? "최근 생성 파일" : "최근 수정 파일";
+    if (els.noteTitle) els.noteTitle.textContent = state.calendarKind === "created" ? "최근 생성 파일" : "최근 수정 파일";
   }
   updateSyncStatus();
 }
@@ -10327,10 +10363,9 @@ function showEmptyTab() {
   if (els.mindmapShell) els.mindmapShell.hidden = true;
   els.editorShell.hidden = true;
   if (els.calendarView) els.calendarView.hidden = true;
-  if (els.noteTitleArea) els.noteTitleArea.hidden = true;
   if (els.headingControlsOverlay) els.headingControlsOverlay.hidden = true;
   if (els.viewControlsOverlay) els.viewControlsOverlay.hidden = false;
-  els.noteTitle.textContent = "새 탭";
+  if (els.noteTitle) els.noteTitle.textContent = "새 탭";
   if (els.notePath) els.notePath.textContent = "";
   updateEditButtons();
   updateHistoryButtons();
@@ -10461,9 +10496,8 @@ async function renameCurrentFile(newTitle) {
       savePinnedTabsLocal();
       void savePinnedTabsOrderToVault();
     }
-    els.noteTitle.textContent = displayDocumentTitle(newName);
-    updateEditorTitleButton();
-    if (els.notePath) els.notePath.textContent = node.path;
+    if (els.noteTitle) els.noteTitle.textContent = displayDocumentTitle(newName);
+    if (els.notePath) els.notePath.textContent = displayDocumentTitle(newName);
     renderTabStrip();
     renderTree();
   } catch {}
