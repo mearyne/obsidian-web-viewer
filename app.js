@@ -124,7 +124,6 @@ const state = {
   customConfirmResolve: null,
   mindmapInstance: null,
   mindmapContext: null,
-  mindmapZoomLevel: 2,
   lastGPressAt: 0,
   taskCreateSourceDate: "",
   selectedPaths: new Set(),
@@ -3363,16 +3362,9 @@ function getMindmapThemeConfig() {
 
 function updateVisibleMindmapTheme() {
   const jm = state.mindmapInstance;
-  if (state.mindmapContext?.engine === "simple-mind-map" && jm?.setThemeConfig && !els.mindmapShell?.hidden) {
+  if (jm?.setThemeConfig && !els.mindmapShell?.hidden) {
     jm.setThemeConfig(getMindmapThemeConfig());
-    return;
   }
-  if (!jm?.view || !els.mindmapShell || els.mindmapShell.hidden) return;
-  const lineColor = getMindmapLineColor();
-  if (jm.options?.view) jm.options.view.line_color = lineColor;
-  if (jm.view.opts) jm.view.opts.line_color = lineColor;
-  if (jm.view.graph?.opts) jm.view.graph.opts.line_color = lineColor;
-  jm.view.show_lines?.();
 }
 
 function createMindmapNodeId() {
@@ -3392,7 +3384,7 @@ function normalizeMindmapText(value) {
   return text;
 }
 
-function jsmindNodeToSimpleMindMapNode(node) {
+function legacyMindmapNodeToSimpleMindMapNode(node) {
   const data = {
     uid: node?.id || createMindmapNodeId(),
     text: normalizeMindmapText(node?.topic),
@@ -3401,11 +3393,11 @@ function jsmindNodeToSimpleMindMapNode(node) {
   if (node?.direction === "left" || node?.direction === "right") data.dir = node.direction;
   return {
     data,
-    children: Array.isArray(node?.children) ? node.children.map(jsmindNodeToSimpleMindMapNode) : [],
+    children: Array.isArray(node?.children) ? node.children.map(legacyMindmapNodeToSimpleMindMapNode) : [],
   };
 }
 
-function simpleMindMapNodeToJsmindNode(node, isRoot = false) {
+function simpleMindMapNodeToLegacyMindmapNode(node, isRoot = false) {
   const rawData = node?.data || {};
   const result = {
     id: isRoot ? "root" : String(rawData.uid || rawData.id || createMindmapNodeId()),
@@ -3413,17 +3405,17 @@ function simpleMindMapNodeToJsmindNode(node, isRoot = false) {
     expanded: rawData.expand !== false,
   };
   if (!isRoot && (rawData.dir === "left" || rawData.dir === "right")) result.direction = rawData.dir;
-  const children = Array.isArray(node?.children) ? node.children.map((child) => simpleMindMapNodeToJsmindNode(child, false)) : [];
+  const children = Array.isArray(node?.children) ? node.children.map((child) => simpleMindMapNodeToLegacyMindmapNode(child, false)) : [];
   if (children.length) result.children = children;
   return result;
 }
 
-function jsmindDataToSimpleMindMapData(data) {
-  return jsmindNodeToSimpleMindMapNode(data?.data || createDefaultMindmapData("마인드맵").data);
+function legacyMindmapDataToSimpleMindMapData(data) {
+  return legacyMindmapNodeToSimpleMindMapNode(data?.data || createDefaultMindmapData("마인드맵").data);
 }
 
-function simpleMindMapDataToJsmindData(data, previousData) {
-  const root = simpleMindMapNodeToJsmindNode(data, true);
+function simpleMindMapDataToLegacyMindmapData(data, previousData) {
+  const root = simpleMindMapNodeToLegacyMindmapNode(data, true);
   return {
     meta: {
       name: root.topic || previousData?.meta?.name || "마인드맵",
@@ -3439,7 +3431,7 @@ function renderMindmapDocument() {
   const data = extractMindmapData(state.currentContent) || createDefaultMindmapData(displayDocumentTitle(state.currentNode?.name || state.currentPath || "마인드맵"));
   state.mindmapInstance?.destroy?.();
   state.mindmapInstance = null;
-  state.mindmapContext = { path: state.currentPath, node: state.currentNode, content: state.currentContent, sourceData: data, engine: "" };
+  state.mindmapContext = { path: state.currentPath, node: state.currentNode, content: state.currentContent, sourceData: data };
   els.markdownView.hidden = true;
   els.editorShell.hidden = true;
   els.calendarView.hidden = true;
@@ -3460,23 +3452,18 @@ function renderMindmapDocument() {
     </section>
   `;
   const canvas = els.mindmapShell.querySelector("#mindmapCanvas");
-  if ((!window.SimpleMindMap && !window.jsMind) || !canvas) {
+  if (!window.SimpleMindMap || !canvas) {
     els.mindmapShell.innerHTML = "<p>마인드맵 라이브러리를 불러오지 못했습니다.</p>";
     return;
   }
 
-  if (window.SimpleMindMap) {
-    renderSimpleMindMapDocument(data, canvas);
-    return;
-  }
-  renderJsmindDocument(data, canvas);
+  renderSimpleMindMapDocument(data, canvas);
 }
 
 function renderSimpleMindMapDocument(data, canvas) {
-  state.mindmapContext.engine = "simple-mind-map";
   const mindMap = new window.SimpleMindMap({
     el: canvas,
-    data: jsmindDataToSimpleMindMapData(data),
+    data: legacyMindmapDataToSimpleMindMapData(data),
     readonly: !(state.editMode && canEditNode(state.currentNode)),
     layout: "mindMap",
     theme: "default",
@@ -3498,64 +3485,6 @@ function renderSimpleMindMapDocument(data, canvas) {
   });
 }
 
-function renderJsmindDocument(data, canvas) {
-  state.mindmapContext.engine = "jsmind";
-  const jm = new window.jsMind({
-    container: "mindmapCanvas",
-    editable: state.editMode && canEditNode(state.currentNode),
-    theme: "primary",
-    mode: "full",
-    view: {
-      engine: "canvas",
-      draggable: true,
-      hmargin: 80,
-      vmargin: 40,
-      line_width: 2,
-      line_color: getMindmapLineColor(),
-    },
-    layout: { hspace: 42, vspace: 12, pspace: 12 },
-    shortcut: {
-      enable: true,
-      mapping: {
-        addchild: [9, 45, 4109],
-        addbrother: [13, 1033],
-        editnode: 113,
-        delnode: 46,
-        toggle: 32,
-        left: 37,
-        up: 38,
-        right: 39,
-        down: 40,
-      },
-    },
-  });
-  state.mindmapInstance = jm;
-  jm.show(data);
-  jm.select_node(firstMindmapEditableNodeId(data) || "root");
-  const focusMindmap = () => {
-    const panel = jm.view?.e_panel || canvas;
-    panel.tabIndex = 0;
-    panel.focus();
-  };
-  canvas.addEventListener("click", focusMindmap);
-  bindMindmapToolbarControls();
-  requestAnimationFrame(() => {
-    jm.resize();
-    fitMindmapToView();
-    focusMindmap();
-    requestAnimationFrame(() => {
-      jm.resize();
-      applyMindmapZoom(state.mindmapZoomLevel);
-    });
-    window.setTimeout(() => {
-      jm.resize();
-      applyMindmapZoom(state.mindmapZoomLevel);
-    }, 120);
-  });
-}
-
-const MINDMAP_ZOOM_LEVELS = [0.5, 0.75, 1, 1.25, 1.5];
-
 function bindMindmapToolbarControls() {
   const canEdit = state.editMode && canEditNode(state.currentNode);
   els.mindmapShell?.querySelectorAll("[data-edit-only]").forEach((button) => {
@@ -3572,63 +3501,18 @@ function runMindmapToolbarAction(action) {
   const jm = state.mindmapInstance;
   if (!jm) return;
   const canEdit = state.editMode && canEditNode(state.currentNode);
-  if (state.mindmapContext?.engine === "simple-mind-map") {
-    if (action === "back") jm.execCommand?.("BACK");
-    if (action === "forward") jm.execCommand?.("FORWARD");
-    if (canEdit && action === "insert-child") jm.execCommand?.("INSERT_CHILD_NODE");
-    if (canEdit && action === "insert-sibling") jm.execCommand?.("INSERT_NODE");
-    if (canEdit && action === "remove-node") jm.execCommand?.("REMOVE_NODE");
-    if (action === "fit") jm.view?.fit?.();
-    if (action === "reset-layout") jm.execCommand?.("RESET_LAYOUT");
-    return;
-  }
-  if (action === "fit") {
-    fitMindmapToView();
-    return;
-  }
-  if (action === "reset-layout") {
-    jm.resize?.();
-    fitMindmapToView();
-    return;
-  }
-  if (!canEdit) return;
-  if (action === "insert-child") jm.shortcut?.handler?.addchild?.();
-  if (action === "insert-sibling") jm.shortcut?.handler?.addbrother?.();
-  if (action === "remove-node") jm.shortcut?.handler?.delnode?.();
+  if (action === "back") jm.execCommand?.("BACK");
+  if (action === "forward") jm.execCommand?.("FORWARD");
+  if (canEdit && action === "insert-child") jm.execCommand?.("INSERT_CHILD_NODE");
+  if (canEdit && action === "insert-sibling") jm.execCommand?.("INSERT_NODE");
+  if (canEdit && action === "remove-node") jm.execCommand?.("REMOVE_NODE");
+  if (action === "fit") jm.view?.fit?.();
+  if (action === "reset-layout") jm.execCommand?.("RESET_LAYOUT");
 }
 
 function fitMindmapToView() {
   const jm = state.mindmapInstance;
-  if (state.mindmapContext?.engine === "simple-mind-map") {
-    jm?.view?.fit?.();
-    return;
-  }
-  if (!jm?.view?.e_panel || !jm?.layout?.bounds) return;
-  const rect = jm.view.e_panel.getBoundingClientRect();
-  const bounds = jm.layout.bounds;
-  const mapWidth = Math.max(1, bounds.e - bounds.w + 160);
-  const mapHeight = Math.max(1, bounds.s - bounds.n + 120);
-  const fit = Math.min(rect.width / mapWidth, rect.height / mapHeight);
-  let level = 0;
-  for (let index = 0; index < MINDMAP_ZOOM_LEVELS.length; index += 1) {
-    if (MINDMAP_ZOOM_LEVELS[index] <= fit) level = index;
-  }
-  applyMindmapZoom(level);
-}
-
-function applyMindmapZoom(level) {
-  const jm = state.mindmapInstance;
-  if (state.mindmapContext?.engine === "simple-mind-map") {
-    const index = Math.max(0, Math.min(MINDMAP_ZOOM_LEVELS.length - 1, Number(level) || 0));
-    state.mindmapZoomLevel = index;
-    jm?.view?.setScale?.(MINDMAP_ZOOM_LEVELS[index]);
-    return;
-  }
-  if (!jm?.view?.set_zoom) return;
-  const index = Math.max(0, Math.min(MINDMAP_ZOOM_LEVELS.length - 1, Number(level) || 0));
-  state.mindmapZoomLevel = index;
-  jm.view.set_zoom(MINDMAP_ZOOM_LEVELS[index]);
-  jm.scroll_node_to_center?.("root");
+  jm?.view?.fit?.();
 }
 
 async function saveMindmapEdit() {
@@ -3637,10 +3521,6 @@ async function saveMindmapEdit() {
   state.editMode = false;
   updateEditButtons();
   renderCurrentDocument();
-}
-
-function firstMindmapEditableNodeId(data) {
-  return data?.data?.children?.[0]?.id || "";
 }
 
 async function saveMindmapNow({ silent = true } = {}) {
@@ -3654,9 +3534,7 @@ async function saveMindmapNow({ silent = true } = {}) {
     if (!silent) showAppToast("현재 마인드맵은 저장할 수 없습니다.", "error");
     return false;
   }
-  const data = state.mindmapContext?.engine === "simple-mind-map"
-    ? simpleMindMapDataToJsmindData(state.mindmapInstance.getData(), state.mindmapContext?.sourceData)
-    : state.mindmapInstance.get_data("node_tree");
+  const data = simpleMindMapDataToLegacyMindmapData(state.mindmapInstance.getData(), state.mindmapContext?.sourceData);
   const previousContent = context?.content ?? state.currentContent;
   const nextContent = buildMindmapDocumentContent(data, previousContent);
   if (nextContent === previousContent) {

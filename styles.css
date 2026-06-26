@@ -2052,46 +2052,6 @@ button:disabled {
   border-color: var(--accent);
 }
 
-.mindmap-canvas jmnodes.theme-primary jmnode {
-  background: var(--mindmap-node-bg);
-  border: 1px solid var(--mindmap-node-border);
-  border-radius: 7px;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.1);
-  color: var(--mindmap-node-text);
-  font-family: inherit;
-}
-
-.mindmap-canvas jmnodes.theme-primary jmnode:hover {
-  background: var(--mindmap-node-hover-bg);
-  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.16);
-  color: var(--mindmap-node-text);
-}
-
-.mindmap-canvas jmnodes.theme-primary jmnode.root {
-  background: var(--mindmap-root-bg);
-  border-color: var(--mindmap-root-border);
-  color: var(--mindmap-root-text);
-  font-weight: 750;
-}
-
-.mindmap-canvas jmnodes.theme-primary jmnode.selected {
-  background: var(--mindmap-selected-bg);
-  border-color: var(--mindmap-selected-border);
-  box-shadow: 0 0 0 2px var(--mindmap-selected-border), 0 6px 18px rgba(15, 23, 42, 0.18);
-  color: var(--mindmap-selected-text);
-}
-
-.mindmap-canvas jmnodes.theme-primary jmexpander {
-  background: var(--mindmap-expander-bg);
-  border-color: var(--mindmap-node-border);
-  color: var(--mindmap-expander-text);
-}
-
-.mindmap-canvas jmnodes.theme-primary jmexpander:hover {
-  border-color: var(--mindmap-root-border);
-  color: var(--mindmap-root-bg);
-}
-
 .mindmap-canvas input {
   background: var(--mindmap-node-bg);
   border: 1px solid var(--mindmap-root-border);
