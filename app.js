@@ -8574,13 +8574,15 @@ function bindEmbedRefreshButtons(root) {
         if (!metaRes.ok) throw new Error("meta fetch failed");
         const meta = await metaRes.json();
         const fullBlock = buildEmbedBlock(meta, embedUrl);
-        const loadingPattern = new RegExp(
-          "```embed\\s*\\nstatus:\\s*\"loading\"\\s*\\nurl:\\s*\"" +
-          embedUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") +
-          "\"\\s*\\n```",
-          "g"
-        );
-        const newContent = state.currentContent.replace(loadingPattern, fullBlock);
+        let replaced = false;
+        const newContent = state.currentContent.replace(/```embed\s*\n([\s\S]*?)\n```/g, (block, body) => {
+          if (replaced) return block;
+          const escapedUrl = embedUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          const urlPattern = new RegExp(`^url:\\s*"${escapedUrl}"\\s*$`, "m");
+          if (!urlPattern.test(body)) return block;
+          replaced = true;
+          return fullBlock;
+        });
         if (newContent === state.currentContent) throw new Error("block not found");
         await writeServerFile(state.currentPath, newContent, { backup: false });
         state.currentContent = newContent;
@@ -8648,6 +8650,7 @@ function renderEmbedBlock(code) {
   return `<div class="link-embed-wrap${collapsed}">` +
     `<button class="link-embed-toggle" type="button" title="${toggleLabel}" aria-expanded="${toggleExpanded}">${toggleIcon}</button>` +
     `<a href="${escapeAttribute(url)}" target="_blank" rel="noopener" class="link-embed-card">` +
+    `<button class="embed-refresh-btn" type="button" title="새로고침" data-embed-url="${escapeAttribute(url)}">🔄</button>` +
     visualHtml +
     `<div class="link-embed-body">` +
     `<div class="link-embed-title">${escapeHtml(title || url)}</div>` +
