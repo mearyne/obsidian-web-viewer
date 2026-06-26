@@ -368,6 +368,12 @@ button:disabled {
   white-space: nowrap;
 }
 
+.tree-actions button.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
 .file-tree {
   flex: 1 1 auto;
   min-height: 0;

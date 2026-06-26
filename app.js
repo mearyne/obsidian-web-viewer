@@ -64,6 +64,7 @@ const state = {
   contentSearchSnippetsVisible: false,
   searchTreeAutoExpand: true,
   renderedSearchQuery: "",
+  recentSevenDaysFilter: false,
   vaultLoaded: false,
   taskDialogActiveField: null,
   taskDialogPickerMonth: null,
@@ -357,7 +358,7 @@ els.regexSearchToggle.addEventListener("change", renderTree);
 els.contentSearchToggleButton?.addEventListener("click", toggleContentSearchSnippets);
 els.treeSortSelect.addEventListener("change", updateTreeSortMode);
 els.treeSortDirectionButton.addEventListener("click", toggleTreeSortDirection);
-els.recentSevenDaysButton?.addEventListener("click", showRecentSevenDaysDocuments);
+els.recentSevenDaysButton?.addEventListener("click", toggleRecentSevenDaysFilter);
 els.expandTreeButton.addEventListener("click", expandAllTree);
 els.revealCurrentButton.addEventListener("click", revealCurrentFileInTree);
 els.collapseTreeButton.addEventListener("click", collapseAllTree);
@@ -580,7 +581,7 @@ function handleGlobalKeydown(event) {
   if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key === ",") {
     event.preventDefault();
     event.stopPropagation();
-    toggleOptionsMenu();
+    openOptionsMenu();
     return;
   }
 
@@ -1551,14 +1552,39 @@ function renderTree() {
     regexMode: els.regexSearchToggle.checked,
     caseSensitive: els.caseSearchToggle.checked,
   }) : null;
+  const recentMatcher = state.recentSevenDaysFilter ? createRecentSevenDaysMatcher() : null;
+  const treeMatcher = combineTreeMatchers(matcher, recentMatcher);
   const folderPaths = parsePathList(els.folderPathInput?.value || "");
   const excludePaths = matcher ? state.searchExcludePaths : [];
-  if (matcher && state.searchTreeAutoExpand) expandMatchingDirectories(matcher, folderPaths, excludePaths);
+  if (treeMatcher && state.searchTreeAutoExpand) expandMatchingDirectories(treeMatcher, folderPaths, excludePaths);
   const rootFragment = document.createDocumentFragment();
-  const matchCount = renderDirChildren(state.root, rootFragment, matcher, folderPaths, excludePaths);
+  const matchCount = renderDirChildren(state.root, rootFragment, treeMatcher, folderPaths, excludePaths);
   els.fileTree.append(rootFragment);
   els.fileTree.scrollTop = Math.min(previousScrollTop, els.fileTree.scrollHeight);
+  updateRecentSevenDaysButton();
   updateSearchStatus(query, matchCount);
+}
+
+function toggleRecentSevenDaysFilter() {
+  state.recentSevenDaysFilter = !state.recentSevenDaysFilter;
+  state.searchTreeAutoExpand = state.recentSevenDaysFilter || els.searchInput?.value?.trim().length >= 2;
+  renderTree();
+}
+
+function updateRecentSevenDaysButton() {
+  if (!els.recentSevenDaysButton) return;
+  els.recentSevenDaysButton.classList.toggle("active", state.recentSevenDaysFilter);
+  els.recentSevenDaysButton.setAttribute("aria-pressed", String(state.recentSevenDaysFilter));
+}
+
+function createRecentSevenDaysMatcher() {
+  return (path) => isRecentSevenDaysNode(state.files.get(path));
+}
+
+function combineTreeMatchers(...matchers) {
+  const activeMatchers = matchers.filter(Boolean);
+  if (!activeMatchers.length) return null;
+  return (path) => activeMatchers.every((matcher) => matcher(path));
 }
 
 function updateSearchStatus(query, matchCount) {
@@ -1703,7 +1729,7 @@ function revealCurrentFileInTree(event) {
 }
 
 function setTreeCollapsed(collapsed) {
-  if (els.searchInput?.value?.trim().length >= 2) {
+  if (els.searchInput?.value?.trim().length >= 2 || state.recentSevenDaysFilter) {
     state.searchTreeAutoExpand = !collapsed;
   }
   state.directories.forEach((dir, path) => {
@@ -1742,7 +1768,7 @@ function renderDirChildren(dir, parent, matcher, folderPaths, excludePaths = [])
   entries.forEach((node) => {
     if (folderPaths.length && !nodeInAnyPath(node, folderPaths)) return;
     if (matcher && excludePaths.length && nodeIsExcluded(node, excludePaths)) return;
-    const hasContentMatch = node.kind === "file" && state.contentSearchMatches?.has(node.path);
+    const hasContentMatch = node.kind === "file" && state.contentSearchMatches?.has(node.path) && (!state.recentSevenDaysFilter || isRecentSevenDaysNode(node));
     if (matcher && node.kind === "file" && !matcher(node.path) && !hasContentMatch) return;
     if (matcher && node.kind === "directory" && !dirHasMatch(node, matcher, folderPaths, excludePaths)) return;
 
@@ -1856,7 +1882,10 @@ function dirHasMatch(dir, matcher, folderPaths, excludePaths = []) {
   return [...dir.children.values()].some((node) => {
     if (folderPaths.length && !nodeInAnyPath(node, folderPaths)) return false;
     if (excludePaths.length && nodeIsExcluded(node, excludePaths)) return false;
-    if (node.kind === "file") return matcher(node.path) || state.contentSearchMatches?.has(node.path);
+    if (node.kind === "file") {
+      const hasContentMatch = state.contentSearchMatches?.has(node.path) && (!state.recentSevenDaysFilter || isRecentSevenDaysNode(node));
+      return matcher(node.path) || hasContentMatch;
+    }
     return dirHasMatch(node, matcher, folderPaths, excludePaths);
   });
 }
@@ -1867,7 +1896,8 @@ function countDirMatches(dir, matcher, folderPaths, excludePaths = []) {
     if (folderPaths.length && !nodeInAnyPath(node, folderPaths)) continue;
     if (excludePaths.length && nodeIsExcluded(node, excludePaths)) continue;
     if (node.kind === "file") {
-      if (matcher(node.path) || state.contentSearchMatches?.has(node.path)) count++;
+      const hasContentMatch = state.contentSearchMatches?.has(node.path) && (!state.recentSevenDaysFilter || isRecentSevenDaysNode(node));
+      if (matcher(node.path) || hasContentMatch) count++;
     } else {
       count += countDirMatches(node, matcher, folderPaths, excludePaths);
     }
@@ -3657,6 +3687,12 @@ function runEditorCommand(command) {
   markEditorDirty();
 }
 
+function isRecentSevenDaysNode(node) {
+  if (!node || node.kind !== "file" || !isOpenableDocument(node.name)) return false;
+  const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  return Math.max(Number(node.updatedAt) || 0, Number(node.createdAt) || 0) >= cutoff;
+}
+
 function handleEditorToolbarIndent(outdent) {
   focusEditor();
   indentSelectedEditorLines(els.markdownEditor, outdent);
@@ -4216,13 +4252,18 @@ function closeSidebar({ force = false } = {}) {
 }
 
 function toggleOptionsMenu(event) {
-  event.stopPropagation();
+  event?.stopPropagation();
   const open = els.optionsMenu.hidden;
-  if (open) closeSidebar({ force: true });
-  els.optionsMenu.hidden = !open;
-  els.optionsBackdrop.hidden = !open;
-  document.body.classList.toggle("options-open", open);
-  els.optionsButton.setAttribute("aria-expanded", String(open));
+  if (open) openOptionsMenu();
+  else closeOptionsMenu();
+}
+
+function openOptionsMenu() {
+  closeSidebar({ force: true });
+  els.optionsMenu.hidden = false;
+  els.optionsBackdrop.hidden = false;
+  document.body.classList.add("options-open");
+  els.optionsButton.setAttribute("aria-expanded", "true");
 }
 
 function closeOptionsMenu() {
@@ -9931,58 +9972,6 @@ function showEmptyTab() {
   state.activeView = "note";
   document.documentElement.classList.remove("matrix-mode");
   updateSyncStatus?.();
-}
-
-function showRecentSevenDaysDocuments() {
-  state.currentPath = null;
-  state.currentContent = "";
-  state.currentNode = null;
-  els.markdownView.hidden = true;
-  els.editorShell.hidden = true;
-  if (els.calendarView) els.calendarView.hidden = true;
-  if (els.noteTitleArea) els.noteTitleArea.hidden = true;
-  if (els.headingControlsOverlay) els.headingControlsOverlay.hidden = true;
-  if (els.viewControlsOverlay) els.viewControlsOverlay.hidden = false;
-  els.noteTitle.textContent = "최근 7일 문서";
-  if (els.notePath) els.notePath.textContent = "최근 7일";
-  state.activeView = "note";
-  updateEditButtons();
-  updateHistoryButtons();
-  renderRecentSevenDaysPage();
-  if (els.newTabPage) els.newTabPage.hidden = false;
-  document.documentElement.classList.remove("matrix-mode");
-  updateSyncStatus?.();
-}
-
-function renderRecentSevenDaysPage() {
-  if (!els.newTabPage) return;
-  const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
-  const files = [...state.files.values()]
-    .filter((node) => node.kind === "file" && isOpenableDocument(node.name))
-    .filter((node) => Math.max(Number(node.updatedAt) || 0, Number(node.createdAt) || 0) >= cutoff)
-    .sort((a, b) => Math.max(Number(b.updatedAt) || 0, Number(b.createdAt) || 0) - Math.max(Number(a.updatedAt) || 0, Number(a.createdAt) || 0))
-    .slice(0, 100);
-  const list = files.length ? `<ul class="new-tab-list">${files.map((node) => {
-    const changedAt = Math.max(Number(node.updatedAt) || 0, Number(node.createdAt) || 0);
-    const changedLabel = new Date(changedAt).toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
-    return `
-      <li class="new-tab-item"><button type="button" class="new-tab-file-btn" data-path="${escapeAttribute(node.path)}">
-        <span class="new-tab-file-name">${escapeHtml(displayDocumentTitle(node.name))}</span>
-        <span class="new-tab-file-path">${escapeHtml(node.path)}</span>
-        <time class="new-tab-file-path" datetime="${new Date(changedAt).toISOString()}">${escapeHtml(changedLabel)}</time>
-      </button></li>`;
-  }).join("")}</ul>` : `<p class="new-tab-empty">최근 7일 안에 생성되거나 수정된 문서가 없습니다.</p>`;
-  els.newTabPage.innerHTML = `
-    <div class="new-tab-content">
-      <h2 class="new-tab-title">최근 7일 문서</h2>
-      <section class="new-tab-section">
-        ${list}
-      </section>
-    </div>
-  `;
-  els.newTabPage.querySelectorAll("[data-path]").forEach((btn) => {
-    btn.addEventListener("click", () => void openFile(btn.dataset.path));
-  });
 }
 
 function renderTodayFilesSection() {
