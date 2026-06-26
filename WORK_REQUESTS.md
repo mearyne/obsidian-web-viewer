@@ -29,3 +29,4 @@
 - 2026-06-26: Clarify whether the identified jsMind-related projects are the most well-known options.
 - 2026-06-26: Research open-source browser-based mindmap options that support preview, editing, and saveback without requiring jsMind.
 - 2026-06-26: Assess whether `wanglin2/mind-map` can be used quickly in the browser for preview and editing.
+- 2026-06-26: Prototype `wanglin2/mind-map` (`simple-mind-map`) as the browser mindmap renderer while preserving local saveback.

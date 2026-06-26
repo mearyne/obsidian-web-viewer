@@ -1,6 +1,7 @@
 {
   "scripts": {
     "build:excalidraw": "esbuild vendor-src/excalidraw-preview.jsx --bundle --format=esm --splitting --outdir=vendor --conditions=production --loader:.woff2=file --jsx=automatic --minify",
+    "build:simple-mind-map": "esbuild vendor-src/simple-mind-map.js --bundle --format=iife --outfile=vendor/simple-mind-map.js --loader:.css=css --minify",
     "prebuild:excalidraw": "node --test tests/calendar-gesture-rules.test.cjs",
     "test": "node --test tests/calendar-gesture-rules.test.cjs",
     "predev": "node --test tests/calendar-gesture-rules.test.cjs",
@@ -14,7 +15,8 @@
     "linkedom": "^0.18.12",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "sharp": "^0.35.1"
+    "sharp": "^0.35.1",
+    "simple-mind-map": "^0.14.0-fix.2"
   },
   "devDependencies": {
     "esbuild": "^0.28.1"

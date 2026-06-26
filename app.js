@@ -3339,8 +3339,34 @@ function getMindmapLineColor() {
   return getMindmapCssValue("--mindmap-line", getComputedStyle(document.documentElement).getPropertyValue("--line-strong").trim() || "#6b7280");
 }
 
+function getMindmapThemeConfig() {
+  return {
+    backgroundColor: getMindmapCssValue("--mindmap-bg", "#fbfcff"),
+    lineColor: getMindmapLineColor(),
+    root: {
+      fillColor: getMindmapCssValue("--mindmap-root-bg", "#4056c8"),
+      color: getMindmapCssValue("--mindmap-root-text", "#ffffff"),
+      borderColor: getMindmapCssValue("--mindmap-root-border", "#3142a4"),
+    },
+    second: {
+      fillColor: getMindmapCssValue("--mindmap-node-bg", "#ffffff"),
+      color: getMindmapCssValue("--mindmap-node-text", "#1e293b"),
+      borderColor: getMindmapCssValue("--mindmap-node-border", "#c9d3e3"),
+    },
+    node: {
+      fillColor: getMindmapCssValue("--mindmap-node-bg", "#ffffff"),
+      color: getMindmapCssValue("--mindmap-node-text", "#1e293b"),
+      borderColor: getMindmapCssValue("--mindmap-node-border", "#c9d3e3"),
+    },
+  };
+}
+
 function updateVisibleMindmapTheme() {
   const jm = state.mindmapInstance;
+  if (state.mindmapContext?.engine === "simple-mind-map" && jm?.setThemeConfig && !els.mindmapShell?.hidden) {
+    jm.setThemeConfig(getMindmapThemeConfig());
+    return;
+  }
   if (!jm?.view || !els.mindmapShell || els.mindmapShell.hidden) return;
   const lineColor = getMindmapLineColor();
   if (jm.options?.view) jm.options.view.line_color = lineColor;
@@ -3349,10 +3375,58 @@ function updateVisibleMindmapTheme() {
   jm.view.show_lines?.();
 }
 
+function createMindmapNodeId() {
+  return `node_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function jsmindNodeToSimpleMindMapNode(node) {
+  const data = {
+    uid: node?.id || createMindmapNodeId(),
+    text: String(node?.topic || ""),
+    expand: node?.expanded !== false,
+  };
+  if (node?.direction === "left" || node?.direction === "right") data.dir = node.direction;
+  return {
+    data,
+    children: Array.isArray(node?.children) ? node.children.map(jsmindNodeToSimpleMindMapNode) : [],
+  };
+}
+
+function simpleMindMapNodeToJsmindNode(node, isRoot = false) {
+  const rawData = node?.data || {};
+  const result = {
+    id: isRoot ? "root" : String(rawData.uid || rawData.id || createMindmapNodeId()),
+    topic: String(rawData.text || ""),
+    expanded: rawData.expand !== false,
+  };
+  if (!isRoot && (rawData.dir === "left" || rawData.dir === "right")) result.direction = rawData.dir;
+  const children = Array.isArray(node?.children) ? node.children.map((child) => simpleMindMapNodeToJsmindNode(child, false)) : [];
+  if (children.length) result.children = children;
+  return result;
+}
+
+function jsmindDataToSimpleMindMapData(data) {
+  return jsmindNodeToSimpleMindMapNode(data?.data || createDefaultMindmapData("마인드맵").data);
+}
+
+function simpleMindMapDataToJsmindData(data, previousData) {
+  const root = simpleMindMapNodeToJsmindNode(data, true);
+  return {
+    meta: {
+      name: root.topic || previousData?.meta?.name || "마인드맵",
+      author: previousData?.meta?.author || "obsidian-web-viewer",
+      version: previousData?.meta?.version || "1.0",
+    },
+    format: "node_tree",
+    data: root,
+  };
+}
+
 function renderMindmapDocument() {
   const data = extractMindmapData(state.currentContent) || createDefaultMindmapData(displayDocumentTitle(state.currentNode?.name || state.currentPath || "마인드맵"));
+  state.mindmapInstance?.destroy?.();
   state.mindmapInstance = null;
-  state.mindmapContext = { path: state.currentPath, node: state.currentNode, content: state.currentContent };
+  state.mindmapContext = { path: state.currentPath, node: state.currentNode, content: state.currentContent, sourceData: data, engine: "" };
   els.markdownView.hidden = true;
   els.editorShell.hidden = true;
   els.calendarView.hidden = true;
@@ -3367,11 +3441,46 @@ function renderMindmapDocument() {
     </section>
   `;
   const canvas = els.mindmapShell.querySelector("#mindmapCanvas");
-  if (!window.jsMind || !canvas) {
+  if ((!window.SimpleMindMap && !window.jsMind) || !canvas) {
     els.mindmapShell.innerHTML = "<p>마인드맵 라이브러리를 불러오지 못했습니다.</p>";
     return;
   }
 
+  if (window.SimpleMindMap) {
+    renderSimpleMindMapDocument(data, canvas);
+    return;
+  }
+  renderJsmindDocument(data, canvas);
+}
+
+function renderSimpleMindMapDocument(data, canvas) {
+  state.mindmapContext.engine = "simple-mind-map";
+  const mindMap = new window.SimpleMindMap({
+    el: canvas,
+    data: jsmindDataToSimpleMindMapData(data),
+    readonly: !(state.editMode && canEditNode(state.currentNode)),
+    layout: "mindMap",
+    theme: "default",
+    themeConfig: getMindmapThemeConfig(),
+    fit: true,
+    enableShortcutOnlyWhenMouseInSvg: true,
+    enableAutoEnterTextEditWhenKeydown: true,
+    selectTextOnEnterEditText: true,
+    errorHandler: () => {},
+  });
+  state.mindmapInstance = mindMap;
+  mindMap.on("data_change", () => {
+    if (state.editMode && canEditNode(state.currentNode)) state.editorDirty = true;
+  });
+  bindMindmapZoomControls();
+  requestAnimationFrame(() => {
+    mindMap.resize();
+    fitMindmapToView();
+  });
+}
+
+function renderJsmindDocument(data, canvas) {
+  state.mindmapContext.engine = "jsmind";
   const jm = new window.jsMind({
     container: "mindmapCanvas",
     editable: state.editMode && canEditNode(state.currentNode),
@@ -3441,6 +3550,11 @@ function bindMindmapZoomControls() {
 
 function fitMindmapToView() {
   const jm = state.mindmapInstance;
+  if (state.mindmapContext?.engine === "simple-mind-map") {
+    jm?.view?.fit?.();
+    updateMindmapZoomControls();
+    return;
+  }
   if (!jm?.view?.e_panel || !jm?.layout?.bounds) return;
   const rect = jm.view.e_panel.getBoundingClientRect();
   const bounds = jm.layout.bounds;
@@ -3456,6 +3570,13 @@ function fitMindmapToView() {
 
 function applyMindmapZoom(level) {
   const jm = state.mindmapInstance;
+  if (state.mindmapContext?.engine === "simple-mind-map") {
+    const index = Math.max(0, Math.min(MINDMAP_ZOOM_LEVELS.length - 1, Number(level) || 0));
+    state.mindmapZoomLevel = index;
+    jm?.view?.setScale?.(MINDMAP_ZOOM_LEVELS[index]);
+    updateMindmapZoomControls();
+    return;
+  }
   if (!jm?.view?.set_zoom) return;
   const index = Math.max(0, Math.min(MINDMAP_ZOOM_LEVELS.length - 1, Number(level) || 0));
   state.mindmapZoomLevel = index;
@@ -3493,7 +3614,9 @@ async function saveMindmapNow({ silent = true } = {}) {
     if (!silent) showAppToast("현재 마인드맵은 저장할 수 없습니다.", "error");
     return false;
   }
-  const data = state.mindmapInstance.get_data("node_tree");
+  const data = state.mindmapContext?.engine === "simple-mind-map"
+    ? simpleMindMapDataToJsmindData(state.mindmapInstance.getData(), state.mindmapContext?.sourceData)
+    : state.mindmapInstance.get_data("node_tree");
   const previousContent = context?.content ?? state.currentContent;
   const nextContent = buildMindmapDocumentContent(data, previousContent);
   if (nextContent === previousContent) {
