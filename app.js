@@ -64,7 +64,7 @@ const state = {
   contentSearchSnippetsVisible: false,
   searchTreeAutoExpand: true,
   renderedSearchQuery: "",
-  recentSevenDaysFilter: false,
+  recentDaysFilter: 0,
   vaultLoaded: false,
   taskDialogActiveField: null,
   taskDialogPickerMonth: null,
@@ -144,7 +144,7 @@ const els = {
   regexSearchToggle: document.querySelector("#regexSearchToggle"),
   treeSortSelect: document.querySelector("#treeSortSelect"),
   treeSortDirectionButton: document.querySelector("#treeSortDirectionButton"),
-  recentSevenDaysButton: document.querySelector("#recentSevenDaysButton"),
+  recentDaysInput: document.querySelector("#recentDaysInput"),
   expandTreeButton: document.querySelector("#expandTreeButton"),
   revealCurrentButton: document.querySelector("#revealCurrentButton"),
   collapseTreeButton: document.querySelector("#collapseTreeButton"),
@@ -358,7 +358,7 @@ els.regexSearchToggle.addEventListener("change", renderTree);
 els.contentSearchToggleButton?.addEventListener("click", toggleContentSearchSnippets);
 els.treeSortSelect.addEventListener("change", updateTreeSortMode);
 els.treeSortDirectionButton.addEventListener("click", toggleTreeSortDirection);
-els.recentSevenDaysButton?.addEventListener("click", toggleRecentSevenDaysFilter);
+els.recentDaysInput?.addEventListener("input", handleRecentDaysFilterInput);
 els.expandTreeButton.addEventListener("click", expandAllTree);
 els.revealCurrentButton.addEventListener("click", revealCurrentFileInTree);
 els.collapseTreeButton.addEventListener("click", collapseAllTree);
@@ -1552,7 +1552,7 @@ function renderTree() {
     regexMode: els.regexSearchToggle.checked,
     caseSensitive: els.caseSearchToggle.checked,
   }) : null;
-  const recentMatcher = state.recentSevenDaysFilter ? createRecentSevenDaysMatcher() : null;
+  const recentMatcher = state.recentDaysFilter > 0 ? createRecentDaysMatcher(state.recentDaysFilter) : null;
   const treeMatcher = combineTreeMatchers(matcher, recentMatcher);
   const folderPaths = parsePathList(els.folderPathInput?.value || "");
   const excludePaths = matcher ? state.searchExcludePaths : [];
@@ -1561,24 +1561,24 @@ function renderTree() {
   const matchCount = renderDirChildren(state.root, rootFragment, treeMatcher, folderPaths, excludePaths);
   els.fileTree.append(rootFragment);
   els.fileTree.scrollTop = Math.min(previousScrollTop, els.fileTree.scrollHeight);
-  updateRecentSevenDaysButton();
+  updateRecentDaysFilterInput();
   updateSearchStatus(query, matchCount);
 }
 
-function toggleRecentSevenDaysFilter() {
-  state.recentSevenDaysFilter = !state.recentSevenDaysFilter;
-  state.searchTreeAutoExpand = state.recentSevenDaysFilter || els.searchInput?.value?.trim().length >= 2;
+function handleRecentDaysFilterInput() {
+  const value = Number(els.recentDaysInput?.value || 0);
+  state.recentDaysFilter = Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+  state.searchTreeAutoExpand = state.recentDaysFilter > 0 || els.searchInput?.value?.trim().length >= 2;
   renderTree();
 }
 
-function updateRecentSevenDaysButton() {
-  if (!els.recentSevenDaysButton) return;
-  els.recentSevenDaysButton.classList.toggle("active", state.recentSevenDaysFilter);
-  els.recentSevenDaysButton.setAttribute("aria-pressed", String(state.recentSevenDaysFilter));
+function updateRecentDaysFilterInput() {
+  if (!els.recentDaysInput) return;
+  els.recentDaysInput.classList.toggle("active", state.recentDaysFilter > 0);
 }
 
-function createRecentSevenDaysMatcher() {
-  return (path) => isRecentSevenDaysNode(state.files.get(path));
+function createRecentDaysMatcher(days) {
+  return (path) => isRecentDaysNode(state.files.get(path), days);
 }
 
 function combineTreeMatchers(...matchers) {
@@ -1729,7 +1729,7 @@ function revealCurrentFileInTree(event) {
 }
 
 function setTreeCollapsed(collapsed) {
-  if (els.searchInput?.value?.trim().length >= 2 || state.recentSevenDaysFilter) {
+  if (els.searchInput?.value?.trim().length >= 2 || state.recentDaysFilter > 0) {
     state.searchTreeAutoExpand = !collapsed;
   }
   state.directories.forEach((dir, path) => {
@@ -1768,7 +1768,7 @@ function renderDirChildren(dir, parent, matcher, folderPaths, excludePaths = [])
   entries.forEach((node) => {
     if (folderPaths.length && !nodeInAnyPath(node, folderPaths)) return;
     if (matcher && excludePaths.length && nodeIsExcluded(node, excludePaths)) return;
-    const hasContentMatch = node.kind === "file" && state.contentSearchMatches?.has(node.path) && (!state.recentSevenDaysFilter || isRecentSevenDaysNode(node));
+    const hasContentMatch = node.kind === "file" && state.contentSearchMatches?.has(node.path) && (!state.recentDaysFilter || isRecentDaysNode(node, state.recentDaysFilter));
     if (matcher && node.kind === "file" && !matcher(node.path) && !hasContentMatch) return;
     if (matcher && node.kind === "directory" && !dirHasMatch(node, matcher, folderPaths, excludePaths)) return;
 
@@ -1884,7 +1884,7 @@ function dirHasMatch(dir, matcher, folderPaths, excludePaths = []) {
     if (folderPaths.length && !nodeInAnyPath(node, folderPaths)) return false;
     if (excludePaths.length && nodeIsExcluded(node, excludePaths)) return false;
     if (node.kind === "file") {
-      const hasContentMatch = state.contentSearchMatches?.has(node.path) && (!state.recentSevenDaysFilter || isRecentSevenDaysNode(node));
+      const hasContentMatch = state.contentSearchMatches?.has(node.path) && (!state.recentDaysFilter || isRecentDaysNode(node, state.recentDaysFilter));
       return matcher(node.path) || hasContentMatch;
     }
     return dirHasMatch(node, matcher, folderPaths, excludePaths);
@@ -1897,7 +1897,7 @@ function countDirMatches(dir, matcher, folderPaths, excludePaths = []) {
     if (folderPaths.length && !nodeInAnyPath(node, folderPaths)) continue;
     if (excludePaths.length && nodeIsExcluded(node, excludePaths)) continue;
     if (node.kind === "file") {
-      const hasContentMatch = state.contentSearchMatches?.has(node.path) && (!state.recentSevenDaysFilter || isRecentSevenDaysNode(node));
+      const hasContentMatch = state.contentSearchMatches?.has(node.path) && (!state.recentDaysFilter || isRecentDaysNode(node, state.recentDaysFilter));
       if (matcher(node.path) || hasContentMatch) count++;
     } else {
       count += countDirMatches(node, matcher, folderPaths, excludePaths);
@@ -3688,9 +3688,9 @@ function runEditorCommand(command) {
   markEditorDirty();
 }
 
-function isRecentSevenDaysNode(node) {
+function isRecentDaysNode(node, days) {
   if (!node || node.kind !== "file" || !isOpenableDocument(node.name)) return false;
-  const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const cutoff = Date.now() - Math.max(1, Number(days) || 1) * 24 * 60 * 60 * 1000;
   return Math.max(Number(node.updatedAt) || 0, Number(node.createdAt) || 0) >= cutoff;
 }
 
