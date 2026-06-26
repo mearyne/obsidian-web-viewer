@@ -21,3 +21,4 @@
 - 2026-06-26: Compare which mindmap approaches can be previewed locally and linked directly to external services.
 - 2026-06-26: Clarify whether edits made in external mindmap services can be saved back to the local vault.
 - 2026-06-26: Evaluate implementing markmap locally for mindmap preview and editing.
+- 2026-06-26: Compare jsmind and markmap for local mindmap support.
