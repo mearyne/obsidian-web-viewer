@@ -89,3 +89,4 @@ After completing requested code or configuration changes, automatically commit a
 ## 7. Work Request Log
 
 For every future user work request, append a concise entry to `WORK_REQUESTS.md` as a Markdown list item.
+When summarizing or reviewing requested work for the user, present the requests in a Markdown table with columns for request, implementation status, and evidence or notes.
