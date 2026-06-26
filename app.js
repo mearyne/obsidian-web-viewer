@@ -127,6 +127,7 @@ const state = {
   mindmapEmbedData: new Map(),
   mindmapOptions: { layout: "mindMap", theme: "auto", autoFit: true, advancedTools: true },
   mindmapKeyCaptureActive: false,
+  mindmapToolbarDrag: null,
   mindmapDirectImagePasteAt: 0,
   lastGPressAt: 0,
   taskCreateSourceDate: "",
@@ -3488,13 +3489,10 @@ function renderCurrentDocument(showOpenStep = null, diagnostics = null) {
     showOpenStep?.(step);
   };
   markRenderStep("렌더 영역 초기화 중");
-  state.mindmapInstance?.destroy?.();
-  state.mindmapInstance = null;
   els.markdownView.classList.remove("empty-state", "plain-text-mode", "code-document");
   els.editorShell.hidden = true;
   if (els.mindmapShell) {
-    els.mindmapShell.hidden = true;
-    els.mindmapShell.replaceChildren();
+    clearMindmapShell();
   }
   els.markdownView.hidden = false;
 
@@ -3552,6 +3550,16 @@ function renderCurrentDocument(showOpenStep = null, diagnostics = null) {
 
   markRenderStep("원문 표시 중");
   renderPlainTextDocument(state.currentContent);
+}
+
+function clearMindmapShell() {
+  state.mindmapInstance?.destroy?.();
+  state.mindmapInstance = null;
+  state.mindmapContext = null;
+  state.mindmapKeyCaptureActive = false;
+  if (!els.mindmapShell) return;
+  els.mindmapShell.hidden = true;
+  els.mindmapShell.replaceChildren();
 }
 
 function isMindmapDocument(content) {
@@ -3778,7 +3786,7 @@ function renderMindmapDocument() {
   state.mindmapKeyCaptureActive = false;
   els.mindmapShell.innerHTML = `
     <section class="mindmap-view">
-      ${canEdit ? `<details class="mindmap-toolbar-panel" open>
+      ${canEdit ? `<details class="mindmap-toolbar-panel" open data-mindmap-toolbar-panel>
         <summary class="mindmap-toolbar-toggle" aria-label="마인드맵 도구 접기/펼치기" title="마인드맵 도구">☰</summary>
         <div class="mindmap-toolbar" aria-label="마인드맵 도구">
           <div class="mindmap-toolbar-row">
@@ -3865,6 +3873,8 @@ function renderSimpleMindMapDocument(data, canvas) {
 
 function bindMindmapToolbarControls() {
   const canEdit = state.editMode && canEditNode(state.currentNode);
+  restoreMindmapToolbarPosition();
+  els.mindmapShell?.querySelector(".mindmap-toolbar-toggle")?.addEventListener("pointerdown", startMindmapToolbarDrag);
   els.mindmapShell?.querySelectorAll("[data-edit-only]").forEach((button) => {
     button.disabled = !canEdit;
   });
@@ -3877,6 +3887,78 @@ function bindMindmapToolbarControls() {
   els.mindmapShell?.querySelector("[data-mindmap-search]")?.addEventListener("input", (event) => {
     runMindmapSearch(event.target.value);
   });
+}
+
+function restoreMindmapToolbarPosition() {
+  const panel = els.mindmapShell?.querySelector("[data-mindmap-toolbar-panel]");
+  if (!panel) return;
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem("obsidian-web-viewer-mindmap-toolbar-position") || "null"); } catch {}
+  if (!saved || !Number.isFinite(saved.left) || !Number.isFinite(saved.top)) return;
+  const parent = panel.offsetParent || els.mindmapShell;
+  const bounds = parent.getBoundingClientRect();
+  const left = Math.max(8, Math.min(saved.left, Math.max(8, bounds.width - 40)));
+  const top = Math.max(8, Math.min(saved.top, Math.max(8, bounds.height - 40)));
+  panel.style.left = `${left}px`;
+  panel.style.top = `${top}px`;
+  panel.style.right = "auto";
+}
+
+function startMindmapToolbarDrag(event) {
+  const panel = event.currentTarget?.closest?.("[data-mindmap-toolbar-panel]");
+  if (!panel || !els.mindmapShell) return;
+  const panelRect = panel.getBoundingClientRect();
+  const parentRect = (panel.offsetParent || els.mindmapShell).getBoundingClientRect();
+  state.mindmapToolbarDrag = {
+    panel,
+    handle: event.currentTarget,
+    parentRect,
+    offsetX: event.clientX - panelRect.left,
+    offsetY: event.clientY - panelRect.top,
+    startX: event.clientX,
+    startY: event.clientY,
+    moved: false,
+  };
+  event.currentTarget.setPointerCapture?.(event.pointerId);
+  window.addEventListener("pointermove", moveMindmapToolbar, { passive: false });
+  window.addEventListener("pointerup", stopMindmapToolbar, { passive: false });
+  window.addEventListener("pointercancel", stopMindmapToolbar, { passive: false });
+}
+
+function moveMindmapToolbar(event) {
+  const drag = state.mindmapToolbarDrag;
+  if (!drag) return;
+  if (Math.abs(event.clientX - drag.startX) > 3 || Math.abs(event.clientY - drag.startY) > 3) drag.moved = true;
+  if (!drag.moved) return;
+  event.preventDefault();
+  const width = drag.panel.offsetWidth || 120;
+  const height = drag.panel.offsetHeight || 40;
+  const left = Math.max(8, Math.min(event.clientX - drag.parentRect.left - drag.offsetX, drag.parentRect.width - width - 8));
+  const top = Math.max(8, Math.min(event.clientY - drag.parentRect.top - drag.offsetY, drag.parentRect.height - height - 8));
+  drag.panel.style.left = `${left}px`;
+  drag.panel.style.top = `${top}px`;
+  drag.panel.style.right = "auto";
+}
+
+function stopMindmapToolbar() {
+  const drag = state.mindmapToolbarDrag;
+  if (!drag) return;
+  state.mindmapToolbarDrag = null;
+  window.removeEventListener("pointermove", moveMindmapToolbar);
+  window.removeEventListener("pointerup", stopMindmapToolbar);
+  window.removeEventListener("pointercancel", stopMindmapToolbar);
+  const left = parseFloat(drag.panel.style.left);
+  const top = parseFloat(drag.panel.style.top);
+  if (drag.moved) {
+    const suppressToggle = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    drag.handle?.addEventListener("click", suppressToggle, { once: true, capture: true });
+  }
+  if (Number.isFinite(left) && Number.isFinite(top)) {
+    localStorage.setItem("obsidian-web-viewer-mindmap-toolbar-position", JSON.stringify({ left, top }));
+  }
 }
 
 function runMindmapToolbarAction(action) {
@@ -9859,12 +9941,18 @@ async function hydrateEmbeddedDocuments(root) {
 }
 
 function hydrateMindmapEmbeds(root) {
-  if (!window.SimpleMindMap) return;
   root.querySelectorAll("[data-mindmap-embed-id]").forEach((canvas) => {
     if (canvas.dataset.mindmapHydrated === "true") return;
+    if (!window.SimpleMindMap) {
+      canvas.textContent = "마인드맵 라이브러리를 불러오지 못했습니다.";
+      return;
+    }
     const id = canvas.getAttribute("data-mindmap-embed-id");
     const entry = state.mindmapEmbedData.get(id);
-    if (!entry?.data) return;
+    if (!entry?.data) {
+      canvas.textContent = "마인드맵 미리보기를 불러오지 못했습니다.";
+      return;
+    }
     canvas.dataset.mindmapHydrated = "true";
     const mindMap = new window.SimpleMindMap({
       el: canvas,
@@ -10361,7 +10449,7 @@ async function switchTab(id) {
     state.editMode = false;
     els.editorShell.hidden = true;
     els.markdownView.hidden = false;
-    if (els.mindmapShell) els.mindmapShell.hidden = true;
+    clearMindmapShell();
     stopAutoSave();
     updateEditButtons();
   }

@@ -2003,6 +2003,7 @@ button:disabled {
   height: 32px;
   justify-content: center;
   list-style: none;
+  touch-action: none;
   width: 34px;
 }
 
@@ -2036,7 +2037,7 @@ button:disabled {
   max-height: min(72vh, 620px);
   overflow: auto;
   padding: 4px;
-  width: 118px;
+  width: 172px;
 }
 
 .mindmap-toolbar-row {
@@ -2052,7 +2053,7 @@ button:disabled {
 }
 
 .mindmap-toolbar-search-row {
-  grid-template-columns: 1fr repeat(3, 26px);
+  grid-template-columns: minmax(72px, 1fr) repeat(3, 30px);
 }
 
 .mindmap-toolbar-search-row .mindmap-search-status {
@@ -2065,7 +2066,7 @@ button:disabled {
   border-radius: 5px;
   color: var(--muted);
   height: 26px;
-  min-width: 26px;
+  min-width: 30px;
   padding: 0;
   width: auto;
 }
