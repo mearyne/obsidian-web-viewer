@@ -3588,7 +3588,7 @@ function isMindmapDocument(content) {
   const parsed = extractFrontmatter(String(content || "").replace(/\r\n/g, "\n"));
   const block = findMindmapBlock(parsed.body);
   if (!block) return false;
-  return isMindmapFrontmatter(parsed.frontmatter);
+  return true;
 }
 
 function extractMindmapData(content) {
@@ -4078,10 +4078,11 @@ function startActiveMindmapNodeTextEdit() {
   const node = jm?.renderer?.activeNodeList?.[0];
   if (!jm || !node) return false;
   const candidates = [
-    [jm.renderer, "startTextEdit", [node]],
+    [jm.renderer?.textEdit, "show", [{ node, isInserting: false, isFromKeyDown: true }]],
     [jm.renderer?.textEdit, "showEditTextBox", [node]],
     [jm.renderer?.textEdit, "show", [node]],
     [jm.textEdit, "show", [node]],
+    [jm.renderer, "startTextEdit", []],
     [jm, "execCommand", ["EDIT_NODE", node]],
     [jm, "execCommand", ["EDIT_NODE_TEXT", node]],
     [jm, "execCommand", ["START_TEXT_EDIT", node]],
