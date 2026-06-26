@@ -123,7 +123,6 @@ const state = {
   customConfirmResolve: null,
   mindmapInstance: null,
   mindmapContext: null,
-  mindmapSaveTimer: null,
   lastGPressAt: 0,
   taskCreateSourceDate: "",
   selectedPaths: new Set(),
@@ -3336,12 +3335,8 @@ function buildMindmapDocumentContent(data, previousContent = "") {
 
 function renderMindmapDocument() {
   const data = extractMindmapData(state.currentContent) || createDefaultMindmapData(displayDocumentTitle(state.currentNode?.name || state.currentPath || "마인드맵"));
-  if (state.mindmapInstance && state.mindmapContext?.path !== state.currentPath) {
-    void saveMindmapNow({ silent: true });
-  }
   state.mindmapInstance = null;
   state.mindmapContext = { path: state.currentPath, node: state.currentNode, content: state.currentContent };
-  window.clearTimeout(state.mindmapSaveTimer);
   els.markdownView.hidden = true;
   els.editorShell.hidden = true;
   els.calendarView.hidden = true;
@@ -3395,16 +3390,13 @@ function renderMindmapDocument() {
   state.mindmapInstance = jm;
   jm.show(data);
   jm.select_node(firstMindmapEditableNodeId(data) || "root");
-  jm.add_event_listener((type) => {
-    if (type === window.jsMind.event_type.edit) scheduleMindmapSave();
-  });
   const focusMindmap = () => {
     const panel = jm.view?.e_panel || canvas;
     panel.tabIndex = 0;
     panel.focus();
   };
   canvas.addEventListener("click", focusMindmap);
-  saveButton?.addEventListener("click", () => void saveMindmapNow({ silent: false, backup: true, refreshTree: true }));
+  saveButton?.addEventListener("click", () => void saveMindmapNow({ silent: false }));
   requestAnimationFrame(() => {
     jm.resize();
     focusMindmap();
@@ -3421,15 +3413,7 @@ function firstMindmapEditableNodeId(data) {
   return data?.data?.children?.[0]?.id || "";
 }
 
-function scheduleMindmapSave() {
-  window.clearTimeout(state.mindmapSaveTimer);
-  state.mindmapSaveTimer = window.setTimeout(() => {
-    state.mindmapSaveTimer = null;
-    void saveMindmapNow({ silent: true, backup: false, refreshTree: false });
-  }, 2000);
-}
-
-async function saveMindmapNow({ silent = true, backup = false, refreshTree = false } = {}) {
+async function saveMindmapNow({ silent = true } = {}) {
   const context = state.mindmapContext;
   const node = context?.node || state.currentNode;
   if (!state.mindmapInstance) {
@@ -3448,16 +3432,14 @@ async function saveMindmapNow({ silent = true, backup = false, refreshTree = fal
     return;
   }
   try {
-    const metadata = await writeNodeContent(node, nextContent, { backup, previousContent });
+    const metadata = await writeNodeContent(node, nextContent, { backup: true, previousContent });
     Object.assign(node, metadata);
     node.content = nextContent;
     if (context) context.content = nextContent;
     if (state.currentPath === node.path) state.currentContent = nextContent;
-    if (refreshTree) {
-      refreshDirectoryMetadata();
-      refreshRecentFilesCache();
-      renderTree();
-    }
+    refreshDirectoryMetadata();
+    refreshRecentFilesCache();
+    renderTree();
     if (!silent) showAppToast("마인드맵 저장됨", "success");
   } catch {
     if (!silent) showAppToast("마인드맵 저장 실패", "error");
