@@ -1441,6 +1441,13 @@ button:disabled {
   padding-top: 0;
 }
 
+.viewer-wrap:has(.mindmap-shell:not([hidden])) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+}
+
 .loading-overlay {
   align-items: center;
   background: color-mix(in srgb, var(--surface) 76%, transparent);
@@ -1966,12 +1973,24 @@ button:disabled {
   color: var(--accent-contrast);
 }
 
+.mindmap-shell {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+}
+
+.mindmap-shell[hidden] {
+  display: none;
+}
+
 .mindmap-view {
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 10px;
-  margin: 0 auto;
-  max-width: min(100%, 1180px);
-  min-height: calc(100dvh - 150px);
+  height: 100%;
+  min-height: 0;
+  padding: 10px 16px 56px;
+  width: 100%;
 }
 
 .mindmap-toolbar {
@@ -2007,11 +2026,12 @@ button:disabled {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 8px;
-  height: max(560px, calc(100dvh - 210px));
-  min-height: 420px;
+  height: 100%;
+  min-height: 0;
   overflow: auto;
   outline: none;
   position: relative;
+  width: 100%;
 }
 
 .mindmap-canvas:focus {
@@ -2037,7 +2057,8 @@ button:disabled {
 
 @media (max-width: 780px) {
   .mindmap-view {
-    min-height: calc(100dvh - 118px);
+    gap: 8px;
+    padding: 8px 8px 88px;
   }
 
   .mindmap-toolbar {
@@ -2049,10 +2070,7 @@ button:disabled {
     white-space: normal;
   }
 
-  .mindmap-canvas {
-    height: calc(100dvh - 190px);
-    min-height: 360px;
-  }
+  .mindmap-canvas { min-height: 0; }
 }
 
 .editor-image-btn {
@@ -4514,6 +4532,11 @@ button.calendar-more {
   /* 모바일: 고정 탭스트립(44px) + 상태바(44px)를 위한 하단 여백 복원 */
   .viewer-wrap:has(.calendar-view:not([hidden])) {
     padding-bottom: 88px;
+  }
+
+  .viewer-wrap:has(.mindmap-shell:not([hidden])) {
+    overflow: hidden;
+    padding: 0;
   }
 
   .calendar-shell {

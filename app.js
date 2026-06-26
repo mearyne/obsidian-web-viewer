@@ -122,6 +122,7 @@ const state = {
   randomNoticeToast: null,
   customConfirmResolve: null,
   mindmapInstance: null,
+  mindmapContext: null,
   mindmapSaveTimer: null,
   lastGPressAt: 0,
   taskCreateSourceDate: "",
@@ -251,6 +252,7 @@ const els = {
   viewerWrap: document.querySelector(".viewer-wrap"),
   newTabPage: document.querySelector("#newTabPage"),
   markdownView: document.querySelector("#markdownView"),
+  mindmapShell: document.querySelector("#mindmapShell"),
   editorShell: document.querySelector("#editorShell"),
   markdownEditor: document.querySelector("#markdownEditor"),
   editorPreview: document.querySelector("#editorPreview"),
@@ -560,7 +562,7 @@ function handleGlobalKeydown(event) {
     return;
   }
 
-  if (event.target.closest?.(".mindmap-view")) return;
+  if (event.target.closest?.(".mindmap-shell")) return;
 
   if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && event.code === "KeyN") {
     event.preventDefault();
@@ -1400,6 +1402,7 @@ function hydrateUnavailableVault(message) {
   els.markdownView.classList.add("empty-state");
   els.markdownView.hidden = false;
   els.editorShell.hidden = true;
+  if (els.mindmapShell) els.mindmapShell.hidden = true;
   els.calendarView.hidden = true;
   els.notePath.textContent = "server vault";
   els.noteTitle.textContent = "Vault unavailable";
@@ -2143,6 +2146,10 @@ async function openFile(path) {
     updateEditButtons();
     els.markdownView.classList.remove("empty-state", "plain-text-mode", "code-document");
     els.markdownView.replaceChildren();
+    if (els.mindmapShell) {
+      els.mindmapShell.hidden = true;
+      els.mindmapShell.replaceChildren();
+    }
     markOpenStep("화면 전환 중");
     showNoteView();
     scrollViewerTop();
@@ -3223,6 +3230,10 @@ function renderCurrentDocument(showOpenStep = null, diagnostics = null) {
   markRenderStep("렌더 영역 초기화 중");
   els.markdownView.classList.remove("empty-state", "plain-text-mode", "code-document");
   els.editorShell.hidden = true;
+  if (els.mindmapShell) {
+    els.mindmapShell.hidden = true;
+    els.mindmapShell.replaceChildren();
+  }
   els.markdownView.hidden = false;
 
   if (state.markdownEnabled && isMindmapDocument(state.currentContent)) {
@@ -3325,9 +3336,18 @@ function buildMindmapDocumentContent(data, previousContent = "") {
 
 function renderMindmapDocument() {
   const data = extractMindmapData(state.currentContent) || createDefaultMindmapData(displayDocumentTitle(state.currentNode?.name || state.currentPath || "마인드맵"));
+  if (state.mindmapInstance && state.mindmapContext?.path !== state.currentPath) {
+    void saveMindmapNow({ silent: true });
+  }
   state.mindmapInstance = null;
+  state.mindmapContext = { path: state.currentPath, node: state.currentNode, content: state.currentContent };
   window.clearTimeout(state.mindmapSaveTimer);
-  els.markdownView.innerHTML = `
+  els.markdownView.hidden = true;
+  els.editorShell.hidden = true;
+  els.calendarView.hidden = true;
+  if (!els.mindmapShell) return;
+  els.mindmapShell.hidden = false;
+  els.mindmapShell.innerHTML = `
     <section class="mindmap-view">
       <div class="mindmap-toolbar">
         <span>Enter 형제 추가 · Tab 자식 추가 · F2 수정 · Delete 삭제</span>
@@ -3336,10 +3356,10 @@ function renderMindmapDocument() {
       <div id="mindmapCanvas" class="mindmap-canvas" tabindex="0"></div>
     </section>
   `;
-  const canvas = els.markdownView.querySelector("#mindmapCanvas");
-  const saveButton = els.markdownView.querySelector(".mindmap-save-button");
+  const canvas = els.mindmapShell.querySelector("#mindmapCanvas");
+  const saveButton = els.mindmapShell.querySelector(".mindmap-save-button");
   if (!window.jsMind || !canvas) {
-    els.markdownView.innerHTML = "<p>마인드맵 라이브러리를 불러오지 못했습니다.</p>";
+    els.mindmapShell.innerHTML = "<p>마인드맵 라이브러리를 불러오지 못했습니다.</p>";
     return;
   }
 
@@ -3378,11 +3398,16 @@ function renderMindmapDocument() {
   jm.add_event_listener((type) => {
     if (type === window.jsMind.event_type.edit) scheduleMindmapSave();
   });
-  canvas.addEventListener("click", () => canvas.focus());
+  const focusMindmap = () => {
+    const panel = jm.view?.e_panel || canvas;
+    panel.tabIndex = 0;
+    panel.focus();
+  };
+  canvas.addEventListener("click", focusMindmap);
   saveButton?.addEventListener("click", () => void saveMindmapNow({ silent: false }));
   requestAnimationFrame(() => {
-    canvas.focus();
     jm.resize();
+    focusMindmap();
   });
 }
 
@@ -3399,15 +3424,19 @@ function scheduleMindmapSave() {
 }
 
 async function saveMindmapNow({ silent = true } = {}) {
-  if (!state.mindmapInstance || !canEditNode(state.currentNode)) return;
+  const context = state.mindmapContext;
+  const node = context?.node || state.currentNode;
+  if (!state.mindmapInstance || !canEditNode(node)) return;
   const data = state.mindmapInstance.get_data("node_tree");
-  const nextContent = buildMindmapDocumentContent(data, state.currentContent);
-  if (nextContent === state.currentContent) return;
+  const previousContent = context?.content ?? state.currentContent;
+  const nextContent = buildMindmapDocumentContent(data, previousContent);
+  if (nextContent === previousContent) return;
   try {
-    const metadata = await writeNodeContent(state.currentNode, nextContent, { backup: true, previousContent: state.currentContent });
-    Object.assign(state.currentNode, metadata);
-    state.currentNode.content = nextContent;
-    state.currentContent = nextContent;
+    const metadata = await writeNodeContent(node, nextContent, { backup: true, previousContent });
+    Object.assign(node, metadata);
+    node.content = nextContent;
+    if (context) context.content = nextContent;
+    if (state.currentPath === node.path) state.currentContent = nextContent;
     refreshDirectoryMetadata();
     refreshRecentFilesCache();
     renderTree();
@@ -3508,6 +3537,7 @@ async function enterEditMode() {
   state.editorDirty = false;
   setEditorValue(state.currentContent);
   els.markdownView.hidden = true;
+  if (els.mindmapShell) els.mindmapShell.hidden = true;
   els.calendarView.hidden = true;
   els.editorShell.hidden = false;
   if (els.noteTitleArea) els.noteTitleArea.hidden = false;
@@ -5038,6 +5068,7 @@ function showNoteView() {
   document.documentElement.classList.remove("matrix-mode");
   if (els.newTabPage) els.newTabPage.hidden = true;
   els.markdownView.hidden = false;
+  if (els.mindmapShell) els.mindmapShell.hidden = true;
   els.editorShell.hidden = true;
   els.calendarView.hidden = true;
   if (els.noteTitleArea) els.noteTitleArea.hidden = true;
@@ -5066,6 +5097,7 @@ function showCalendarView() {
   }
   if (els.newTabPage) els.newTabPage.hidden = true;
   els.markdownView.hidden = true;
+  if (els.mindmapShell) els.mindmapShell.hidden = true;
   els.editorShell.hidden = true;
   els.calendarView.hidden = false;
   els.viewerWrap.scrollTop = 0;
@@ -9551,6 +9583,7 @@ async function switchTab(id) {
     state.editMode = false;
     els.editorShell.hidden = true;
     els.markdownView.hidden = false;
+    if (els.mindmapShell) els.mindmapShell.hidden = true;
     stopAutoSave();
     updateEditButtons();
   }
@@ -10271,6 +10304,7 @@ function showEmptyTab() {
   state.currentContent = "";
   state.currentNode = null;
   els.markdownView.hidden = true;
+  if (els.mindmapShell) els.mindmapShell.hidden = true;
   els.editorShell.hidden = true;
   if (els.calendarView) els.calendarView.hidden = true;
   if (els.noteTitleArea) els.noteTitleArea.hidden = true;
