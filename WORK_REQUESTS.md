@@ -34,3 +34,4 @@
 - 2026-06-26: Remove paragraph margins inside `simple-mind-map` rich text nodes so node labels remain visible.
 - 2026-06-26: Normalize `simple-mind-map` rich text HTML to plain node labels so `<p>` tags are not shown as text.
 - 2026-06-26: Replace the mindmap 1-5 zoom buttons with basic `simple-mind-map` toolbar actions.
+- 2026-06-26: List additional `simple-mind-map` features that could be exposed in the mindmap UI.
