@@ -1157,7 +1157,8 @@ function normalizeSettings(settings) {
     discordFixedTimesTodo: normalizeNotifyFixedTimes(settings?.discordFixedTimesTodo),
     discordFixedTimesEvent: normalizeNotifyFixedTimes(settings?.discordFixedTimesEvent),
     mindmapLayout: normalizeMindmapLayout(settings?.mindmapLayout),
-    mindmapTheme: normalizeMindmapTheme(settings?.mindmapTheme),
+    mindmapLightTheme: normalizeMindmapTheme(settings?.mindmapLightTheme, normalizeMindmapTheme(settings?.mindmapTheme, "light")),
+    mindmapDarkTheme: normalizeMindmapTheme(settings?.mindmapDarkTheme, normalizeMindmapTheme(settings?.mindmapTheme, "dark")),
     mindmapAutoFit: typeof settings?.mindmapAutoFit === "boolean" ? settings.mindmapAutoFit : true,
     mindmapAdvancedTools: typeof settings?.mindmapAdvancedTools === "boolean" ? settings.mindmapAdvancedTools : true,
     clipperRules: Array.isArray(settings?.clipperRules)
@@ -1179,10 +1180,10 @@ function normalizeMindmapLayout(layout) {
     : "mindMap";
 }
 
-function normalizeMindmapTheme(theme) {
-  return ["auto", "light", "light-blue", "light-green", "dark", "dark-slate", "dark-green"].includes(theme)
+function normalizeMindmapTheme(theme, fallback = "light") {
+  return ["light", "light-blue", "light-green", "branch-depth-light", "dark", "dark-slate", "dark-green", "branch-depth-dark"].includes(theme)
     ? theme
-    : "auto";
+    : fallback;
 }
 
 function settingsFilePath() {

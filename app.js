@@ -125,9 +125,10 @@ const state = {
   mindmapInstance: null,
   mindmapContext: null,
   mindmapEmbedData: new Map(),
-  mindmapOptions: { layout: "mindMap", theme: "auto", autoFit: true, advancedTools: true },
+  mindmapOptions: { layout: "mindMap", lightTheme: "light", darkTheme: "dark", autoFit: true, advancedTools: true },
   mindmapKeyCaptureActive: false,
   mindmapToolbarDrag: null,
+  mindmapViewportBeforeArrow: null,
   mindmapDirectImagePasteAt: 0,
   lastGPressAt: 0,
   taskCreateSourceDate: "",
@@ -142,13 +143,14 @@ const MINDMAP_DOCUMENT_TYPE = "owv-mindmap";
 const MINDMAP_DATA_BLOCK_PATTERN = /<!--\s*owv-mindmap-data\s*\n([\s\S]*?)\n\s*owv-mindmap-data\s*-->/i;
 
 const MINDMAP_THEME_OPTIONS = [
-  { value: "auto", label: "앱 테마 자동" },
   { value: "light", label: "라이트 기본" },
   { value: "light-blue", label: "라이트 블루" },
   { value: "light-green", label: "라이트 그린" },
+  { value: "branch-depth-light", label: "라이트 분기 명도" },
   { value: "dark", label: "다크 기본" },
   { value: "dark-slate", label: "다크 슬레이트" },
   { value: "dark-green", label: "다크 그린" },
+  { value: "branch-depth-dark", label: "다크 분기 명도" },
 ];
 
 const MINDMAP_THEME_CONFIGS = {
@@ -173,6 +175,13 @@ const MINDMAP_THEME_CONFIGS = {
     second: { fillColor: "#ecfdf5", color: "#064e3b", borderColor: "#6ee7b7" },
     node: { fillColor: "#ffffff", color: "#134e4a", borderColor: "#99f6e4" },
   },
+  "branch-depth-light": {
+    backgroundColor: "#f8fafc",
+    lineColor: "#7f8da3",
+    root: { fillColor: "#293241", color: "#ffffff", borderColor: "#111827" },
+    second: { fillColor: "#eef2f7", color: "#172033", borderColor: "#c9d4e3" },
+    node: { fillColor: "#f8fafc", color: "#1f2937", borderColor: "#d4dce8" },
+  },
   dark: {
     backgroundColor: "#171a1f",
     lineColor: "#687489",
@@ -194,7 +203,16 @@ const MINDMAP_THEME_CONFIGS = {
     second: { fillColor: "#1c2a27", color: "#ecfdf5", borderColor: "#2f4f47" },
     node: { fillColor: "#17211f", color: "#d1fae5", borderColor: "#2f4f47" },
   },
+  "branch-depth-dark": {
+    backgroundColor: "#111318",
+    lineColor: "#627084",
+    root: { fillColor: "#e5e7eb", color: "#111827", borderColor: "#f8fafc" },
+    second: { fillColor: "#252b35", color: "#f8fafc", borderColor: "#445266" },
+    node: { fillColor: "#1b2029", color: "#e5e7eb", borderColor: "#364152" },
+  },
 };
+
+const MINDMAP_BRANCH_THEME_NAMES = new Set(["branch-depth-light", "branch-depth-dark"]);
 
 const els = {
   sidebarPanel: document.querySelector("#sidebarPanel"),
@@ -504,7 +522,7 @@ els.clipperFolderInput?.addEventListener("input", () => {
 els.clipperRuleAddBtn?.addEventListener("click", () => { addClipperRuleRow("", "", ""); scheduleSettingsSave(); });
 els.searchExcludeInput?.addEventListener("input", handleSearchExcludeInput);
 els.optionsMenu?.addEventListener("change", (event) => {
-  if (event.target?.matches?.("#mindmapLayoutSelect, #mindmapThemeSelect, #mindmapAutoFitInput, #mindmapAdvancedToolsInput")) {
+  if (event.target?.matches?.("#mindmapLayoutSelect, #mindmapLightThemeSelect, #mindmapDarkThemeSelect, #mindmapAutoFitInput, #mindmapAdvancedToolsInput")) {
     handleMindmapOptionInput();
   }
 });
@@ -2660,8 +2678,14 @@ function ensureMindmapOptionsSection() {
         </select>
       </label>
       <label class="option-field">
-        <span>&#53580;&#47560;</span>
-        <select id="mindmapThemeSelect">
+        <span>&#46972;&#51060;&#53944; &#53580;&#47560;</span>
+        <select id="mindmapLightThemeSelect">
+          ${MINDMAP_THEME_OPTIONS.map((theme) => `<option value="${theme.value}">${theme.label}</option>`).join("")}
+        </select>
+      </label>
+      <label class="option-field">
+        <span>&#45796;&#53356; &#53580;&#47560;</span>
+        <select id="mindmapDarkThemeSelect">
           ${MINDMAP_THEME_OPTIONS.map((theme) => `<option value="${theme.value}">${theme.label}</option>`).join("")}
         </select>
       </label>
@@ -2680,9 +2704,11 @@ function ensureMindmapOptionsSection() {
 }
 
 function loadMindmapOptionsFromLocalStorage() {
+  const legacyTheme = localStorage.getItem("obsidian-web-viewer-mindmap-theme");
   const options = normalizeMindmapOptions({
     layout: localStorage.getItem("obsidian-web-viewer-mindmap-layout"),
-    theme: localStorage.getItem("obsidian-web-viewer-mindmap-theme"),
+    lightTheme: localStorage.getItem("obsidian-web-viewer-mindmap-light-theme") || legacyTheme,
+    darkTheme: localStorage.getItem("obsidian-web-viewer-mindmap-dark-theme") || legacyTheme,
     autoFit: localStorage.getItem("obsidian-web-viewer-mindmap-auto-fit"),
     advancedTools: localStorage.getItem("obsidian-web-viewer-mindmap-advanced-tools"),
   });
@@ -2692,12 +2718,14 @@ function loadMindmapOptionsFromLocalStorage() {
 function normalizeMindmapOptions(options = {}) {
   const layouts = new Set(["mindMap", "logicalStructure", "logicalStructureLeft", "organizationStructure", "catalogOrganization", "timeline"]);
   const themes = new Set(MINDMAP_THEME_OPTIONS.map((theme) => theme.value));
-  const previous = state.mindmapOptions || { layout: "mindMap", theme: "auto", autoFit: true, advancedTools: true };
+  const previous = state.mindmapOptions || { layout: "mindMap", lightTheme: "light", darkTheme: "dark", autoFit: true, advancedTools: true };
   const layout = layouts.has(options.mindmapLayout) ? options.mindmapLayout : (layouts.has(options.layout) ? options.layout : previous.layout);
-  const theme = themes.has(options.mindmapTheme) ? options.mindmapTheme : (themes.has(options.theme) ? options.theme : previous.theme);
+  const lightTheme = themes.has(options.mindmapLightTheme) ? options.mindmapLightTheme : (themes.has(options.lightTheme) ? options.lightTheme : previous.lightTheme);
+  const darkTheme = themes.has(options.mindmapDarkTheme) ? options.mindmapDarkTheme : (themes.has(options.darkTheme) ? options.darkTheme : previous.darkTheme);
   return {
     layout: layout || "mindMap",
-    theme: theme || "auto",
+    lightTheme: lightTheme || "light",
+    darkTheme: darkTheme || "dark",
     autoFit: normalizeStoredBoolean(options.mindmapAutoFit ?? options.autoFit, previous.autoFit),
     advancedTools: normalizeStoredBoolean(options.mindmapAdvancedTools ?? options.advancedTools, previous.advancedTools),
   };
@@ -2718,18 +2746,21 @@ function applyMindmapOptions(options = {}, { persist = true, applyVisible = true
 
 function syncMindmapOptionInputs() {
   const layout = document.getElementById("mindmapLayoutSelect");
-  const theme = document.getElementById("mindmapThemeSelect");
+  const lightTheme = document.getElementById("mindmapLightThemeSelect");
+  const darkTheme = document.getElementById("mindmapDarkThemeSelect");
   const autoFit = document.getElementById("mindmapAutoFitInput");
   const advancedTools = document.getElementById("mindmapAdvancedToolsInput");
   if (layout) layout.value = state.mindmapOptions.layout;
-  if (theme) theme.value = state.mindmapOptions.theme;
+  if (lightTheme) lightTheme.value = state.mindmapOptions.lightTheme;
+  if (darkTheme) darkTheme.value = state.mindmapOptions.darkTheme;
   if (autoFit) autoFit.checked = state.mindmapOptions.autoFit;
   if (advancedTools) advancedTools.checked = state.mindmapOptions.advancedTools;
 }
 
 function persistMindmapOptions() {
   localStorage.setItem("obsidian-web-viewer-mindmap-layout", state.mindmapOptions.layout);
-  localStorage.setItem("obsidian-web-viewer-mindmap-theme", state.mindmapOptions.theme);
+  localStorage.setItem("obsidian-web-viewer-mindmap-light-theme", state.mindmapOptions.lightTheme);
+  localStorage.setItem("obsidian-web-viewer-mindmap-dark-theme", state.mindmapOptions.darkTheme);
   localStorage.setItem("obsidian-web-viewer-mindmap-auto-fit", state.mindmapOptions.autoFit ? "1" : "0");
   localStorage.setItem("obsidian-web-viewer-mindmap-advanced-tools", state.mindmapOptions.advancedTools ? "1" : "0");
 }
@@ -2739,6 +2770,7 @@ function applyVisibleMindmapOptions() {
   if (!jm || els.mindmapShell?.hidden) return;
   jm.setLayout?.(state.mindmapOptions.layout);
   jm.setThemeConfig?.(getMindmapThemeConfig());
+  refreshVisibleMindmapThemeData();
   updateMindmapAdvancedToolVisibility();
   if (state.mindmapOptions.autoFit) requestAnimationFrame(() => fitMindmapToView());
 }
@@ -2752,7 +2784,8 @@ function updateMindmapAdvancedToolVisibility() {
 function handleMindmapOptionInput() {
   applyMindmapOptions({
     layout: document.getElementById("mindmapLayoutSelect")?.value,
-    theme: document.getElementById("mindmapThemeSelect")?.value,
+    lightTheme: document.getElementById("mindmapLightThemeSelect")?.value,
+    darkTheme: document.getElementById("mindmapDarkThemeSelect")?.value,
     autoFit: document.getElementById("mindmapAutoFitInput")?.checked,
     advancedTools: document.getElementById("mindmapAdvancedToolsInput")?.checked,
   });
@@ -3479,7 +3512,8 @@ async function saveServerSettings() {
         discordFixedTimesEvent: getDiscordFixedTimes("event"),
         clipperRules: getClipperRules(),
         mindmapLayout: state.mindmapOptions.layout,
-        mindmapTheme: state.mindmapOptions.theme,
+        mindmapLightTheme: state.mindmapOptions.lightTheme,
+        mindmapDarkTheme: state.mindmapOptions.darkTheme,
         mindmapAutoFit: state.mindmapOptions.autoFit,
         mindmapAdvancedTools: state.mindmapOptions.advancedTools,
       }),
@@ -3665,9 +3699,9 @@ function getMindmapLineColor() {
 }
 
 function selectedMindmapThemeName() {
-  const selected = state.mindmapOptions?.theme || "auto";
-  if (selected !== "auto") return selected;
-  return document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+  return document.documentElement.dataset.theme === "dark"
+    ? (state.mindmapOptions?.darkTheme || "dark")
+    : (state.mindmapOptions?.lightTheme || "light");
 }
 
 function getMindmapThemeConfig() {
@@ -3698,7 +3732,17 @@ function updateVisibleMindmapTheme() {
   const jm = state.mindmapInstance;
   if (jm?.setThemeConfig && !els.mindmapShell?.hidden) {
     jm.setThemeConfig(getMindmapThemeConfig());
+    refreshVisibleMindmapThemeData();
   }
+}
+
+function refreshVisibleMindmapThemeData() {
+  const jm = state.mindmapInstance;
+  if (!jm?.getData || !jm?.updateData) return;
+  const wasDirty = state.editorDirty;
+  const currentData = simpleMindMapDataToLegacyMindmapData(jm.getData(), state.mindmapContext?.sourceData);
+  jm.updateData(legacyMindmapDataToSimpleMindMapData(currentData));
+  state.editorDirty = wasDirty;
 }
 
 function createMindmapNodeId() {
@@ -3765,7 +3809,40 @@ function copyMindmapImageData(source, target) {
 }
 
 function legacyMindmapDataToSimpleMindMapData(data) {
-  return prepareMindmapImagesForPreview(legacyMindmapNodeToSimpleMindMapNode(data?.data || createDefaultMindmapData("마인드맵").data));
+  const root = prepareMindmapImagesForPreview(legacyMindmapNodeToSimpleMindMapNode(data?.data || createDefaultMindmapData("마인드맵").data));
+  return applyMindmapBranchTheme(root);
+}
+
+function applyMindmapBranchTheme(root) {
+  const themeName = selectedMindmapThemeName();
+  if (!MINDMAP_BRANCH_THEME_NAMES.has(themeName) || !Array.isArray(root?.children)) return root;
+  const dark = themeName === "branch-depth-dark";
+  const hues = [208, 158, 28, 268, 344, 188, 12, 232];
+  root.children.forEach((child, index) => {
+    applyMindmapBranchNodeStyle(child, hues[index % hues.length], 0, dark);
+  });
+  return root;
+}
+
+function applyMindmapBranchNodeStyle(node, hue, depth, dark) {
+  if (!node?.data) return;
+  const saturation = dark ? 48 : 68;
+  const lightness = dark ? Math.max(22, 39 - depth * 5) : Math.max(66, 91 - depth * 6);
+  const borderLightness = dark ? Math.min(58, lightness + 12) : Math.max(42, lightness - 22);
+  node.data.fillColor = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+  node.data.borderColor = `hsl(${hue}, ${saturation}%, ${borderLightness}%)`;
+  node.data.lineColor = node.data.borderColor;
+  node.data.color = dark ? "#f8fafc" : "#111827";
+  if (Array.isArray(node.children)) {
+    node.children.forEach((child) => applyMindmapBranchNodeStyle(child, hue, depth + 1, dark));
+  }
+}
+
+function expandMindmapPreviewNodes(node) {
+  if (!node?.data) return node;
+  node.data.expand = true;
+  if (Array.isArray(node.children)) node.children.forEach(expandMindmapPreviewNodes);
+  return node;
 }
 
 function prepareMindmapImagesForPreview(node) {
@@ -3899,6 +3976,7 @@ function renderSimpleMindMapDocument(data, canvas) {
   });
   mindMap.on("node_active", () => {
     state.mindmapKeyCaptureActive = true;
+    restoreMindmapViewportAfterArrowNavigation(canvas);
   });
   mindMap.on("search_info_change", updateMindmapSearchStatus);
   bindMindmapToolbarControls();
@@ -4026,9 +4104,59 @@ function fitMindmapToView() {
   jm?.view?.fit?.();
 }
 
+function captureMindmapViewportBeforeArrowNavigation(event) {
+  if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
+  if (event.altKey || event.ctrlKey || event.metaKey || event.isComposing) return;
+  const target = event.target;
+  const targetInMindmap = target?.closest?.(".mindmap-shell");
+  const activeInMindmap = els.mindmapShell?.contains(document.activeElement);
+  if (!targetInMindmap && !activeInMindmap && !state.mindmapKeyCaptureActive) return;
+  const jm = state.mindmapInstance;
+  const view = jm?.view;
+  if (!view || !Number.isFinite(view.x) || !Number.isFinite(view.y) || !Number.isFinite(view.scale)) return;
+  state.mindmapViewportBeforeArrow = { x: view.x, y: view.y, scale: view.scale };
+  window.setTimeout(() => {
+    state.mindmapViewportBeforeArrow = null;
+  }, 180);
+}
+
+function restoreMindmapViewportAfterArrowNavigation(canvas) {
+  const previous = state.mindmapViewportBeforeArrow;
+  if (!previous) return;
+  state.mindmapViewportBeforeArrow = null;
+  const jm = state.mindmapInstance;
+  const view = jm?.view;
+  if (!view) return;
+  requestAnimationFrame(() => {
+    view.x = previous.x;
+    view.y = previous.y;
+    view.scale = previous.scale;
+    view.transform?.();
+    keepActiveMindmapNodeInView(canvas);
+  });
+}
+
+function keepActiveMindmapNodeInView(canvas) {
+  const jm = state.mindmapInstance;
+  const node = jm?.renderer?.activeNodeList?.[0];
+  const nodeElement = node?.group?.node;
+  if (!jm?.view || !canvas || !nodeElement?.getBoundingClientRect) return;
+  const nodeRect = nodeElement.getBoundingClientRect();
+  const canvasRect = canvas.getBoundingClientRect();
+  const padding = 28;
+  let dx = 0;
+  let dy = 0;
+  if (nodeRect.left < canvasRect.left + padding) dx = canvasRect.left + padding - nodeRect.left;
+  else if (nodeRect.right > canvasRect.right - padding) dx = canvasRect.right - padding - nodeRect.right;
+  if (nodeRect.top < canvasRect.top + padding) dy = canvasRect.top + padding - nodeRect.top;
+  else if (nodeRect.bottom > canvasRect.bottom - padding) dy = canvasRect.bottom - padding - nodeRect.bottom;
+  if (dx || dy) jm.view.translateXY?.(dx, dy);
+}
+
 function handleMindmapKeydown(event) {
   if (!state.mindmapInstance || els.mindmapShell?.hidden) return;
   if (isMindmapTextEditingEvent(event)) return;
+  captureMindmapViewportBeforeArrowNavigation(event);
   if (isPlainMindmapKey(event, "e")) {
     if (!state.editMode && canEditNode(state.currentNode)) {
       event.preventDefault();
@@ -10095,23 +10223,41 @@ function hydrateMindmapEmbeds(root) {
       return;
     }
     canvas.dataset.mindmapHydrated = "true";
+    const previewData = expandMindmapPreviewNodes(legacyMindmapDataToSimpleMindMapData(entry.data));
     const mindMap = new window.SimpleMindMap({
       el: canvas,
-      data: legacyMindmapDataToSimpleMindMapData(entry.data),
+      data: previewData,
       readonly: true,
       layout: state.mindmapOptions.layout,
       theme: "default",
       themeConfig: getMindmapThemeConfig(),
       fit: true,
+      fitPadding: 8,
+      isDisableDrag: true,
+      disableMouseWheelZoom: true,
+      customHandleMousewheel: () => false,
       enableShortcutOnlyWhenMouseInSvg: false,
       errorHandler: () => {},
     });
     canvas._mindmapPreviewInstance = mindMap;
+    disableMindmapEmbedInteraction(canvas);
     requestAnimationFrame(() => {
       mindMap.resize();
       mindMap.view?.fit?.();
       enableMindmapLazyImages(canvas);
     });
+  });
+}
+
+function disableMindmapEmbedInteraction(canvas) {
+  if (!canvas || canvas.dataset.mindmapInteractionBlocked === "true") return;
+  canvas.dataset.mindmapInteractionBlocked = "true";
+  ["mousedown", "mousemove", "wheel", "touchstart", "touchmove", "pointerdown", "pointermove", "contextmenu"].forEach((type) => {
+    canvas.addEventListener(type, (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation?.();
+    }, { capture: true, passive: false });
   });
 }
 

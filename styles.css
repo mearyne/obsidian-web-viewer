@@ -1994,6 +1994,7 @@ button:disabled {
   position: absolute;
   right: 24px;
   top: 16px;
+  width: 236px;
   z-index: 3;
 }
 
@@ -2013,7 +2014,7 @@ button:disabled {
   justify-content: center;
   list-style: none;
   touch-action: none;
-  width: 38px;
+  width: 100%;
 }
 
 .mindmap-toolbar-toggle::-webkit-details-marker {
@@ -2199,6 +2200,7 @@ button:disabled {
 
 .mindmap-embed-canvas {
   background: var(--mindmap-bg);
+  cursor: default;
   height: min(42vh, 360px);
   min-height: 220px;
   width: 100%;
@@ -2222,6 +2224,7 @@ button:disabled {
     max-width: calc(100vw - 28px);
     right: 14px;
     top: 14px;
+    width: min(236px, calc(100vw - 28px));
   }
 
   .mindmap-canvas { min-height: 0; }
