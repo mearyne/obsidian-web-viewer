@@ -3379,10 +3379,23 @@ function createMindmapNodeId() {
   return `node_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function normalizeMindmapText(value) {
+  let text = String(value || "");
+  if (!/[<&][a-z!/]/i.test(text)) return text;
+  const box = document.createElement("div");
+  for (let index = 0; index < 3 && /[<&][a-z!/]/i.test(text); index += 1) {
+    box.innerHTML = text;
+    const next = box.textContent || box.innerText || text;
+    if (next === text) break;
+    text = next;
+  }
+  return text;
+}
+
 function jsmindNodeToSimpleMindMapNode(node) {
   const data = {
     uid: node?.id || createMindmapNodeId(),
-    text: String(node?.topic || ""),
+    text: normalizeMindmapText(node?.topic),
     expand: node?.expanded !== false,
   };
   if (node?.direction === "left" || node?.direction === "right") data.dir = node.direction;
@@ -3396,7 +3409,7 @@ function simpleMindMapNodeToJsmindNode(node, isRoot = false) {
   const rawData = node?.data || {};
   const result = {
     id: isRoot ? "root" : String(rawData.uid || rawData.id || createMindmapNodeId()),
-    topic: String(rawData.text || ""),
+    topic: normalizeMindmapText(rawData.text),
     expanded: rawData.expand !== false,
   };
   if (!isRoot && (rawData.dir === "left" || rawData.dir === "right")) result.direction = rawData.dir;
