@@ -480,7 +480,6 @@ els.optionsCloseButton.addEventListener("click", closeOptionsMenu);
 els.optionsBackdrop.addEventListener("click", closeOptionsMenu);
 els.imageLightbox.addEventListener("click", closeImageLightbox);
 els.imageLightboxClose.addEventListener("click", closeImageLightbox);
-els.editButton.addEventListener("click", openCurrentFileInObsidian);
 els.recentSevenDaysQuickButton?.addEventListener("click", () => setRecentDaysFilter(7));
 els.themeButton.addEventListener("click", toggleTheme);
 els.sidebarResizeHandle.addEventListener("pointerdown", startSidebarResize);
@@ -4067,7 +4066,7 @@ async function writeServerFile(path, content, { backup = true } = {}) {
 function updateEditButtons() {
   const canEdit = canEditNode(state.currentNode) && state.activeView === "note";
   document.documentElement.classList.toggle("editing-mode", state.editMode);
-  els.editButton.disabled = state.activeView !== "note" || !state.vaultName || !state.currentPath;
+  if (els.editButton) els.editButton.disabled = state.activeView !== "note" || !state.vaultName || !state.currentPath;
   els.webEditButton.disabled = !canEdit || state.autoSaveInFlight;
   els.webEditButton.hidden = state.activeView !== "note";
   renderEditSaveButton();
@@ -4791,7 +4790,7 @@ function showCalendarView() {
   els.calendarButton.classList.add("active");
   els.matrixButton?.classList.toggle("active", state.calendarKind === "matrix");
   updateCalendarKindButton();
-  els.editButton.disabled = true;
+  if (els.editButton) els.editButton.disabled = true;
   updateEditButtons();
 }
 
