@@ -13,3 +13,4 @@
 - 2026-06-26: Rework the sidebar header and recent-days controls with a compact one-line filter, clear button, and bottom recent7 shortcut.
 - 2026-06-26: Add guidance to `AGENTS.md` and `CLAUDE.md` to show requested work in table form, then push it.
 - 2026-06-26: Remove the sidebar recent-days placeholder text, rename the recent7 shortcut to 7d, and remove the bottom Obsidian button.
+- 2026-06-26: Allow dragging a document in the sidebar tree onto a folder to move it there.

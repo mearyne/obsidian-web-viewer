@@ -128,6 +128,7 @@ const state = {
   selectedPaths: new Set(),
   lastSelectedPath: null,
   treeVisibleOrder: [],
+  sidebarDraggedFilePath: "",
 };
 
 const EXCALIDRAW_PREVIEW_ENABLED = false;
@@ -1802,6 +1803,7 @@ function renderDirChildren(dir, parent, matcher, folderPaths, excludePaths = [])
     if (node.path === state.currentPath) row.classList.add("active");
     if (state.selectedPaths.has(node.path)) row.classList.add("selected");
     state.treeVisibleOrder.push(node.path);
+    bindTreeDragAndDrop(row, node);
 
     const toggle = document.createElement("span");
     toggle.className = "tree-toggle";
@@ -1890,6 +1892,91 @@ function renderDirChildren(dir, parent, matcher, folderPaths, excludePaths = [])
   });
 
   return fileCount;
+}
+
+function bindTreeDragAndDrop(row, node) {
+  if (!row || !node || !state.serverVaultWritable) return;
+  if (node.kind === "file" && node.serverBacked && isOpenableDocument(node.name)) {
+    row.draggable = true;
+    row.addEventListener("dragstart", (event) => {
+      state.sidebarDraggedFilePath = node.path;
+      row.classList.add("dragging");
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", node.path);
+      event.dataTransfer.setData("application/x-owv-tree-file", node.path);
+    });
+    row.addEventListener("dragend", () => {
+      state.sidebarDraggedFilePath = "";
+      row.classList.remove("dragging");
+      clearTreeDropTargets();
+    });
+    return;
+  }
+
+  if (node.kind !== "directory") return;
+  row.addEventListener("dragover", (event) => {
+    if (!canDropSidebarFileOnFolder(node.path)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    row.classList.add("tree-drop-target");
+  });
+  row.addEventListener("dragleave", () => {
+    row.classList.remove("tree-drop-target");
+  });
+  row.addEventListener("drop", async (event) => {
+    if (!canDropSidebarFileOnFolder(node.path)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    row.classList.remove("tree-drop-target");
+    await moveSidebarDraggedFileToFolder(node.path);
+  });
+}
+
+function canDropSidebarFileOnFolder(folderPath) {
+  const filePath = state.sidebarDraggedFilePath;
+  if (!filePath) return false;
+  const fileName = filePath.split("/").pop();
+  const currentFolder = filePath.includes("/") ? filePath.split("/").slice(0, -1).join("/") : "";
+  if (folderPath === currentFolder) return false;
+  return Boolean(fileName && state.files.has(filePath) && state.directories.has(folderPath));
+}
+
+function clearTreeDropTargets() {
+  els.fileTree?.querySelectorAll(".tree-drop-target").forEach((item) => item.classList.remove("tree-drop-target"));
+}
+
+async function moveSidebarDraggedFileToFolder(folderPath) {
+  const filePath = state.sidebarDraggedFilePath;
+  const fileName = filePath.split("/").pop();
+  if (!filePath || !fileName) return;
+  const nextPath = folderPath ? `${folderPath}/${fileName}` : fileName;
+  if (nextPath === filePath) return;
+  try {
+    const resultPath = await moveVaultFile(filePath, nextPath);
+    state.tabs.forEach((tab) => {
+      if (tab.path === filePath) {
+        tab.path = resultPath;
+        tab.title = resultPath.split("/").pop();
+      }
+    });
+    if (state.currentPath === filePath) state.currentPath = resultPath;
+    state.selectedPaths.delete(filePath);
+    state.selectedPaths.add(resultPath);
+    await reloadVaultFileList();
+    if (state.currentPath === resultPath) state.currentNode = state.files.get(resultPath) || state.currentNode;
+    refreshRecentFilesCache();
+    invalidateRandomMarkdownCache();
+    setTasksDirty();
+    if (state.activeView === "calendar") renderCalendar();
+    renderTabStrip();
+    saveOpenTabs();
+    showAppToast("이동 완료: " + resultPath, "success");
+  } catch (error) {
+    showAppToast(error.message || "이동에 실패했습니다.", "error");
+  } finally {
+    state.sidebarDraggedFilePath = "";
+    clearTreeDropTargets();
+  }
 }
 
 function dirHasMatch(dir, matcher, folderPaths, excludePaths = []) {

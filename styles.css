@@ -559,6 +559,16 @@ button:disabled {
   background: color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
+.tree-row.dragging {
+  opacity: 0.55;
+}
+
+.tree-row.tree-drop-target {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
 .tree-row.not-openable {
   opacity: 0.48;
 }
