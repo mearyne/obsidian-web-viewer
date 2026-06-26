@@ -818,7 +818,7 @@ function getSearchableMarkdownContent(content) {
 
 function extractMindmapSearchText(content) {
   const topics = [];
-  const blocks = String(content || "").matchAll(/```(?:simple-mind-map|mindmap|jsmind)\s*\n([\s\S]*?)\n```/gi);
+  const blocks = String(content || "").matchAll(/```simple-mind-map\s*\n([\s\S]*?)\n```/gi);
   for (const match of blocks) {
     try {
       const parsed = JSON.parse(match[1]);

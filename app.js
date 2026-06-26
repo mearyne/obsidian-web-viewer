@@ -140,7 +140,7 @@ const state = {
 const EXCALIDRAW_PREVIEW_ENABLED = false;
 const MINDMAP_DOCUMENT_TYPE = "simple-mind-map";
 const MINDMAP_CODE_BLOCK_LANGUAGE = "simple-mind-map";
-const MINDMAP_CODE_BLOCK_PATTERN = /```(simple-mind-map|mindmap|jsmind)\s*\n([\s\S]*?)\n```/gi;
+const MINDMAP_CODE_BLOCK_PATTERN = /```(simple-mind-map)\s*\n([\s\S]*?)\n```/gi;
 
 const MINDMAP_THEME_OPTIONS = [
   { value: "auto", label: "앱 테마 자동" },
@@ -3569,16 +3569,7 @@ function isMindmapDocument(content) {
   const parsed = extractFrontmatter(String(content || "").replace(/\r\n/g, "\n"));
   const block = findMindmapBlock(parsed.body);
   if (!block) return false;
-  if (isMindmapFrontmatter(parsed.frontmatter)) return true;
-
-  const normalized = parsed.body.trim();
-  const withoutBlock = normalized.replace(block.raw, "").trim();
-  if (!withoutBlock) return true;
-  return !withoutBlock
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .some((line) => !/^#{1,6}\s+/.test(line));
+  return isMindmapFrontmatter(parsed.frontmatter);
 }
 
 function extractMindmapData(content) {
@@ -3607,7 +3598,7 @@ function isMindmapFrontmatter(frontmatter) {
       const match = line.match(/^\s*(?:type|documentType|document-type)\s*:\s*["']?([^"']+)["']?\s*$/i);
       if (!match) return false;
       const value = match[1].trim().toLowerCase();
-      return value === MINDMAP_DOCUMENT_TYPE || value === "mindmap";
+      return value === MINDMAP_DOCUMENT_TYPE;
     });
 }
 
