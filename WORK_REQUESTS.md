@@ -18,3 +18,4 @@
 - 2026-06-26: Change the sidebar recent-days filter into a button that increments by one day per click and resets with x.
 - 2026-06-26: Pull the latest changes from origin/main.
 - 2026-06-26: Replace local mindmap editing with a read-only preview and external markmap link.
+- 2026-06-26: Compare which mindmap approaches can be previewed locally and linked directly to external services.
