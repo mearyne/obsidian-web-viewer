@@ -795,12 +795,13 @@ function searchVaultContent(query, limitStr, res) {
       if (!/\.md$/i.test(entry.name)) continue;
       let content;
       try { content = fs.readFileSync(fullPath, "utf8"); } catch { continue; }
-      const lower = content.toLowerCase();
+      const searchableContent = getSearchableMarkdownContent(content);
+      const lower = searchableContent.toLowerCase();
       const idx = lower.indexOf(lowerQuery);
       if (idx === -1) continue;
       const start = Math.max(0, idx - 40);
-      const end = Math.min(content.length, idx + query.length + 80);
-      const snippet = (start > 0 ? "…" : "") + content.slice(start, end).replace(/\n/g, " ").trim() + (end < content.length ? "…" : "");
+      const end = Math.min(searchableContent.length, idx + query.length + 80);
+      const snippet = (start > 0 ? "…" : "") + searchableContent.slice(start, end).replace(/\n/g, " ").trim() + (end < searchableContent.length ? "…" : "");
       const relativePath = path.relative(vaultRoot, fullPath).replace(/\\/g, "/");
       results.push({ path: relativePath, snippet });
     }
@@ -808,6 +809,49 @@ function searchVaultContent(query, limitStr, res) {
 
   walkDir(vaultRoot);
   sendJson(res, 200, results);
+}
+
+function getSearchableMarkdownContent(content) {
+  const mindmapText = extractLegacyMindmapSearchText(content);
+  return mindmapText ? `${mindmapText}\n${content}` : content;
+}
+
+function extractLegacyMindmapSearchText(content) {
+  const topics = [];
+  const blocks = String(content || "").matchAll(/```jsmind\s*\n([\s\S]*?)\n```/gi);
+  for (const match of blocks) {
+    try {
+      const parsed = JSON.parse(match[1]);
+      collectLegacyMindmapTopics(parsed?.data, topics);
+    } catch {}
+  }
+  return topics.join("\n");
+}
+
+function collectLegacyMindmapTopics(node, topics) {
+  if (!node || typeof node !== "object") return;
+  const topic = normalizeMindmapSearchText(node.topic);
+  if (topic) topics.push(topic);
+  if (Array.isArray(node.children)) {
+    node.children.forEach((child) => collectLegacyMindmapTopics(child, topics));
+  }
+}
+
+function normalizeMindmapSearchText(value) {
+  let text = String(value || "");
+  if (!/[<&][a-z!/]/i.test(text)) return text;
+  for (let index = 0; index < 3 && /[<&][a-z!/]/i.test(text); index += 1) {
+    const next = text
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&amp;/g, "&")
+      .replace(/&quot;/g, "\"")
+      .replace(/&#39;/g, "'")
+      .replace(/<[^>]*>/g, "");
+    if (next === text) break;
+    text = next;
+  }
+  return text;
 }
 
 function writeBinaryVaultFile(requestedPath, body, res) {

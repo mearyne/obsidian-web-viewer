@@ -3444,9 +3444,28 @@ function renderMindmapDocument() {
         <button type="button" data-mindmap-action="forward" aria-label="다시 실행" title="다시 실행">↷</button>
         <button type="button" data-mindmap-action="insert-child" data-edit-only aria-label="하위 노드 추가" title="하위 노드 추가">+↓</button>
         <button type="button" data-mindmap-action="insert-sibling" data-edit-only aria-label="같은 단계 노드 추가" title="같은 단계 노드 추가">+→</button>
+        <button type="button" data-mindmap-action="insert-parent" data-edit-only aria-label="부모 노드 추가" title="부모 노드 추가">+↑</button>
         <button type="button" data-mindmap-action="remove-node" data-edit-only aria-label="선택 노드 삭제" title="선택 노드 삭제">⌫</button>
+        <button type="button" data-mindmap-action="move-up" data-edit-only aria-label="위로 이동" title="위로 이동">↑</button>
+        <button type="button" data-mindmap-action="move-down" data-edit-only aria-label="아래로 이동" title="아래로 이동">↓</button>
+        <button type="button" data-mindmap-action="expand-all" aria-label="전체 펼치기" title="전체 펼치기">⊞</button>
+        <button type="button" data-mindmap-action="collapse-all" aria-label="전체 접기" title="전체 접기">⊟</button>
+        <button type="button" data-mindmap-action="collapse-level-2" aria-label="2단계까지만 펼치기" title="2단계까지만 펼치기">L2</button>
         <button type="button" data-mindmap-action="fit" aria-label="화면에 맞춤" title="화면에 맞춤">⛶</button>
         <button type="button" data-mindmap-action="reset-layout" aria-label="레이아웃 정리" title="레이아웃 정리">↺</button>
+        <select class="mindmap-layout-select" data-mindmap-layout aria-label="마인드맵 레이아웃" title="마인드맵 레이아웃">
+          <option value="mindMap">Mind</option>
+          <option value="logicalStructure">Logic</option>
+          <option value="logicalStructureLeft">Left</option>
+          <option value="organizationStructure">Org</option>
+          <option value="catalogOrganization">Catalog</option>
+          <option value="timeline">Timeline</option>
+        </select>
+        <input class="mindmap-search-input" type="search" data-mindmap-search placeholder="검색" aria-label="마인드맵 내부 검색" />
+        <button type="button" data-mindmap-action="search-prev" aria-label="이전 검색 결과" title="이전 검색 결과">‹</button>
+        <button type="button" data-mindmap-action="search-next" aria-label="다음 검색 결과" title="다음 검색 결과">›</button>
+        <button type="button" data-mindmap-action="search-clear" aria-label="검색 해제" title="검색 해제">×</button>
+        <span class="mindmap-search-status" data-mindmap-search-status></span>
       </div>
       <div id="mindmapCanvas" class="mindmap-canvas" tabindex="0"></div>
     </section>
@@ -3478,6 +3497,7 @@ function renderSimpleMindMapDocument(data, canvas) {
   mindMap.on("data_change", () => {
     if (state.editMode && canEditNode(state.currentNode)) state.editorDirty = true;
   });
+  mindMap.on("search_info_change", updateMindmapSearchStatus);
   bindMindmapToolbarControls();
   requestAnimationFrame(() => {
     mindMap.resize();
@@ -3495,6 +3515,13 @@ function bindMindmapToolbarControls() {
       runMindmapToolbarAction(button.getAttribute("data-mindmap-action"));
     });
   });
+  els.mindmapShell?.querySelector("[data-mindmap-layout]")?.addEventListener("change", (event) => {
+    state.mindmapInstance?.setLayout?.(event.target.value);
+    fitMindmapToView();
+  });
+  els.mindmapShell?.querySelector("[data-mindmap-search]")?.addEventListener("input", (event) => {
+    runMindmapSearch(event.target.value);
+  });
 }
 
 function runMindmapToolbarAction(action) {
@@ -3505,14 +3532,72 @@ function runMindmapToolbarAction(action) {
   if (action === "forward") jm.execCommand?.("FORWARD");
   if (canEdit && action === "insert-child") jm.execCommand?.("INSERT_CHILD_NODE");
   if (canEdit && action === "insert-sibling") jm.execCommand?.("INSERT_NODE");
+  if (canEdit && action === "insert-parent") jm.execCommand?.("INSERT_PARENT_NODE");
   if (canEdit && action === "remove-node") jm.execCommand?.("REMOVE_NODE");
+  if (canEdit && action === "move-up") jm.execCommand?.("UP_NODE");
+  if (canEdit && action === "move-down") jm.execCommand?.("DOWN_NODE");
+  if (action === "expand-all") jm.execCommand?.("EXPAND_ALL");
+  if (action === "collapse-all") jm.execCommand?.("UNEXPAND_ALL");
+  if (action === "collapse-level-2") jm.execCommand?.("UNEXPAND_TO_LEVEL", 2);
   if (action === "fit") jm.view?.fit?.();
   if (action === "reset-layout") jm.execCommand?.("RESET_LAYOUT");
+  if (action === "search-next") runMindmapSearchNext();
+  if (action === "search-prev") runMindmapSearchPrevious();
+  if (action === "search-clear") clearMindmapSearch();
 }
 
 function fitMindmapToView() {
   const jm = state.mindmapInstance;
   jm?.view?.fit?.();
+}
+
+function currentMindmapSearchText() {
+  return els.mindmapShell?.querySelector("[data-mindmap-search]")?.value.trim() || "";
+}
+
+function runMindmapSearch(text) {
+  const query = String(text || "").trim();
+  if (!query) {
+    clearMindmapSearch(false);
+    return;
+  }
+  state.mindmapInstance?.search?.search(query);
+}
+
+function runMindmapSearchNext() {
+  const query = currentMindmapSearchText();
+  if (!query) return;
+  state.mindmapInstance?.search?.search(query);
+}
+
+function runMindmapSearchPrevious() {
+  const search = state.mindmapInstance?.search;
+  const query = currentMindmapSearchText();
+  if (!search || !query) return;
+  if (!search.isSearching || search.searchText !== query) {
+    search.search(query);
+    return;
+  }
+  const total = search.matchNodeList?.length || 0;
+  if (!total) return;
+  const previousIndex = search.currentIndex <= 0 ? total - 1 : search.currentIndex - 1;
+  search.jump(previousIndex);
+}
+
+function clearMindmapSearch(clearInput = true) {
+  if (clearInput) {
+    const input = els.mindmapShell?.querySelector("[data-mindmap-search]");
+    if (input) input.value = "";
+  }
+  state.mindmapInstance?.search?.endSearch();
+  updateMindmapSearchStatus({ currentIndex: -1, total: 0 });
+}
+
+function updateMindmapSearchStatus(info = {}) {
+  const status = els.mindmapShell?.querySelector("[data-mindmap-search-status]");
+  if (!status) return;
+  const total = Number(info.total) || 0;
+  status.textContent = total ? `${(Number(info.currentIndex) || 0) + 1}/${total}` : "";
 }
 
 async function saveMindmapEdit() {

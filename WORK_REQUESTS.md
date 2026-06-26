@@ -38,3 +38,4 @@
 - 2026-06-26: Find online demo sites for testing `simple-mind-map` and jsMind behavior.
 - 2026-06-26: Remove the jsMind library and fallback now that `simple-mind-map` is the mindmap renderer.
 - 2026-06-26: Break down `simple-mind-map` feature implementation scope so future work can be selected selectively.
+- 2026-06-26: Implement the first three selected `simple-mind-map` feature groups and include mindmap node text in global search.

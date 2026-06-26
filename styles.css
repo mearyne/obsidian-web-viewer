@@ -1991,7 +1991,9 @@ button:disabled {
   border: 1px solid var(--line);
   border-radius: 7px;
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
+  max-width: min(760px, calc(100% - 48px));
   padding: 4px;
   position: absolute;
   right: 24px;
@@ -2020,6 +2022,33 @@ button:disabled {
 .mindmap-toolbar button:disabled {
   cursor: not-allowed;
   opacity: 0.45;
+}
+
+.mindmap-layout-select,
+.mindmap-search-input {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--text);
+  font: inherit;
+  height: 26px;
+}
+
+.mindmap-layout-select {
+  max-width: 92px;
+}
+
+.mindmap-search-input {
+  min-width: 120px;
+  padding: 0 7px;
+  width: 150px;
+}
+
+.mindmap-search-status {
+  color: var(--muted);
+  font-size: 12px;
+  min-width: 34px;
+  text-align: center;
 }
 
 .mindmap-canvas {
@@ -2066,9 +2095,15 @@ button:disabled {
   }
 
   .mindmap-toolbar {
-    flex-wrap: wrap;
+    left: 14px;
+    max-width: none;
     right: 14px;
     top: 14px;
+  }
+
+  .mindmap-search-input {
+    flex: 1 1 140px;
+    min-width: 0;
   }
 
   .mindmap-canvas { min-height: 0; }
