@@ -143,6 +143,7 @@ const els = {
   regexSearchToggle: document.querySelector("#regexSearchToggle"),
   treeSortSelect: document.querySelector("#treeSortSelect"),
   treeSortDirectionButton: document.querySelector("#treeSortDirectionButton"),
+  recentSevenDaysButton: document.querySelector("#recentSevenDaysButton"),
   expandTreeButton: document.querySelector("#expandTreeButton"),
   revealCurrentButton: document.querySelector("#revealCurrentButton"),
   collapseTreeButton: document.querySelector("#collapseTreeButton"),
@@ -356,6 +357,7 @@ els.regexSearchToggle.addEventListener("change", renderTree);
 els.contentSearchToggleButton?.addEventListener("click", toggleContentSearchSnippets);
 els.treeSortSelect.addEventListener("change", updateTreeSortMode);
 els.treeSortDirectionButton.addEventListener("click", toggleTreeSortDirection);
+els.recentSevenDaysButton?.addEventListener("click", showRecentSevenDaysDocuments);
 els.expandTreeButton.addEventListener("click", expandAllTree);
 els.revealCurrentButton.addEventListener("click", revealCurrentFileInTree);
 els.collapseTreeButton.addEventListener("click", collapseAllTree);
@@ -9929,6 +9931,58 @@ function showEmptyTab() {
   state.activeView = "note";
   document.documentElement.classList.remove("matrix-mode");
   updateSyncStatus?.();
+}
+
+function showRecentSevenDaysDocuments() {
+  state.currentPath = null;
+  state.currentContent = "";
+  state.currentNode = null;
+  els.markdownView.hidden = true;
+  els.editorShell.hidden = true;
+  if (els.calendarView) els.calendarView.hidden = true;
+  if (els.noteTitleArea) els.noteTitleArea.hidden = true;
+  if (els.headingControlsOverlay) els.headingControlsOverlay.hidden = true;
+  if (els.viewControlsOverlay) els.viewControlsOverlay.hidden = false;
+  els.noteTitle.textContent = "최근 7일 문서";
+  if (els.notePath) els.notePath.textContent = "최근 7일";
+  state.activeView = "note";
+  updateEditButtons();
+  updateHistoryButtons();
+  renderRecentSevenDaysPage();
+  if (els.newTabPage) els.newTabPage.hidden = false;
+  document.documentElement.classList.remove("matrix-mode");
+  updateSyncStatus?.();
+}
+
+function renderRecentSevenDaysPage() {
+  if (!els.newTabPage) return;
+  const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const files = [...state.files.values()]
+    .filter((node) => node.kind === "file" && isOpenableDocument(node.name))
+    .filter((node) => Math.max(Number(node.updatedAt) || 0, Number(node.createdAt) || 0) >= cutoff)
+    .sort((a, b) => Math.max(Number(b.updatedAt) || 0, Number(b.createdAt) || 0) - Math.max(Number(a.updatedAt) || 0, Number(a.createdAt) || 0))
+    .slice(0, 100);
+  const list = files.length ? `<ul class="new-tab-list">${files.map((node) => {
+    const changedAt = Math.max(Number(node.updatedAt) || 0, Number(node.createdAt) || 0);
+    const changedLabel = new Date(changedAt).toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+    return `
+      <li class="new-tab-item"><button type="button" class="new-tab-file-btn" data-path="${escapeAttribute(node.path)}">
+        <span class="new-tab-file-name">${escapeHtml(displayDocumentTitle(node.name))}</span>
+        <span class="new-tab-file-path">${escapeHtml(node.path)}</span>
+        <time class="new-tab-file-path" datetime="${new Date(changedAt).toISOString()}">${escapeHtml(changedLabel)}</time>
+      </button></li>`;
+  }).join("")}</ul>` : `<p class="new-tab-empty">최근 7일 안에 생성되거나 수정된 문서가 없습니다.</p>`;
+  els.newTabPage.innerHTML = `
+    <div class="new-tab-content">
+      <h2 class="new-tab-title">최근 7일 문서</h2>
+      <section class="new-tab-section">
+        ${list}
+      </section>
+    </div>
+  `;
+  els.newTabPage.querySelectorAll("[data-path]").forEach((btn) => {
+    btn.addEventListener("click", () => void openFile(btn.dataset.path));
+  });
 }
 
 function renderTodayFilesSection() {
