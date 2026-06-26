@@ -60,3 +60,4 @@
 - 2026-06-27: Keep embedded mindmap canvas clicks from opening files and save mindmaps correctly when switching tabs.
 - 2026-06-27: Hide heading controls on mindmap edit screens and add a Ctrl+P command palette with date-range merged document reading.
 - 2026-06-27: Make each document visually distinct in the merged document reading view.
+- 2026-06-27: Fix web clipper saves from YouTube by allowing private-network CORS preflight requests.

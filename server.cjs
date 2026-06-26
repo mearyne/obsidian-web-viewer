@@ -103,12 +103,20 @@ const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://localhost:${port}`);
   const requestPath = decodeURIComponent(url.pathname);
 
+  if (req.method === "OPTIONS" && requestPath.startsWith("/api/")) {
+    setCorsHeaders(res);
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+
   if (requestPath === "/api/events") {
     res.writeHead(200, {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
       "Connection": "keep-alive",
       "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Private-Network": "true",
     });
     res.write(`event: build-id\ndata: ${JSON.stringify({ id: BUILD_ID })}\n\n`);
     sseClients.add(res);
@@ -285,9 +293,7 @@ const server = http.createServer((req, res) => {
   }
 
   if (requestPath === "/api/settings") {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET, PUT, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    setCorsHeaders(res, "GET, PUT, OPTIONS");
     if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return; }
     if (req.method === "PUT") {
       receiveBody(req, (error, body) => {
@@ -331,9 +337,7 @@ const server = http.createServer((req, res) => {
   }
 
   if (requestPath === "/api/clip") {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    setCorsHeaders(res, "POST, OPTIONS");
     if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return; }
     if (req.method !== "POST") { sendJsonCors(res, 405, { error: "Method not allowed" }); return; }
     receiveBody(req, (error, body) => {
@@ -1723,6 +1727,9 @@ function sendClipBookmarklet(folder, req, res) {
     res.writeHead(200, {
       "Content-Type": "text/plain; charset=utf-8",
       "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Allow-Private-Network": "true",
       "Cache-Control": "no-store",
     });
     res.end(bookmarklet);
@@ -1731,10 +1738,17 @@ function sendClipBookmarklet(folder, req, res) {
   }
 }
 
+function setCorsHeaders(res, methods = "GET, POST, PUT, PATCH, DELETE, OPTIONS") {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", methods);
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Private-Network", "true");
+}
+
 function sendJsonCors(res, status, value) {
+  setCorsHeaders(res);
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
-    "Access-Control-Allow-Origin": "*",
   });
   res.end(JSON.stringify(value));
 }
