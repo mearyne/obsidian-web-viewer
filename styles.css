@@ -1935,9 +1935,42 @@ button:disabled {
 }
 
 .mindmap-shell {
+  --mindmap-bg: #fbfcff;
+  --mindmap-bg-grid: rgba(92, 108, 132, 0.08);
+  --mindmap-node-bg: #ffffff;
+  --mindmap-node-border: #c9d3e3;
+  --mindmap-node-text: #1e293b;
+  --mindmap-node-hover-bg: #edf5ff;
+  --mindmap-root-bg: #4056c8;
+  --mindmap-root-border: #3142a4;
+  --mindmap-root-text: #ffffff;
+  --mindmap-selected-bg: #f5b82e;
+  --mindmap-selected-border: #b97808;
+  --mindmap-selected-text: #17120a;
+  --mindmap-expander-bg: #ffffff;
+  --mindmap-expander-text: #4056c8;
+  --mindmap-line: #7a869a;
   flex: 1 1 auto;
   min-height: 0;
   width: 100%;
+}
+
+[data-theme="dark"] .mindmap-shell {
+  --mindmap-bg: #171a1f;
+  --mindmap-bg-grid: rgba(210, 219, 232, 0.07);
+  --mindmap-node-bg: #252b35;
+  --mindmap-node-border: #3f4a5c;
+  --mindmap-node-text: #e7edf6;
+  --mindmap-node-hover-bg: #303949;
+  --mindmap-root-bg: #69b7a5;
+  --mindmap-root-border: #8fd1c4;
+  --mindmap-root-text: #10211f;
+  --mindmap-selected-bg: #f0c95c;
+  --mindmap-selected-border: #ffe08a;
+  --mindmap-selected-text: #211801;
+  --mindmap-expander-bg: #252b35;
+  --mindmap-expander-text: #8fd1c4;
+  --mindmap-line: #687489;
 }
 
 .mindmap-shell[hidden] {
@@ -1983,7 +2016,11 @@ button:disabled {
 }
 
 .mindmap-canvas {
-  background: var(--surface);
+  background:
+    linear-gradient(var(--mindmap-bg-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--mindmap-bg-grid) 1px, transparent 1px),
+    var(--mindmap-bg);
+  background-size: 28px 28px;
   border: 1px solid var(--line);
   border-radius: 8px;
   height: 100%;
@@ -1998,18 +2035,52 @@ button:disabled {
   border-color: var(--accent);
 }
 
-.mindmap-canvas jmnode {
+.mindmap-canvas jmnodes.theme-primary jmnode {
+  background: var(--mindmap-node-bg);
+  border: 1px solid var(--mindmap-node-border);
   border-radius: 7px;
-  box-shadow: none;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.1);
+  color: var(--mindmap-node-text);
   font-family: inherit;
 }
 
-.mindmap-canvas jmnode.root {
+.mindmap-canvas jmnodes.theme-primary jmnode:hover {
+  background: var(--mindmap-node-hover-bg);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.16);
+  color: var(--mindmap-node-text);
+}
+
+.mindmap-canvas jmnodes.theme-primary jmnode.root {
+  background: var(--mindmap-root-bg);
+  border-color: var(--mindmap-root-border);
+  color: var(--mindmap-root-text);
   font-weight: 750;
 }
 
-.mindmap-canvas jmnode.selected {
-  box-shadow: 0 0 0 2px var(--accent);
+.mindmap-canvas jmnodes.theme-primary jmnode.selected {
+  background: var(--mindmap-selected-bg);
+  border-color: var(--mindmap-selected-border);
+  box-shadow: 0 0 0 2px var(--mindmap-selected-border), 0 6px 18px rgba(15, 23, 42, 0.18);
+  color: var(--mindmap-selected-text);
+}
+
+.mindmap-canvas jmnodes.theme-primary jmexpander {
+  background: var(--mindmap-expander-bg);
+  border-color: var(--mindmap-node-border);
+  color: var(--mindmap-expander-text);
+}
+
+.mindmap-canvas jmnodes.theme-primary jmexpander:hover {
+  border-color: var(--mindmap-root-border);
+  color: var(--mindmap-root-bg);
+}
+
+.mindmap-canvas input {
+  background: var(--mindmap-node-bg);
+  border: 1px solid var(--mindmap-root-border);
+  border-radius: 5px;
+  color: var(--mindmap-node-text);
+  outline: none;
 }
 
 @media (max-width: 780px) {

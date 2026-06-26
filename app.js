@@ -2492,6 +2492,7 @@ function setTheme(theme) {
   els.themeButton.textContent = theme === "dark" ? "☀️" : "🌙";
   els.themeButton.title = theme === "dark" ? "Light" : "Dark";
   els.themeButton.setAttribute("aria-label", els.themeButton.title);
+  updateVisibleMindmapTheme();
 }
 
 function initOptions() {
@@ -3329,6 +3330,25 @@ function buildMindmapDocumentContent(data, previousContent = "") {
   return `# ${title}\n\n${block}\n`;
 }
 
+function getMindmapCssValue(name, fallback) {
+  const source = els.mindmapShell && !els.mindmapShell.hidden ? els.mindmapShell : document.documentElement;
+  return getComputedStyle(source).getPropertyValue(name).trim() || fallback;
+}
+
+function getMindmapLineColor() {
+  return getMindmapCssValue("--mindmap-line", getComputedStyle(document.documentElement).getPropertyValue("--line-strong").trim() || "#6b7280");
+}
+
+function updateVisibleMindmapTheme() {
+  const jm = state.mindmapInstance;
+  if (!jm?.view || !els.mindmapShell || els.mindmapShell.hidden) return;
+  const lineColor = getMindmapLineColor();
+  if (jm.options?.view) jm.options.view.line_color = lineColor;
+  if (jm.view.opts) jm.view.opts.line_color = lineColor;
+  if (jm.view.graph?.opts) jm.view.graph.opts.line_color = lineColor;
+  jm.view.show_lines?.();
+}
+
 function renderMindmapDocument() {
   const data = extractMindmapData(state.currentContent) || createDefaultMindmapData(displayDocumentTitle(state.currentNode?.name || state.currentPath || "마인드맵"));
   state.mindmapInstance = null;
@@ -3363,7 +3383,7 @@ function renderMindmapDocument() {
       hmargin: 80,
       vmargin: 40,
       line_width: 2,
-      line_color: getComputedStyle(document.documentElement).getPropertyValue("--line-strong").trim() || "#6b7280",
+      line_color: getMindmapLineColor(),
     },
     layout: { hspace: 42, vspace: 12, pspace: 12 },
     shortcut: {
