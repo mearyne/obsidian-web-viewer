@@ -145,6 +145,7 @@ const els = {
   treeSortSelect: document.querySelector("#treeSortSelect"),
   treeSortDirectionButton: document.querySelector("#treeSortDirectionButton"),
   recentDaysInput: document.querySelector("#recentDaysInput"),
+  recentDaysClearButton: document.querySelector("#recentDaysClearButton"),
   expandTreeButton: document.querySelector("#expandTreeButton"),
   revealCurrentButton: document.querySelector("#revealCurrentButton"),
   collapseTreeButton: document.querySelector("#collapseTreeButton"),
@@ -294,6 +295,7 @@ const els = {
   imageLightboxClose: document.querySelector("#imageLightboxClose"),
   savedVaultList: document.querySelector("#savedVaultList"),
   editButton: document.querySelector("#editButton"),
+  recentSevenDaysQuickButton: document.querySelector("#recentSevenDaysQuickButton"),
   themeButton: document.querySelector("#themeButton"),
 };
 
@@ -359,6 +361,7 @@ els.contentSearchToggleButton?.addEventListener("click", toggleContentSearchSnip
 els.treeSortSelect.addEventListener("change", updateTreeSortMode);
 els.treeSortDirectionButton.addEventListener("click", toggleTreeSortDirection);
 els.recentDaysInput?.addEventListener("input", handleRecentDaysFilterInput);
+els.recentDaysClearButton?.addEventListener("click", clearRecentDaysFilter);
 els.expandTreeButton.addEventListener("click", expandAllTree);
 els.revealCurrentButton.addEventListener("click", revealCurrentFileInTree);
 els.collapseTreeButton.addEventListener("click", collapseAllTree);
@@ -478,6 +481,7 @@ els.optionsBackdrop.addEventListener("click", closeOptionsMenu);
 els.imageLightbox.addEventListener("click", closeImageLightbox);
 els.imageLightboxClose.addEventListener("click", closeImageLightbox);
 els.editButton.addEventListener("click", openCurrentFileInObsidian);
+els.recentSevenDaysQuickButton?.addEventListener("click", () => setRecentDaysFilter(7));
 els.themeButton.addEventListener("click", toggleTheme);
 els.sidebarResizeHandle.addEventListener("pointerdown", startSidebarResize);
 els.noteTitle?.addEventListener("click", showFullCurrentTitle);
@@ -1567,14 +1571,24 @@ function renderTree() {
 
 function handleRecentDaysFilterInput() {
   const value = Number(els.recentDaysInput?.value || 0);
-  state.recentDaysFilter = Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+  setRecentDaysFilter(Number.isFinite(value) && value > 0 ? Math.floor(value) : 0, { syncInput: false });
+}
+
+function setRecentDaysFilter(days, { syncInput = true } = {}) {
+  state.recentDaysFilter = Math.max(0, Math.floor(Number(days) || 0));
+  if (syncInput && els.recentDaysInput) els.recentDaysInput.value = state.recentDaysFilter > 0 ? String(state.recentDaysFilter) : "";
   state.searchTreeAutoExpand = state.recentDaysFilter > 0 || els.searchInput?.value?.trim().length >= 2;
   renderTree();
+}
+
+function clearRecentDaysFilter() {
+  setRecentDaysFilter(0);
 }
 
 function updateRecentDaysFilterInput() {
   if (!els.recentDaysInput) return;
   els.recentDaysInput.classList.toggle("active", state.recentDaysFilter > 0);
+  if (els.recentDaysClearButton) els.recentDaysClearButton.hidden = state.recentDaysFilter <= 0;
 }
 
 function createRecentDaysMatcher(days) {

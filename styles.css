@@ -178,11 +178,11 @@ button:disabled {
 }
 
 .brand {
-  align-items: center;
+  align-items: end;
   display: flex;
   gap: 8px;
   justify-content: space-between;
-  padding: 16px 16px 10px;
+  padding: 10px 10px 6px;
 }
 
 .brand .icon-button {
@@ -202,6 +202,11 @@ button:disabled {
   color: var(--muted);
   font-size: 12px;
   margin: 5px 0 0;
+}
+
+.brand .search-row {
+  flex: 1 1 auto;
+  padding: 0;
 }
 
 .actions {
@@ -323,11 +328,19 @@ button:disabled {
   color: var(--accent);
 }
 
-.tree-sort {
+.tree-filter-sort-row {
   display: grid;
   gap: 6px;
-  grid-template-columns: minmax(0, 1fr) 34px;
-  padding: 0 10px 10px;
+  grid-template-columns: minmax(96px, 0.74fr) minmax(118px, 1fr);
+  padding: 0 10px 8px;
+}
+
+.tree-sort {
+  display: grid;
+  gap: 4px;
+  grid-template-columns: minmax(0, 1fr) 28px;
+  min-width: 0;
+  padding: 0;
 }
 
 .tree-sort select,
@@ -337,7 +350,7 @@ button:disabled {
   border-radius: 6px;
   color: var(--muted);
   font-size: 12px;
-  min-height: 30px;
+  min-height: 28px;
 }
 
 .tree-sort select {
@@ -349,10 +362,6 @@ button:disabled {
   padding: 0;
 }
 
-.tree-filter-row {
-  padding: 0 10px 8px;
-}
-
 .recent-days-filter {
   align-items: center;
   background: var(--surface);
@@ -361,10 +370,11 @@ button:disabled {
   color: var(--muted);
   display: grid;
   font-size: 12px;
-  gap: 6px;
-  grid-template-columns: auto minmax(64px, 1fr) auto;
-  min-height: 32px;
-  padding: 0 8px;
+  gap: 4px;
+  grid-template-columns: auto minmax(34px, 1fr) auto 18px;
+  min-height: 28px;
+  min-width: 0;
+  padding: 0 5px 0 7px;
 }
 
 .recent-days-filter:focus-within {
@@ -388,6 +398,25 @@ button:disabled {
 .recent-days-filter input.active {
   color: var(--accent-strong);
   font-weight: 650;
+}
+
+.recent-days-filter button {
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  min-height: 20px;
+  padding: 0;
+  width: 18px;
+}
+
+.recent-days-filter button[hidden] {
+  display: block;
+  pointer-events: none;
+  visibility: hidden;
 }
 
 .tree-actions {
@@ -1069,6 +1098,11 @@ button:disabled {
 .sidebar-options > button.active {
   background: var(--accent);
   color: white;
+}
+
+#recentSevenDaysQuickButton {
+  font-size: 12px;
+  font-weight: 650;
 }
 
 .sidebar-theme-button {

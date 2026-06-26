@@ -12,22 +12,18 @@
     <div class="app-shell">
       <aside class="sidebar" id="sidebarPanel" aria-label="Vault navigation">
         <div class="brand">
-          <div>
-            <h1>Vault Viewer</h1>
-            <p id="vaultStatus">Sample vault</p>
+          <p id="vaultStatus" hidden></p>
+          <div class="search-row">
+            <label class="search-box">
+              <span>검색</span>
+              <input id="searchInput" type="search" placeholder="파일명 검색" autocomplete="off" />
+            </label>
+            <div class="search-options" aria-label="검색 옵션">
+              <label title="대소문자 구분"><input id="caseSearchToggle" type="checkbox" /> <span>Aa</span></label>
+              <label title="정규식"><input id="regexSearchToggle" type="checkbox" /> <span>.*</span></label>
+            </div>
           </div>
           <button id="sidebarPinButton" class="icon-button" type="button" aria-pressed="false" aria-label="사이드바 고정" title="사이드바 고정">📍</button>
-        </div>
-
-        <div class="search-row">
-          <label class="search-box">
-            <span>검색</span>
-            <input id="searchInput" type="search" placeholder="파일명 검색" autocomplete="off" />
-          </label>
-          <div class="search-options" aria-label="검색 옵션">
-            <label title="대소문자 구분"><input id="caseSearchToggle" type="checkbox" /> <span>Aa</span></label>
-            <label title="정규식"><input id="regexSearchToggle" type="checkbox" /> <span>.*</span></label>
-          </div>
         </div>
 
         <div class="search-status-row">
@@ -35,23 +31,23 @@
           <button id="contentSearchToggleButton" class="content-search-toggle" type="button" hidden>본문 내용 보기</button>
         </div>
 
-        <div class="tree-sort" aria-label="트리 정렬">
-          <select id="treeSortSelect" aria-label="정렬 기준">
-            <option value="name">이름순</option>
-            <option value="updated">업데이트순</option>
-            <option value="created" selected>생성순</option>
-            <option value="size">크기순</option>
-            <option value="type">종류순</option>
-          </select>
-          <button id="treeSortDirectionButton" type="button" aria-label="정렬 방향: 역배" title="정렬 방향: 역배">↓</button>
-        </div>
-
-        <div class="tree-filter-row">
-          <label class="recent-days-filter" title="생성 또는 수정된 문서를 최근 N일로 필터링">
-            <span>최근</span>
+        <div class="tree-filter-sort-row">
+          <div class="recent-days-filter" title="생성 또는 수정된 문서를 최근 N일로 필터링">
+            <label for="recentDaysInput">최근</label>
             <input id="recentDaysInput" type="number" inputmode="numeric" min="1" max="3650" placeholder="전체" aria-label="최근 기간 필터 일수" />
             <span>일</span>
-          </label>
+            <button id="recentDaysClearButton" type="button" hidden aria-label="최근 기간 필터 초기화" title="초기화">×</button>
+          </div>
+          <div class="tree-sort" aria-label="트리 정렬">
+            <select id="treeSortSelect" aria-label="정렬 기준">
+              <option value="name">이름순</option>
+              <option value="updated">업데이트순</option>
+              <option value="created" selected>생성순</option>
+              <option value="size">크기순</option>
+              <option value="type">종류순</option>
+            </select>
+            <button id="treeSortDirectionButton" type="button" aria-label="정렬 방향: 역배" title="정렬 방향: 역배">↓</button>
+          </div>
         </div>
 
         <div class="tree-actions" aria-label="트리 제어">
@@ -63,7 +59,7 @@
         <nav id="fileTree" class="file-tree" aria-label="Vault files"></nav>
 
         <div class="sidebar-options">
-          <button id="editButton" type="button" disabled aria-label="Obsidian에서 열기" title="Obsidian">
+          <button id="editButton" type="button" disabled aria-label="외부 앱에서 열기" title="외부 앱에서 열기">
             <svg class="obsidian-logo" aria-hidden="true" viewBox="0 0 64 64">
               <path d="M23 3 9 22l8 33 21 6 17-25L40 7Z" />
               <path d="M23 3 40 7l-9 16L9 22Z" />
@@ -71,6 +67,7 @@
               <path d="M31 23 40 7l15 29Z" />
             </svg>
           </button>
+          <button id="recentSevenDaysQuickButton" type="button" aria-label="최근 7일 필터" title="최근 7일">최근7일</button>
           <button id="randomPriorityToggleButton" type="button" aria-pressed="false" aria-label="랜덤: 본 지 오래된 파일 우선 꺼짐" title="랜덤: 본 지 오래된 파일 우선 꺼짐">⏳</button>
           <button id="themeButton" class="sidebar-theme-button" type="button" aria-label="테마 변경" title="테마 변경">🌙</button>
           <button id="optionsButton" type="button" aria-haspopup="dialog" aria-expanded="false" aria-label="옵션" title="옵션">⚙️</button>
