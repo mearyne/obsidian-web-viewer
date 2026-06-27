@@ -1168,6 +1168,7 @@ function normalizeSettings(settings) {
     mindmapDarkTheme: normalizeMindmapTheme(settings?.mindmapDarkTheme, normalizeMindmapTheme(settings?.mindmapTheme, "dark")),
     mindmapAutoFit: typeof settings?.mindmapAutoFit === "boolean" ? settings.mindmapAutoFit : true,
     mindmapAdvancedTools: typeof settings?.mindmapAdvancedTools === "boolean" ? settings.mindmapAdvancedTools : true,
+    hideFrontmatter: typeof settings?.hideFrontmatter === "boolean" ? settings.hideFrontmatter : false,
     clipperRules: Array.isArray(settings?.clipperRules)
       ? settings.clipperRules
           .filter((item) => item && typeof item.urlPattern === "string")

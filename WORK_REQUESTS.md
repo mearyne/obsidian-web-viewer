@@ -73,3 +73,4 @@
 - 2026-06-28: Check whether mindmap documents are related to the "new tab" position.
 - 2026-06-28: Keep empty new tabs at the far right so they cannot sit left of mindmap documents.
 - 2026-06-28: Open links from the merged document reading view in a new tab.
+- 2026-06-28: Add a globally synced option to hide rendered frontmatter.

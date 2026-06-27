@@ -23,6 +23,16 @@ const LINK_OPEN_RULES = globalThis.LinkOpenRules || {
     return forceNewTab || embeddedNote ? "new-tab" : "current-tab";
   },
 };
+const FRONTMATTER_DISPLAY_RULES = globalThis.FrontmatterDisplayRules || {
+  normalizeHideFrontmatter(value, fallback = false) {
+    if (value === true || value === "true" || value === "1") return true;
+    if (value === false || value === "false" || value === "0") return false;
+    return Boolean(fallback);
+  },
+  shouldRenderFrontmatter(frontmatter, hideFrontmatter = false) {
+    return Boolean(String(frontmatter || "").trim()) && !this.normalizeHideFrontmatter(hideFrontmatter);
+  },
+};
 
 const state = {
   files: new Map(),
@@ -135,6 +145,7 @@ const state = {
   mindmapContext: null,
   mindmapEmbedData: new Map(),
   mindmapOptions: { layout: "mindMap", lightTheme: "light", darkTheme: "dark", autoFit: true, advancedTools: true },
+  hideFrontmatter: false,
   mindmapKeyCaptureActive: false,
   mindmapToolbarDrag: null,
   mindmapDirectImagePasteAt: 0,
@@ -330,6 +341,7 @@ const els = {
   calendarRowFontSizeInput: document.querySelector("#calendarRowFontSizeInput"),
   contentAlignSelect: document.querySelector("#contentAlignSelect"),
   contentMaxWidthInput: document.querySelector("#contentMaxWidthInput"),
+  hideFrontmatterInput: null,
   splitPane: document.querySelector("#splitPane"),
   splitTitle: document.querySelector("#splitTitle"),
   splitCloseButton: document.querySelector("#splitCloseButton"),
@@ -535,6 +547,9 @@ els.searchExcludeInput?.addEventListener("input", handleSearchExcludeInput);
 els.optionsMenu?.addEventListener("change", (event) => {
   if (event.target?.matches?.("#mindmapLayoutSelect, #mindmapLightThemeSelect, #mindmapDarkThemeSelect, #mindmapAutoFitInput, #mindmapAdvancedToolsInput")) {
     handleMindmapOptionInput();
+  }
+  if (event.target?.matches?.("#hideFrontmatterInput")) {
+    handleHideFrontmatterInput();
   }
 });
 els.discordWebhookInput?.addEventListener("input", scheduleSettingsSave);
@@ -3092,6 +3107,7 @@ function setTheme(theme) {
 }
 
 function initOptions() {
+  ensureDisplayOptionsSection();
   ensureMindmapOptionsSection();
   loadMindmapOptionsFromLocalStorage();
   const savedCalendarPath = localStorage.getItem("obsidian-web-viewer-calendar-paths") || "";
@@ -3115,6 +3131,7 @@ function initOptions() {
   const savedSearchExclude = localStorage.getItem("obsidian-web-viewer-search-exclude") || "";
   state.searchExcludePaths = parsePathList(savedSearchExclude);
   if (els.searchExcludeInput) els.searchExcludeInput.value = savedSearchExclude;
+  applyHideFrontmatterOption(localStorage.getItem("obsidian-web-viewer-hide-frontmatter"), { persist: false, rerender: false });
   // Discord 알림 목록 기본 렌더링 (서버 설정 로드 전 기본값)
   renderDiscordNotifyList("todo", [60]);
   renderDiscordNotifyList("event", [60]);
@@ -3269,6 +3286,23 @@ function handleMindmapOptionInput() {
   scheduleSettingsSave();
 }
 
+function ensureDisplayOptionsSection() {
+  if (!els.optionsMenu || document.getElementById("hideFrontmatterInput")) {
+    els.hideFrontmatterInput = document.getElementById("hideFrontmatterInput");
+    return;
+  }
+  const alignField = els.contentAlignSelect?.closest(".option-field");
+  if (!alignField) return;
+  const field = document.createElement("label");
+  field.className = "option-field option-field-row";
+  field.innerHTML = `
+    <span>Hide frontmatter</span>
+    <input id="hideFrontmatterInput" type="checkbox" />
+  `;
+  alignField.after(field);
+  els.hideFrontmatterInput = field.querySelector("#hideFrontmatterInput");
+}
+
 async function loadServerSettings() {
   try {
     const response = await fetch("/api/settings", { cache: "no-store" });
@@ -3315,6 +3349,9 @@ async function loadServerSettings() {
       }
     }
     applyMindmapOptions(settings, { persist: true, applyVisible: true });
+    if ("hideFrontmatter" in settings) {
+      applyHideFrontmatterOption(settings.hideFrontmatter, { persist: true, rerender: true });
+    }
     if (typeof settings.discordWebhookUrl === "string" && els.discordWebhookInput) {
       els.discordWebhookInput.value = settings.discordWebhookUrl;
     }
@@ -3379,6 +3416,29 @@ function handleSearchExcludeInput() {
   localStorage.setItem("obsidian-web-viewer-search-exclude", els.searchExcludeInput?.value || "");
   scheduleSettingsSave();
   renderTree();
+}
+
+function applyHideFrontmatterOption(value, { persist = true, rerender = true } = {}) {
+  const next = FRONTMATTER_DISPLAY_RULES.normalizeHideFrontmatter(value, state.hideFrontmatter);
+  const changed = next !== state.hideFrontmatter;
+  state.hideFrontmatter = next;
+  if (els.hideFrontmatterInput) els.hideFrontmatterInput.checked = next;
+  if (persist) localStorage.setItem("obsidian-web-viewer-hide-frontmatter", next ? "1" : "0");
+  if (rerender && changed) rerenderFrontmatterSensitiveViews();
+}
+
+function handleHideFrontmatterInput() {
+  applyHideFrontmatterOption(Boolean(els.hideFrontmatterInput?.checked), { persist: true, rerender: true });
+  scheduleSettingsSave();
+}
+
+function rerenderFrontmatterSensitiveViews() {
+  if (state.activeView === "merged" && state.mergedDocumentRange) {
+    void renderMergedDocuments(state.mergedDocumentRange);
+    return;
+  }
+  if (state.activeView === "note" && state.currentPath && !state.editMode) renderCurrentDocument();
+  if (els.editorPreview && state.editMode) els.editorPreview.innerHTML = renderMarkdown(els.markdownEditor?.value || "");
 }
 
 async function openNewNote() {
@@ -3993,6 +4053,7 @@ async function saveServerSettings() {
         mindmapDarkTheme: state.mindmapOptions.darkTheme,
         mindmapAutoFit: state.mindmapOptions.autoFit,
         mindmapAdvancedTools: state.mindmapOptions.advancedTools,
+        hideFrontmatter: state.hideFrontmatter,
       }),
     });
   } catch {
@@ -10126,7 +10187,8 @@ function renderMarkdown(source, context = {}) {
   const openHeadings = [];
   const documentPath = context.path || "";
 
-  if (frontmatter) html.push(renderFrontmatter(frontmatter));
+  const hideFrontmatter = context.hideFrontmatter ?? state.hideFrontmatter;
+  if (FRONTMATTER_DISPLAY_RULES.shouldRenderFrontmatter(frontmatter, hideFrontmatter)) html.push(renderFrontmatter(frontmatter));
 
   while (i < lines.length) {
     const line = lines[i];
