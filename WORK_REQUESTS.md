@@ -63,3 +63,4 @@
 - 2026-06-27: Fix web clipper saves from YouTube by allowing private-network CORS preflight requests.
 - 2026-06-27: Fix mindmap Ctrl+S save/reset behavior and child-node border styling, and open merged documents in a new tab with a visible drag/click calendar range picker.
 - 2026-06-27: Improve completion report table formatting, add distinct merged-document colors, adjust mindmap child-depth shading, and prevent duplicate calendar tabs.
+- 2026-06-27: Adjust mindmap depth shading from dark to light, add command palette keyboard selection and sidebar button, separate embed controls, and restyle the options dialog.

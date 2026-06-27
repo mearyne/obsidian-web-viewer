@@ -221,6 +221,7 @@ const els = {
   fileTree: document.querySelector("#fileTree"),
   openVaultButton: document.querySelector("#openVaultButton"),
   sidebarToggle: document.querySelector("#sidebarToggle"),
+  commandButton: document.querySelector("#commandButton"),
   searchInput: document.querySelector("#searchInput"),
   caseSearchToggle: document.querySelector("#caseSearchToggle"),
   regexSearchToggle: document.querySelector("#regexSearchToggle"),
@@ -437,6 +438,7 @@ console.log(\`\${vault} markdown viewer\`);
 els.openVaultButton?.addEventListener("click", openVault);
 els.sidebarToggle.addEventListener("click", toggleSidebar);
 els.sidebarPinButton?.addEventListener("click", toggleSidebarPin);
+els.commandButton?.addEventListener("click", openCommandPalette);
 els.searchInput.addEventListener("input", renderTree);
 els.caseSearchToggle.addEventListener("change", renderTree);
 els.regexSearchToggle.addEventListener("change", renderTree);
@@ -925,17 +927,40 @@ function openCommandPalette() {
   });
   const input = overlay.querySelector(".command-palette-input");
   const item = overlay.querySelector("[data-command='merged-documents']");
+  let selectedIndex = 0;
+  const visibleItems = () => [...overlay.querySelectorAll(".command-palette-item")].filter((button) => !button.hidden);
+  const updateSelected = () => {
+    const items = visibleItems();
+    if (!items.length) {
+      selectedIndex = 0;
+      overlay.querySelectorAll(".command-palette-item").forEach((button) => button.classList.remove("selected"));
+      return;
+    }
+    selectedIndex = Math.max(0, Math.min(selectedIndex, items.length - 1));
+    overlay.querySelectorAll(".command-palette-item").forEach((button) => button.classList.remove("selected"));
+    items[selectedIndex]?.classList.add("selected");
+  };
   const runSelected = () => {
+    const selected = visibleItems()[selectedIndex];
+    if (!selected) return;
     closeCommandPalette();
-    openMergedDocumentsDialog();
+    if (selected.dataset.command === "merged-documents") openMergedDocumentsDialog();
   };
   item.addEventListener("click", runSelected);
   input.addEventListener("input", () => {
     const query = input.value.trim().toLowerCase();
     item.hidden = query && !"문서 합쳐보기 merged documents".includes(query);
+    selectedIndex = 0;
+    updateSelected();
   });
   input.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" && !item.hidden) {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      const items = visibleItems();
+      if (!items.length) return;
+      event.preventDefault();
+      selectedIndex = (selectedIndex + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+      updateSelected();
+    } else if (event.key === "Enter") {
       event.preventDefault();
       runSelected();
     } else if (event.key === "Escape") {
@@ -944,6 +969,7 @@ function openCommandPalette() {
     }
   });
   document.body.append(overlay);
+  updateSelected();
   requestAnimationFrame(() => input.focus());
 }
 
@@ -4177,12 +4203,9 @@ function applyMindmapBranchTheme(root) {
 function applyMindmapBranchNodeStyle(node, hue, depth, dark) {
   if (!node?.data) return;
   const saturation = dark ? 52 : 70;
-  const wave = depth % 6;
-  const distanceFromPeak = Math.abs(wave - 3);
-  const darkenAmount = 18 - distanceFromPeak * 6;
   const lightness = dark
-    ? Math.max(28, Math.min(50, 47 - darkenAmount))
-    : Math.max(64, Math.min(92, 90 - darkenAmount));
+    ? Math.min(52, 30 + depth * 5)
+    : Math.min(92, 68 + depth * 5);
   const borderLightness = dark ? Math.min(62, lightness + 12) : Math.max(38, lightness - 24);
   node.data.fillColor = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
   node.data.borderColor = `hsl(${hue}, ${saturation}%, ${borderLightness}%)`;

@@ -1126,28 +1126,29 @@ button:disabled {
 }
 
 .options-backdrop {
-  background: rgba(0, 0, 0, 0.32);
+  background: rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(2px);
   inset: 0;
   position: fixed;
   z-index: 90;
 }
 
 .options-modal {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.22);
+  background: color-mix(in srgb, var(--surface) 94%, var(--surface-2));
+  border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+  border-radius: 12px;
+  box-shadow: 0 26px 80px rgba(0, 0, 0, 0.32);
   display: grid;
-  gap: 8px;
+  gap: 10px;
   left: 50%;
   max-height: min(720px, calc(100vh - 48px));
   max-width: calc(100vw - 32px);
   overflow: auto;
-  padding: 14px;
+  padding: 18px;
   position: fixed;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: min(560px, calc(100vw - 32px));
+  width: min(620px, calc(100vw - 32px));
   z-index: 91;
 }
 
@@ -1214,6 +1215,13 @@ button:disabled {
   min-height: 48px;
   padding: 8px 10px;
   text-align: left;
+}
+
+.command-palette-item.selected,
+.command-palette-item:focus-visible {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 36%, transparent);
+  outline: none;
 }
 
 .command-palette-item span {
@@ -1345,38 +1353,65 @@ button:disabled {
 
 .options-header {
   align-items: center;
-  border-bottom: 1px solid var(--line);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface-2) 78%, transparent), transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
   display: flex;
   justify-content: space-between;
-  margin: -2px 0 4px;
-  padding-bottom: 10px;
+  margin: -18px -18px 4px;
+  padding: 16px 18px 14px;
+  position: sticky;
+  top: -18px;
+  z-index: 1;
 }
 
 .options-header h2 {
-  font-size: 16px;
+  font-size: 18px;
+  font-weight: 750;
   margin: 0;
 }
 
 .option-node {
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  background: var(--surface-2);
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--line) 86%, transparent);
+  border-radius: 10px;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.03);
+  overflow: hidden;
 }
 
 .option-node summary {
   cursor: pointer;
-  font-size: 13px;
-  font-weight: 650;
-  list-style-position: inside;
-  min-height: 36px;
-  padding: 9px 11px;
+  font-size: 14px;
+  font-weight: 700;
+  list-style: none;
+  min-height: 42px;
+  padding: 11px 13px;
+}
+
+.option-node summary::-webkit-details-marker {
+  display: none;
+}
+
+.option-node summary::before {
+  color: var(--muted);
+  content: "›";
+  display: inline-block;
+  font-size: 18px;
+  line-height: 1;
+  margin-right: 8px;
+  transform: translateY(1px);
+  transition: transform 120ms ease;
+}
+
+.option-node[open] summary::before {
+  transform: rotate(90deg) translateX(1px);
 }
 
 .option-node-body {
-  border-top: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface-2) 52%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
   display: grid;
-  gap: 10px;
-  padding: 11px;
+  gap: 12px;
+  padding: 13px;
 }
 
 .option-help {
@@ -1452,7 +1487,7 @@ button:disabled {
 
 .option-field {
   display: grid;
-  gap: 5px;
+  gap: 6px;
 }
 
 .option-field-row {
@@ -1488,23 +1523,24 @@ button:disabled {
 .option-field span {
   color: var(--muted);
   font-size: 12px;
+  font-weight: 650;
 }
 
 .option-field input,
 .option-field select {
-  background: var(--surface-2);
-  border: 1px solid var(--line);
-  border-radius: 6px;
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--line) 86%, transparent);
+  border-radius: 8px;
   color: var(--text);
-  min-height: 32px;
-  padding: 0 9px;
+  min-height: 36px;
+  padding: 0 10px;
   width: 100%;
 }
 
 .option-field textarea {
-  background: var(--surface-2);
-  border: 1px solid var(--line);
-  border-radius: 6px;
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--line) 86%, transparent);
+  border-radius: 8px;
   color: var(--text);
   line-height: 1.4;
   min-height: 70px;
@@ -1516,11 +1552,12 @@ button:disabled {
 
 .option-reset-button {
   background: var(--surface);
-  border-color: var(--line);
+  border-color: color-mix(in srgb, var(--line) 86%, transparent);
+  border-radius: 8px;
   color: var(--muted);
   justify-self: start;
-  min-height: 30px;
-  padding: 0 10px;
+  min-height: 32px;
+  padding: 0 12px;
 }
 
 .heading-controls-overlay {
@@ -1919,6 +1956,10 @@ button:disabled {
   z-index: 1;
 }
 
+.link-embed-wrap:has(.link-embed-toggle) .embed-refresh-btn {
+  right: 44px;
+}
+
 .link-embed-toggle:hover {
   color: var(--text);
 }
@@ -1977,7 +2018,7 @@ button:disabled {
   flex-direction: column;
   gap: 4px;
   min-width: 0;
-  padding: 12px 14px;
+  padding: 12px 82px 12px 14px;
 }
 
 .link-embed-title {
@@ -2087,6 +2128,10 @@ button:disabled {
   min-height: 22px;
   min-width: 22px;
   padding: 3px 5px;
+}
+
+.embed-grid .link-embed-wrap:has(.link-embed-toggle) .embed-refresh-btn {
+  right: 34px;
 }
 
 .markdown-body .code-block {
