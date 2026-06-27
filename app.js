@@ -15,6 +15,9 @@ const CALENDAR_GESTURE_RULES = globalThis.CalendarGestureRules || {
 };
 const CALENDAR_DRAG_DISTANCE = CALENDAR_GESTURE_RULES.thresholds.dragDistance;
 const CALENDAR_LONG_PRESS_MS = CALENDAR_GESTURE_RULES.thresholds.longPressMs;
+const TAB_ORDER_RULES = globalThis.TabOrderRules || {
+  moveEmptyTabsToEnd(tabs) { return tabs; },
+};
 
 const state = {
   files: new Map(),
@@ -11351,6 +11354,7 @@ function showTabContextMenu(x, y, tabId) {
 const OPEN_TABS_KEY = "obsidian-web-viewer-open-tabs";
 
 function saveOpenTabs() {
+  keepEmptyTabsAtEnd();
   const data = {
     tabs: state.tabs.map((t) => ({ id: t.id, path: t.path, title: t.title, pinned: t.pinned, scrollTop: t.scrollTop, view: t.view || null, calendarKind: t.calendarKind || null, mergedRange: t.mergedRange || null })),
     activeTabId: state.activeTabId,
@@ -11412,6 +11416,7 @@ async function restoreActiveTab() {
 }
 
 function renderTabStrip() {
+  keepEmptyTabsAtEnd();
   const contentPane = document.querySelector(".content-pane");
   if (!contentPane) return;
   let strip = document.querySelector(".tab-strip");
@@ -11807,7 +11812,12 @@ function orderTabsByPinnedList(pinned) {
     return aOrder - bOrder || a._tabOrder - b._tabOrder;
   });
   state.tabs = [...pinnedTabs, ...unpinnedTabs];
+  keepEmptyTabsAtEnd();
   state.tabs.forEach((tab) => { delete tab._tabOrder; });
+}
+
+function keepEmptyTabsAtEnd() {
+  TAB_ORDER_RULES.moveEmptyTabsToEnd(state.tabs);
 }
 
 function moveTabToPinnedTail(tab) {

@@ -70,3 +70,5 @@
 - 2026-06-27: Ask for confirmation before opening merged-document view when the selected date range includes many documents.
 - 2026-06-27: Update the top-right save button state after Ctrl+S mindmap saves without re-rendering or resetting the mindmap document.
 - 2026-06-27: Keep merged-document view tabs after refresh by preserving merged tab metadata in local and server tab state.
+- 2026-06-28: Check whether mindmap documents are related to the "new tab" position.
+- 2026-06-28: Keep empty new tabs at the far right so they cannot sit left of mindmap documents.
