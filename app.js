@@ -18,6 +18,11 @@ const CALENDAR_LONG_PRESS_MS = CALENDAR_GESTURE_RULES.thresholds.longPressMs;
 const TAB_ORDER_RULES = globalThis.TabOrderRules || {
   moveEmptyTabsToEnd(tabs) { return tabs; },
 };
+const LINK_OPEN_RULES = globalThis.LinkOpenRules || {
+  resolveWikiLinkOpenMode({ forceNewTab = false, embeddedNote = false } = {}) {
+    return forceNewTab || embeddedNote ? "new-tab" : "current-tab";
+  },
+};
 
 const state = {
   files: new Map(),
@@ -1240,7 +1245,7 @@ async function renderMergedDocuments(range) {
       </header>
       ${sections.length ? sections.join("") : '<p class="merged-documents-empty">해당 날짜 범위에 생성 또는 수정된 문서가 없습니다.</p>'}
     `;
-    bindWikiLinks(els.markdownView);
+    bindWikiLinks(els.markdownView, { openLinksInNewTab: true });
     bindRenderedTaskCheckboxes(els.markdownView);
     hydrateVaultImages(els.markdownView);
     hydrateMindmapEmbeds(els.markdownView);
@@ -10977,7 +10982,7 @@ function resolveVaultPath(target) {
   });
 }
 
-function bindWikiLinks(root) {
+function bindWikiLinks(root, options = {}) {
   root.querySelectorAll("[data-embed-wiki]").forEach((embed) => {
     embed.addEventListener("click", async (event) => {
       if (event.defaultPrevented) return;
@@ -10993,7 +10998,11 @@ function bindWikiLinks(root) {
       event.preventDefault();
       const path = link.getAttribute("data-wiki");
       if (!path || !isOpenableDocument(path)) return;
-      if (link.closest(".embedded-note")) await openFileInNewTab(path);
+      const mode = LINK_OPEN_RULES.resolveWikiLinkOpenMode({
+        forceNewTab: Boolean(options.openLinksInNewTab),
+        embeddedNote: Boolean(link.closest(".embedded-note")),
+      });
+      if (mode === "new-tab") await openFileInNewTab(path);
       else await openFile(path);
     });
   });
