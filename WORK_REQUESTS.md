@@ -66,3 +66,4 @@
 - 2026-06-27: Adjust mindmap depth shading from dark to light, add command palette keyboard selection and sidebar button, separate embed controls, and restyle the options dialog.
 - 2026-06-27: Prevent embed refresh clicks from opening links and restore previously rendered document tabs without reloading when switching back.
 - 2026-06-27: Stop refresh-time tab restore fallback from converting incomplete merged-document tabs into calendar tabs.
+- 2026-06-27: Fix merged-document command calendar so two clicked dates create a range and the selected range is used when running.

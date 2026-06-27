@@ -987,6 +987,7 @@ function openMergedDocumentsDialog() {
   let selectedEnd = end;
   let calendarMonth = new Date(parseDateKey(start).getFullYear(), parseDateKey(start).getMonth(), 1);
   let rangeDrag = null;
+  let rangeAnchor = null;
   const overlay = document.createElement("div");
   overlay.className = "merged-documents-dialog-overlay";
   overlay.innerHTML = `
@@ -1033,20 +1034,35 @@ function openMergedDocumentsDialog() {
   const moveDrag = (event) => {
     if (!rangeDrag || event.pointerId !== rangeDrag.pointerId) return;
     const dateKey = document.elementFromPoint(event.clientX, event.clientY)?.closest?.("[data-merged-date]")?.getAttribute("data-merged-date");
-    if (dateKey) setSelectedRange(rangeDrag.start, dateKey);
+    if (dateKey) {
+      if (dateKey !== rangeDrag.current) rangeDrag.moved = true;
+      rangeDrag.current = dateKey;
+      setSelectedRange(rangeDrag.start, dateKey);
+    }
   };
   const finishDrag = (event) => {
     if (!rangeDrag || event.pointerId !== rangeDrag.pointerId) return;
+    const drag = rangeDrag;
     rangeDrag = null;
     window.removeEventListener("pointermove", moveDrag);
     window.removeEventListener("pointerup", finishDrag);
     window.removeEventListener("pointercancel", finishDrag);
+    if (drag.moved) {
+      rangeAnchor = null;
+      return;
+    }
+    if (rangeAnchor && rangeAnchor !== drag.start) {
+      setSelectedRange(rangeAnchor, drag.start);
+      rangeAnchor = null;
+      return;
+    }
+    rangeAnchor = drag.start;
   };
   const startDrag = (event) => {
     const dateKey = event.target?.closest?.("[data-merged-date]")?.getAttribute("data-merged-date");
     if (!dateKey || (event.button !== undefined && event.button !== 0)) return;
     event.preventDefault();
-    rangeDrag = { start: dateKey, pointerId: event.pointerId };
+    rangeDrag = { start: dateKey, current: dateKey, pointerId: event.pointerId, moved: false };
     setSelectedRange(dateKey, dateKey);
     window.addEventListener("pointermove", moveDrag, { passive: false });
     window.addEventListener("pointerup", finishDrag, { passive: false });
@@ -1064,8 +1080,8 @@ function openMergedDocumentsDialog() {
   };
   const run = () => {
     const range = normalizeMergedDocumentRange(
-      startInput?.value,
-      endInput?.value,
+      selectedStart,
+      selectedEnd,
     );
     if (!range) {
       showAppToast("날짜 범위를 확인하세요.", "error");
