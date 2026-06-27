@@ -2629,7 +2629,12 @@ async function openFile(path) {
         state.tabs.push(curTab);
       }
     }
-    if (curTab) { curTab.path = path; curTab.title = displayDocumentTitle(node.name); curTab.view = null; }
+    if (curTab) {
+      curTab.path = path;
+      curTab.title = displayDocumentTitle(node.name);
+      curTab.view = null;
+      curTab.renderCache = null;
+    }
     if (pinnedTabChanged) {
       savePinnedTabsLocal();
       void savePinnedTabsOrderToVault();
@@ -2688,6 +2693,58 @@ function scheduleCurrentDocumentRender(token, startedAt, readDoneAt, loadingShow
       });
     }
   });
+}
+
+function currentNodeRenderStamp(node) {
+  if (!node) return null;
+  return {
+    updatedAt: Number(node.updatedAt || 0),
+    size: Number(node.size || 0),
+  };
+}
+
+function sameRenderStamp(a, b) {
+  return Boolean(a && b && a.updatedAt === b.updatedAt && a.size === b.size);
+}
+
+function preserveActiveTabRender() {
+  const tab = activeTab();
+  if (!tab || tab.path !== state.currentPath || state.activeView !== "note" || state.editMode) return;
+  if (els.markdownView.hidden || isMindmapDocument(state.currentContent)) return;
+  const fragment = document.createDocumentFragment();
+  fragment.append(...els.markdownView.childNodes);
+  tab.renderCache = {
+    path: state.currentPath,
+    content: state.currentContent,
+    className: els.markdownView.className,
+    scrollTop: els.viewerWrap.scrollTop,
+    stamp: currentNodeRenderStamp(state.currentNode),
+    fragment,
+  };
+}
+
+function restoreTabRender(tab, node) {
+  const cache = tab?.renderCache;
+  if (!cache || cache.path !== tab.path || !sameRenderStamp(cache.stamp, currentNodeRenderStamp(node))) return false;
+  state.documentRenderToken += 1;
+  state.currentPath = tab.path;
+  state.currentContent = cache.content;
+  state.currentNode = node;
+  state.editMode = false;
+  if (els.notePath) {
+    els.notePath.textContent = displayDocumentTitle(node.name);
+    els.notePath.title = tab.path;
+  }
+  if (els.mobileDocTitle) els.mobileDocTitle.textContent = displayDocumentTitle(node.name);
+  if (els.noteTitle) els.noteTitle.textContent = displayDocumentTitle(node.name);
+  els.markdownView.className = cache.className || "markdown-body";
+  els.markdownView.replaceChildren(cache.fragment);
+  tab.renderCache = null;
+  showNoteView();
+  updateEditButtons();
+  pushRecentlyOpened(tab.path, displayDocumentTitle(node.name));
+  requestAnimationFrame(() => { els.viewerWrap.scrollTop = cache.scrollTop || tab.scrollTop || 0; });
+  return true;
 }
 
 function createDocumentOpenDiagnostics(node, startedAt) {
@@ -10268,8 +10325,8 @@ function renderEmbedBlock(code) {
   if (!url) return `<pre class="code-block language-text"><code>${escapeHtml(code)}</code></pre>`;
   if (status === "loading") {
     return `<div class="link-embed-wrap">` +
-      `<a href="${escapeAttribute(url)}" target="_blank" rel="noopener" class="link-embed-card link-embed-loading">` +
       `<button class="embed-refresh-btn" type="button" title="새로고침" data-embed-url="${escapeAttribute(url)}">🔄</button>` +
+      `<a href="${escapeAttribute(url)}" target="_blank" rel="noopener" class="link-embed-card link-embed-loading">` +
       `<div class="link-embed-body">` +
       `<div class="link-embed-title link-embed-fetching">불러오는 중...</div>` +
       `<div class="link-embed-url"><span>${escapeHtml(url)}</span></div>` +
@@ -10289,8 +10346,8 @@ function renderEmbedBlock(code) {
   }
   return `<div class="link-embed-wrap${collapsed}">` +
     `<button class="link-embed-toggle" type="button" title="${toggleLabel}" aria-expanded="${toggleExpanded}">${toggleIcon}</button>` +
-    `<a href="${escapeAttribute(url)}" target="_blank" rel="noopener" class="link-embed-card">` +
     `<button class="embed-refresh-btn" type="button" title="새로고침" data-embed-url="${escapeAttribute(url)}">🔄</button>` +
+    `<a href="${escapeAttribute(url)}" target="_blank" rel="noopener" class="link-embed-card">` +
     visualHtml +
     `<div class="link-embed-body">` +
     `<div class="link-embed-title">${escapeHtml(title || url)}</div>` +
@@ -11108,6 +11165,7 @@ async function switchTab(id) {
     stopAutoSave();
     updateEditButtons();
   }
+  preserveActiveTabRender();
   const cur = activeTab();
   if (cur) cur.scrollTop = els.viewerWrap.scrollTop;
   state.activeTabId = id;
@@ -11127,6 +11185,7 @@ async function switchTab(id) {
     await renderMergedDocuments(tab.mergedRange);
     requestAnimationFrame(() => { els.viewerWrap.scrollTop = tab.scrollTop || 0; });
   } else if (tab.path && state.files.has(tab.path)) {
+    if (restoreTabRender(tab, state.files.get(tab.path))) return;
     const wasNavigating = state.navigatingHistory;
     state.navigatingHistory = true;
     await openFile(tab.path);
