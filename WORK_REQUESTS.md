@@ -76,3 +76,4 @@
 - 2026-06-28: Add a globally synced option to hide rendered frontmatter.
 - 2026-06-28: Add a command to insert a mindmap into the current document, including edit mode.
 - 2026-06-28: Reposition empty new tabs immediately after tab changes so merged document tabs open before them.
+- 2026-06-28: Preserve saved empty new tabs across refresh instead of deduplicating them into one.

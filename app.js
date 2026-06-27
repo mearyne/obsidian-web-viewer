@@ -18,6 +18,12 @@ const CALENDAR_LONG_PRESS_MS = CALENDAR_GESTURE_RULES.thresholds.longPressMs;
 const TAB_ORDER_RULES = globalThis.TabOrderRules || {
   moveEmptyTabsToEnd(tabs) { return tabs; },
   normalizeTabsAfterChange(tabs) { return tabs; },
+  restoredTabKey(tab, index = 0) {
+    if (tab?.view === "calendar") return "view:calendar";
+    if (tab?.view === "merged" && tab?.mergedRange?.start && tab?.mergedRange?.end) return `view:merged:${tab.mergedRange.start}:${tab.mergedRange.end}`;
+    if (tab?.path) return `path:${tab.path}`;
+    return `empty:${tab?.id || index}`;
+  },
 };
 const LINK_OPEN_RULES = globalThis.LinkOpenRules || {
   resolveWikiLinkOpenMode({ forceNewTab = false, embeddedNote = false } = {}) {
@@ -11488,11 +11494,11 @@ function loadOpenTabs() {
 
     const seen = new Set();
     state.tabs = [];
-    data.tabs.forEach((t) => {
+    data.tabs.forEach((t, index) => {
       const path = t?.path || null;
       const view = t?.view || null;
       const mergedRange = normalizeMergedDocumentRange(t?.mergedRange?.start, t?.mergedRange?.end);
-      const tabKey = view === "calendar" ? "view:calendar" : view === "merged" && mergedRange ? `view:merged:${mergedRange.start}:${mergedRange.end}` : path || "empty";
+      const tabKey = TAB_ORDER_RULES.restoredTabKey({ ...t, path, view, mergedRange }, index);
       if (seen.has(tabKey)) return;
       seen.add(tabKey);
       state.tabs.push({

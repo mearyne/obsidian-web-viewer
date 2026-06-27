@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { moveEmptyTabsToEnd, normalizeTabsAfterChange } = require("../tab-order-rules.js");
+const { moveEmptyTabsToEnd, normalizeTabsAfterChange, restoredTabKey } = require("../tab-order-rules.js");
 
 test("empty new tabs move behind document tabs", () => {
   const tabs = [
@@ -37,4 +37,13 @@ test("tab changes move empty new tabs behind merged document tabs immediately", 
   normalizeTabsAfterChange(tabs);
 
   assert.deepEqual(tabs.map((tab) => tab.id), ["note", "merged", "empty"]);
+});
+
+test("saved empty new tabs get distinct restore keys", () => {
+  const tabs = [
+    { id: "empty-a", path: null, view: null },
+    { id: "empty-b", path: null, view: null },
+  ];
+
+  assert.notEqual(restoredTabKey(tabs[0], 0), restoredTabKey(tabs[1], 1));
 });

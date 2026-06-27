@@ -19,9 +19,20 @@
     return moveEmptyTabsToEnd(tabs);
   }
 
+  function restoredTabKey(tab, index = 0) {
+    if (!tab) return `missing:${index}`;
+    if (tab.view === "calendar") return "view:calendar";
+    if (tab.view === "merged" && tab.mergedRange?.start && tab.mergedRange?.end) {
+      return `view:merged:${tab.mergedRange.start}:${tab.mergedRange.end}`;
+    }
+    if (tab.path) return `path:${tab.path}`;
+    return `empty:${tab.id || index}`;
+  }
+
   return {
     isEmptyNewTab,
     moveEmptyTabsToEnd,
     normalizeTabsAfterChange,
+    restoredTabKey,
   };
 });
