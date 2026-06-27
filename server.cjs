@@ -571,8 +571,11 @@ function updateDeviceTabs(body, res) {
         title: typeof t.title === "string" ? t.title.slice(0, 300) : "",
         pinned: Boolean(t.pinned),
         scrollTop: Number(t.scrollTop) || 0,
-        view: t.view === "calendar" ? "calendar" : null,
+        view: t.view === "calendar" ? "calendar" : t.view === "merged" ? "merged" : null,
         calendarKind: typeof t.calendarKind === "string" ? t.calendarKind : null,
+        mergedRange: t.mergedRange && typeof t.mergedRange.start === "string" && typeof t.mergedRange.end === "string"
+          ? { start: t.mergedRange.start.slice(0, 10), end: t.mergedRange.end.slice(0, 10) }
+          : null,
       })),
       activeTabId: typeof payload.openTabs.activeTabId === "string" ? payload.openTabs.activeTabId : null,
     };

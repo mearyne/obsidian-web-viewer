@@ -1165,24 +1165,39 @@ function renderMergedDocumentsCalendar(calendar, month, startKey, endKey) {
 }
 
 async function showMergedDocuments(range) {
-  state.mergedDocumentRange = range;
+  const normalizedRange = normalizeMergedDocumentRange(range?.start, range?.end);
+  if (!normalizedRange) return;
+  state.mergedDocumentRange = normalizedRange;
   const id = generateTabId();
   state.tabs.push({
     id,
     path: null,
-    title: `문서 합쳐보기 ${range.start} - ${range.end}`,
+    title: `문서 합쳐보기 ${normalizedRange.start} - ${normalizedRange.end}`,
     pinned: false,
     scrollTop: 0,
     view: "merged",
     calendarKind: null,
-    mergedRange: range,
+    mergedRange: normalizedRange,
   });
   state.activeTabId = id;
   renderTabStrip();
-  await renderMergedDocuments(range);
+  await renderMergedDocuments(normalizedRange);
+  saveOpenTabs();
 }
 
 async function renderMergedDocuments(range) {
+  const normalizedRange = normalizeMergedDocumentRange(range?.start, range?.end);
+  if (!normalizedRange) return;
+  range = normalizedRange;
+  const tab = activeTab();
+  if (tab) {
+    tab.path = null;
+    tab.title = `문서 합쳐보기 ${range.start} - ${range.end}`;
+    tab.view = "merged";
+    tab.calendarKind = null;
+    tab.mergedRange = range;
+  }
+  state.mergedDocumentRange = range;
   const files = collectMergedDocumentFiles(range);
   state.mindmapEmbedData = new Map();
   state.activeView = "merged";
@@ -1230,6 +1245,7 @@ async function renderMergedDocuments(range) {
     scrollViewerTop();
   } finally {
     hideLoading();
+    saveOpenTabs();
   }
 }
 

@@ -69,3 +69,4 @@
 - 2026-06-27: Fix merged-document command calendar so two clicked dates create a range and the selected range is used when running.
 - 2026-06-27: Ask for confirmation before opening merged-document view when the selected date range includes many documents.
 - 2026-06-27: Update the top-right save button state after Ctrl+S mindmap saves without re-rendering or resetting the mindmap document.
+- 2026-06-27: Keep merged-document view tabs after refresh by preserving merged tab metadata in local and server tab state.
