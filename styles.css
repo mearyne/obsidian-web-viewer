@@ -1012,6 +1012,11 @@ button:disabled {
   width: auto;
 }
 
+.icon-button.is-saving-mode.is-dirty {
+  background: var(--accent);
+  color: #fff;
+}
+
 .editing-mode #newNoteButton,
 .editing-mode #newMindmapButton,
 .editing-mode #randomFileButton,

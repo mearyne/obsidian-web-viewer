@@ -4441,7 +4441,10 @@ function renderSimpleMindMapDocument(data, canvas) {
   });
   state.mindmapInstance = mindMap;
   mindMap.on("data_change", () => {
-    if (state.editMode && canEditNode(state.currentNode)) state.editorDirty = true;
+    if (state.editMode && canEditNode(state.currentNode)) {
+      state.editorDirty = true;
+      renderEditSaveButton();
+    }
   });
   mindMap.on("node_active", () => {
     state.mindmapKeyCaptureActive = true;
@@ -4894,6 +4897,7 @@ async function saveMindmapNow({ silent = true } = {}) {
     if (context) context.content = nextContent;
     if (state.currentPath === node.path) state.currentContent = nextContent;
     state.editorDirty = false;
+    renderEditSaveButton();
     if (!silent) showAppToast("변경 사항이 없습니다.", "info");
     return true;
   }
@@ -4904,6 +4908,7 @@ async function saveMindmapNow({ silent = true } = {}) {
     if (context) context.content = nextContent;
     if (state.currentPath === node.path) state.currentContent = nextContent;
     state.editorDirty = false;
+    renderEditSaveButton();
     refreshDirectoryMetadata();
     refreshRecentFilesCache();
     renderTree();
@@ -5880,12 +5885,14 @@ function renderEditSaveButton() {
   if (!els.webEditButton) return;
   if (state.editMode) {
     els.webEditButton.classList.add("is-saving-mode");
-    els.webEditButton.setAttribute("aria-label", "저장");
-    els.webEditButton.title = "저장";
-    els.webEditButton.textContent = "저장";
+    els.webEditButton.classList.toggle("is-dirty", state.editorDirty);
+    const label = state.editorDirty ? "저장" : "저장됨";
+    els.webEditButton.setAttribute("aria-label", label);
+    els.webEditButton.title = label;
+    els.webEditButton.textContent = label;
     return;
   }
-  els.webEditButton.classList.remove("is-saving-mode");
+  els.webEditButton.classList.remove("is-saving-mode", "is-dirty");
   els.webEditButton.setAttribute("aria-label", "웹에서 편집");
   els.webEditButton.title = "웹에서 편집";
   els.webEditButton.innerHTML = `
