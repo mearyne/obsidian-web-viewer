@@ -11346,16 +11346,20 @@ function loadOpenTabs() {
 
 async function restoreActiveTab() {
   const tab = state.tabs.find((t) => t.id === state.activeTabId);
-  if (tab?.view === "calendar") {
+  if (!tab) {
+    showInitialCalendarView();
+  } else if (tab.view === "calendar") {
     state.calendarKind = tab.calendarKind || "tasks";
     showInitialCalendarView();
-  } else if (tab?.view === "merged" && tab.mergedRange) {
+  } else if (tab.view === "merged" && tab.mergedRange) {
     await renderMergedDocuments(tab.mergedRange);
-  } else if (tab?.path && state.files.has(tab.path)) {
+  } else if (tab.path && state.files.has(tab.path)) {
     await openFile(tab.path);
     requestAnimationFrame(() => { els.viewerWrap.scrollTop = tab.scrollTop || 0; });
-  } else {
+  } else if (!_tabsRestoredFromStorage && !tab.path && !tab.view) {
     showInitialCalendarView();
+  } else {
+    showEmptyTab();
   }
 }
 

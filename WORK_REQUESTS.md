@@ -65,3 +65,4 @@
 - 2026-06-27: Improve completion report table formatting, add distinct merged-document colors, adjust mindmap child-depth shading, and prevent duplicate calendar tabs.
 - 2026-06-27: Adjust mindmap depth shading from dark to light, add command palette keyboard selection and sidebar button, separate embed controls, and restyle the options dialog.
 - 2026-06-27: Prevent embed refresh clicks from opening links and restore previously rendered document tabs without reloading when switching back.
+- 2026-06-27: Stop refresh-time tab restore fallback from converting incomplete merged-document tabs into calendar tabs.
