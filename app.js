@@ -24,6 +24,13 @@ const TAB_ORDER_RULES = globalThis.TabOrderRules || {
     if (tab?.path) return `path:${tab.path}`;
     return `empty:${tab?.id || index}`;
   },
+  selectOpenTabsForRestore(allDeviceTabs, deviceId) {
+    const ownEntry = allDeviceTabs?.[deviceId];
+    if (Array.isArray(ownEntry?.openTabs?.tabs) && ownEntry.openTabs.tabs.length) return ownEntry.openTabs;
+    return Object.values(allDeviceTabs || {})
+      .filter((entry) => Array.isArray(entry?.openTabs?.tabs) && entry.openTabs.tabs.length)
+      .sort((a, b) => (Number(b?.updatedAt) || 0) - (Number(a?.updatedAt) || 0))[0]?.openTabs || null;
+  },
 };
 const LINK_OPEN_RULES = globalThis.LinkOpenRules || {
   resolveWikiLinkOpenMode({ forceNewTab = false, embeddedNote = false } = {}) {
@@ -12065,9 +12072,9 @@ async function loadOpenTabsFromVault() {
     if (!res.ok) return;
     const allDeviceTabs = await res.json();
     const deviceId = getDeviceId();
-    const myEntry = allDeviceTabs[deviceId];
-    if (!myEntry?.openTabs?.tabs?.length) return;
-    localStorage.setItem(OPEN_TABS_KEY, JSON.stringify(myEntry.openTabs));
+    const openTabs = TAB_ORDER_RULES.selectOpenTabsForRestore(allDeviceTabs, deviceId);
+    if (!openTabs?.tabs?.length) return;
+    localStorage.setItem(OPEN_TABS_KEY, JSON.stringify(openTabs));
     loadOpenTabs();
   } catch {}
 }

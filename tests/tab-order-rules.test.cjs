@@ -1,6 +1,11 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { moveEmptyTabsToEnd, normalizeTabsAfterChange, restoredTabKey } = require("../tab-order-rules.js");
+const {
+  moveEmptyTabsToEnd,
+  normalizeTabsAfterChange,
+  restoredTabKey,
+  selectOpenTabsForRestore,
+} = require("../tab-order-rules.js");
 
 test("empty new tabs move behind document tabs", () => {
   const tabs = [
@@ -46,4 +51,20 @@ test("saved empty new tabs get distinct restore keys", () => {
   ];
 
   assert.notEqual(restoredTabKey(tabs[0], 0), restoredTabKey(tabs[1], 1));
+});
+
+test("first open can restore the newest available device tabs", () => {
+  const selected = selectOpenTabsForRestore({
+    mine: { updatedAt: 10 },
+    laptop: {
+      updatedAt: 20,
+      openTabs: { tabs: [{ id: "old", path: "Old.md" }], activeTabId: "old" },
+    },
+    desktop: {
+      updatedAt: 30,
+      openTabs: { tabs: [{ id: "new", path: "New.md" }], activeTabId: "new" },
+    },
+  }, "mine");
+
+  assert.equal(selected.activeTabId, "new");
 });

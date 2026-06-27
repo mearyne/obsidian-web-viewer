@@ -29,10 +29,20 @@
     return `empty:${tab.id || index}`;
   }
 
+  function selectOpenTabsForRestore(allDeviceTabs, deviceId) {
+    const entries = Object.entries(allDeviceTabs || {})
+      .filter(([, entry]) => Array.isArray(entry?.openTabs?.tabs) && entry.openTabs.tabs.length);
+    const ownEntry = allDeviceTabs?.[deviceId];
+    if (Array.isArray(ownEntry?.openTabs?.tabs) && ownEntry.openTabs.tabs.length) return ownEntry.openTabs;
+    entries.sort(([, a], [, b]) => (Number(b?.updatedAt) || 0) - (Number(a?.updatedAt) || 0));
+    return entries[0]?.[1]?.openTabs || null;
+  }
+
   return {
     isEmptyNewTab,
     moveEmptyTabsToEnd,
     normalizeTabsAfterChange,
     restoredTabKey,
+    selectOpenTabsForRestore,
   };
 });
