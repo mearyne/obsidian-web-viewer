@@ -62,3 +62,4 @@
 - 2026-06-27: Make each document visually distinct in the merged document reading view.
 - 2026-06-27: Fix web clipper saves from YouTube by allowing private-network CORS preflight requests.
 - 2026-06-27: Fix mindmap Ctrl+S save/reset behavior and child-node border styling, and open merged documents in a new tab with a visible drag/click calendar range picker.
+- 2026-06-27: Improve completion report table formatting, add distinct merged-document colors, adjust mindmap child-depth shading, and prevent duplicate calendar tabs.

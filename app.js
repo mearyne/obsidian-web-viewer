@@ -1212,8 +1212,9 @@ function renderMergedDocumentSection(node, content, file, range, index = 0) {
   state.currentPath = node.path;
   const rendered = isMindmapDocument(content) ? renderMindmapEmbedPreview(content, node.path) : renderMarkdown(content, { path: node.path });
   state.currentPath = previousPath;
+  const colorIndex = index % 8;
   return `
-    <section class="merged-document-section">
+    <section class="merged-document-section merged-document-color-${colorIndex}">
       <header class="merged-document-title">
         <span class="merged-document-index">${index + 1}</span>
         <button type="button" data-wiki="${escapeAttribute(node.path)}">${escapeHtml(displayDocumentTitle(node.name || node.path))}</button>
@@ -4175,9 +4176,14 @@ function applyMindmapBranchTheme(root) {
 
 function applyMindmapBranchNodeStyle(node, hue, depth, dark) {
   if (!node?.data) return;
-  const saturation = dark ? 48 : 68;
-  const lightness = dark ? Math.max(22, 39 - depth * 5) : Math.max(66, 91 - depth * 6);
-  const borderLightness = dark ? Math.min(58, lightness + 12) : Math.max(42, lightness - 22);
+  const saturation = dark ? 52 : 70;
+  const wave = depth % 6;
+  const distanceFromPeak = Math.abs(wave - 3);
+  const darkenAmount = 18 - distanceFromPeak * 6;
+  const lightness = dark
+    ? Math.max(28, Math.min(50, 47 - darkenAmount))
+    : Math.max(64, Math.min(92, 90 - darkenAmount));
+  const borderLightness = dark ? Math.min(62, lightness + 12) : Math.max(38, lightness - 24);
   node.data.fillColor = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
   node.data.borderColor = `hsl(${hue}, ${saturation}%, ${borderLightness}%)`;
   node.data.lineColor = node.data.borderColor;
@@ -6454,6 +6460,7 @@ function showCalendarView() {
     tab.view = "calendar";
     tab.calendarKind = state.calendarKind;
     tab.title = "캘린더";
+    removeDuplicateCalendarTabs(tab.id);
     if (tab.pinned) {
       savePinnedTabsLocal();
       void savePinnedTabsOrderToVault();
@@ -6473,6 +6480,22 @@ function showCalendarView() {
   updateCalendarKindButton();
   if (els.editButton) els.editButton.disabled = true;
   updateEditButtons();
+}
+
+function removeDuplicateCalendarTabs(keepTabId) {
+  const duplicates = state.tabs.filter((item) => item.view === "calendar" && item.id !== keepTabId);
+  if (!duplicates.length) return;
+  const removedPinned = duplicates.some((item) => item.pinned);
+  const duplicateIds = new Set(duplicates.map((item) => item.id));
+  state.tabs = state.tabs.filter((item) => !duplicateIds.has(item.id));
+  duplicateIds.forEach((id) => {
+    state.randomSeenByTab.delete(id);
+    state.navigationHistories.delete(id);
+  });
+  if (removedPinned) {
+    savePinnedTabsLocal();
+    void savePinnedTabsOrderToVault();
+  }
 }
 
 function updateCalendarKindButton() {
