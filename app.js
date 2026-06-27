@@ -33,6 +33,17 @@ const FRONTMATTER_DISPLAY_RULES = globalThis.FrontmatterDisplayRules || {
     return Boolean(String(frontmatter || "").trim()) && !this.normalizeHideFrontmatter(hideFrontmatter);
   },
 };
+const MINDMAP_COMMAND_RULES = globalThis.MindmapCommandRules || {
+  canAddMindmapToCurrentDocument({ activeView, currentPath, currentContent, canEdit, isMindmap } = {}) {
+    return activeView === "note" && Boolean(currentPath) && /\.md$/i.test(String(currentPath)) && !isMindmap && Boolean(canEdit) && typeof currentContent === "string";
+  },
+  contentForMindmapInsertion({ currentContent = "", editorContent = "", editMode = false } = {}) {
+    return editMode ? String(editorContent || "") : String(currentContent || "");
+  },
+  appendMindmapEmbed(content, path) {
+    return `${String(content || "").replace(/\s*$/u, "")}\n\n![[${path}]]\n`;
+  },
+};
 
 const state = {
   files: new Map(),
@@ -943,6 +954,10 @@ function openCommandPalette() {
           <span>문서 합쳐보기</span>
           <small>생성/수정 날짜 범위의 문서를 한 화면에서 읽기</small>
         </button>
+        <button class="command-palette-item" type="button" data-command="add-mindmap-to-current">
+          <span>현재 문서에 마인드맵 추가</span>
+          <small>현재 Markdown 문서에 새 마인드맵을 만들고 임베드합니다</small>
+        </button>
       </div>
     </section>
   `;
@@ -950,7 +965,7 @@ function openCommandPalette() {
     if (event.target === overlay) closeCommandPalette();
   });
   const input = overlay.querySelector(".command-palette-input");
-  const item = overlay.querySelector("[data-command='merged-documents']");
+  const commandItems = [...overlay.querySelectorAll(".command-palette-item")];
   let selectedIndex = 0;
   const visibleItems = () => [...overlay.querySelectorAll(".command-palette-item")].filter((button) => !button.hidden);
   const updateSelected = () => {
@@ -969,11 +984,19 @@ function openCommandPalette() {
     if (!selected) return;
     closeCommandPalette();
     if (selected.dataset.command === "merged-documents") openMergedDocumentsDialog();
+    if (selected.dataset.command === "add-mindmap-to-current") void createLinkedMindmapFromCurrentNote();
   };
-  item.addEventListener("click", runSelected);
+  commandItems.forEach((button) => {
+    button.addEventListener("click", () => {
+      selectedIndex = Math.max(0, visibleItems().indexOf(button));
+      runSelected();
+    });
+  });
   input.addEventListener("input", () => {
     const query = input.value.trim().toLowerCase();
-    item.hidden = query && !"문서 합쳐보기 merged documents".includes(query);
+    commandItems.forEach((button) => {
+      button.hidden = Boolean(query) && !button.textContent.toLowerCase().includes(query);
+    });
     selectedIndex = 0;
     updateSelected();
   });
@@ -3618,11 +3641,14 @@ async function createAndOpenMindmap(title, dirPathOverride) {
 }
 
 function canCreateLinkedMindmapFromCurrentNote() {
-  return state.activeView === "note"
-    && !state.editMode
-    && isMarkdownDocument(state.currentPath || "")
-    && !isMindmapDocument(state.currentContent)
-    && canEditNode(state.currentNode);
+  return MINDMAP_COMMAND_RULES.canAddMindmapToCurrentDocument({
+    activeView: state.activeView,
+    editMode: state.editMode,
+    currentPath: state.currentPath || "",
+    currentContent: state.editMode ? editorValue() : state.currentContent,
+    canEdit: canEditNode(state.currentNode),
+    isMindmap: isMindmapDocument(state.currentContent),
+  });
 }
 
 async function createLinkedMindmapFromCurrentNote() {
@@ -3632,6 +3658,12 @@ async function createLinkedMindmapFromCurrentNote() {
     alert("파일 편집 권한이 필요합니다.");
     return;
   }
+  const keepEditing = state.editMode;
+  const baseContent = MINDMAP_COMMAND_RULES.contentForMindmapInsertion({
+    currentContent: state.currentContent,
+    editorContent: keepEditing ? editorValue() : "",
+    editMode: keepEditing,
+  });
   const now = new Date();
   const pad = (value) => String(value).padStart(2, "0");
   const currentDir = state.currentPath?.includes("/") ? state.currentPath.split("/").slice(0, -1).join("/") : "";
@@ -3663,18 +3695,25 @@ async function createLinkedMindmapFromCurrentNote() {
   if (dir) dir.children.set(mindmapNode.name, mindmapNode);
 
   const embedTarget = path;
-  const nextContent = `${state.currentContent.replace(/\s*$/u, "")}\n\n![[${embedTarget}]]\n`;
+  const nextContent = MINDMAP_COMMAND_RULES.appendMindmapEmbed(baseContent, embedTarget);
   const metadata = await writeNodeContent(state.currentNode, nextContent, { previousContent: state.currentContent });
   Object.assign(state.currentNode, metadata);
   state.currentNode.content = nextContent;
   state.currentContent = nextContent;
+  if (keepEditing) {
+    setEditorValue(nextContent);
+    state.editorDirty = false;
+    renderEditorPreview();
+    renderEditSaveButton();
+  }
   updateTasksForFile(state.currentNode.path, nextContent);
   refreshDirectoryMetadataFrom(path);
   refreshDirectoryMetadataFrom(state.currentNode.path);
   renderTree();
   refreshRecentFilesCache();
   invalidateRandomMarkdownCache();
-  renderCurrentDocument();
+  if (keepEditing) updateEditorStatus("Saved");
+  else renderCurrentDocument();
 }
 
 async function openCreatedNoteInEditMode(path, node, content) {
