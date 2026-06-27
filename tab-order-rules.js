@@ -15,8 +15,13 @@
     return tabs;
   }
 
+  function normalizeTabsAfterChange(tabs) {
+    return moveEmptyTabsToEnd(tabs);
+  }
+
   return {
     isEmptyNewTab,
     moveEmptyTabsToEnd,
+    normalizeTabsAfterChange,
   };
 });

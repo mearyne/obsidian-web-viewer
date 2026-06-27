@@ -17,6 +17,7 @@ const CALENDAR_DRAG_DISTANCE = CALENDAR_GESTURE_RULES.thresholds.dragDistance;
 const CALENDAR_LONG_PRESS_MS = CALENDAR_GESTURE_RULES.thresholds.longPressMs;
 const TAB_ORDER_RULES = globalThis.TabOrderRules || {
   moveEmptyTabsToEnd(tabs) { return tabs; },
+  normalizeTabsAfterChange(tabs) { return tabs; },
 };
 const LINK_OPEN_RULES = globalThis.LinkOpenRules || {
   resolveWikiLinkOpenMode({ forceNewTab = false, embeddedNote = false } = {}) {
@@ -1225,6 +1226,7 @@ async function showMergedDocuments(range) {
     calendarKind: null,
     mergedRange: normalizedRange,
   });
+  keepEmptyTabsAtEnd();
   state.activeTabId = id;
   renderTabStrip();
   await renderMergedDocuments(normalizedRange);
@@ -11307,6 +11309,7 @@ function initTabs() {
 async function createTab(path = null) {
   const id = generateTabId();
   state.tabs.push({ id, path: null, title: "새 탭", pinned: false, scrollTop: 0 });
+  keepEmptyTabsAtEnd();
   await switchTab(id);
   if (path) await openFile(path);
   else showEmptyTab();
@@ -11330,6 +11333,7 @@ async function switchTab(id) {
   const cur = activeTab();
   if (cur) cur.scrollTop = els.viewerWrap.scrollTop;
   state.activeTabId = id;
+  keepEmptyTabsAtEnd();
   renderTabStrip();
   updateHistoryButtons();
   const tab = state.tabs.find((t) => t.id === id);
@@ -11370,9 +11374,11 @@ async function closeTab(id) {
   }
   const idx = state.tabs.indexOf(tab);
   state.tabs.splice(idx, 1);
+  keepEmptyTabsAtEnd();
   state.randomSeenByTab.delete(id);
   if (state.tabs.length === 0) {
     state.tabs.push({ id: generateTabId(), path: null, title: "새 탭", pinned: false, scrollTop: 0 });
+    keepEmptyTabsAtEnd();
   }
   if (state.activeTabId === id) {
     const newIdx = Math.max(0, Math.min(idx, state.tabs.length - 1));
@@ -11758,6 +11764,7 @@ function reorderTab(tabId, targetId, beforeTarget) {
     insertAt = Math.max(insertAt, pinnedCount);
   }
   state.tabs.splice(insertAt, 0, tab);
+  keepEmptyTabsAtEnd();
   if (tab.pinned) {
     savePinnedTabsLocal();
     void savePinnedTabsOrderToVault();
@@ -11927,7 +11934,7 @@ function orderTabsByPinnedList(pinned) {
 }
 
 function keepEmptyTabsAtEnd() {
-  TAB_ORDER_RULES.moveEmptyTabsToEnd(state.tabs);
+  (TAB_ORDER_RULES.normalizeTabsAfterChange || TAB_ORDER_RULES.moveEmptyTabsToEnd)(state.tabs);
 }
 
 function moveTabToPinnedTail(tab) {
@@ -11969,6 +11976,7 @@ async function openFileInNewTab(path) {
 
   const id = generateTabId();
   state.tabs.push({ id, path: null, title: "새 탭", pinned: false, scrollTop: 0 });
+  keepEmptyTabsAtEnd();
   state.activeTabId = id;
   renderTabStrip();
   await openFile(normalizedPath);

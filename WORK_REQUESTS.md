@@ -75,3 +75,4 @@
 - 2026-06-28: Open links from the merged document reading view in a new tab.
 - 2026-06-28: Add a globally synced option to hide rendered frontmatter.
 - 2026-06-28: Add a command to insert a mindmap into the current document, including edit mode.
+- 2026-06-28: Reposition empty new tabs immediately after tab changes so merged document tabs open before them.

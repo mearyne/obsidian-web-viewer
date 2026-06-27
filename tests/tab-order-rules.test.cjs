@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { moveEmptyTabsToEnd } = require("../tab-order-rules.js");
+const { moveEmptyTabsToEnd, normalizeTabsAfterChange } = require("../tab-order-rules.js");
 
 test("empty new tabs move behind document tabs", () => {
   const tabs = [
@@ -25,4 +25,16 @@ test("empty new tabs stay behind pinned tabs and document tabs", () => {
   moveEmptyTabsToEnd(tabs);
 
   assert.deepEqual(tabs.map((tab) => tab.id), ["pinned", "calendar", "note", "empty"]);
+});
+
+test("tab changes move empty new tabs behind merged document tabs immediately", () => {
+  const tabs = [
+    { id: "note", path: "Note.md", pinned: false },
+    { id: "empty", path: null, title: "새 탭", pinned: false },
+    { id: "merged", path: null, view: "merged", pinned: false },
+  ];
+
+  normalizeTabsAfterChange(tabs);
+
+  assert.deepEqual(tabs.map((tab) => tab.id), ["note", "merged", "empty"]);
 });
