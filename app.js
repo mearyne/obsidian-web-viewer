@@ -957,6 +957,10 @@ function openMergedDocumentsDialog() {
   const today = formatDate(new Date());
   const start = state.mergedDocumentRange?.start || today;
   const end = state.mergedDocumentRange?.end || today;
+  let selectedStart = start;
+  let selectedEnd = end;
+  let calendarMonth = new Date(parseDateKey(start).getFullYear(), parseDateKey(start).getMonth(), 1);
+  let rangeDrag = null;
   const overlay = document.createElement("div");
   overlay.className = "merged-documents-dialog-overlay";
   overlay.innerHTML = `
@@ -973,17 +977,69 @@ function openMergedDocumentsDialog() {
         <span>끝날짜</span>
         <input class="merged-documents-end" type="date" value="${escapeAttribute(end)}" />
       </label>
+      <div class="merged-documents-calendar" data-merged-documents-calendar></div>
       <footer>
         <button type="button" class="merged-documents-cancel">취소</button>
         <button type="button" class="merged-documents-run">보기</button>
       </footer>
     </section>
   `;
+  const startInput = overlay.querySelector(".merged-documents-start");
+  const endInput = overlay.querySelector(".merged-documents-end");
+  const calendar = overlay.querySelector("[data-merged-documents-calendar]");
   const close = () => overlay.remove();
+  const syncInputs = () => {
+    if (startInput) startInput.value = selectedStart;
+    if (endInput) endInput.value = selectedEnd;
+  };
+  const setSelectedRange = (startKey, endKey) => {
+    const range = normalizeMergedDocumentRange(startKey, endKey);
+    if (!range) return;
+    selectedStart = range.start;
+    selectedEnd = range.end;
+    syncInputs();
+    renderMergedDocumentsCalendar(calendar, calendarMonth, selectedStart, selectedEnd);
+  };
+  const showCalendarMonth = (offset) => {
+    calendarMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + offset, 1);
+    renderMergedDocumentsCalendar(calendar, calendarMonth, selectedStart, selectedEnd);
+  };
+  const moveDrag = (event) => {
+    if (!rangeDrag || event.pointerId !== rangeDrag.pointerId) return;
+    const dateKey = document.elementFromPoint(event.clientX, event.clientY)?.closest?.("[data-merged-date]")?.getAttribute("data-merged-date");
+    if (dateKey) setSelectedRange(rangeDrag.start, dateKey);
+  };
+  const finishDrag = (event) => {
+    if (!rangeDrag || event.pointerId !== rangeDrag.pointerId) return;
+    rangeDrag = null;
+    window.removeEventListener("pointermove", moveDrag);
+    window.removeEventListener("pointerup", finishDrag);
+    window.removeEventListener("pointercancel", finishDrag);
+  };
+  const startDrag = (event) => {
+    const dateKey = event.target?.closest?.("[data-merged-date]")?.getAttribute("data-merged-date");
+    if (!dateKey || (event.button !== undefined && event.button !== 0)) return;
+    event.preventDefault();
+    rangeDrag = { start: dateKey, pointerId: event.pointerId };
+    setSelectedRange(dateKey, dateKey);
+    window.addEventListener("pointermove", moveDrag, { passive: false });
+    window.addEventListener("pointerup", finishDrag, { passive: false });
+    window.addEventListener("pointercancel", finishDrag, { passive: false });
+  };
+  const handleInputChange = () => {
+    const range = normalizeMergedDocumentRange(startInput?.value, endInput?.value);
+    if (!range) return;
+    selectedStart = range.start;
+    selectedEnd = range.end;
+    const startDate = parseDateKey(selectedStart);
+    calendarMonth = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+    syncInputs();
+    renderMergedDocumentsCalendar(calendar, calendarMonth, selectedStart, selectedEnd);
+  };
   const run = () => {
     const range = normalizeMergedDocumentRange(
-      overlay.querySelector(".merged-documents-start")?.value,
-      overlay.querySelector(".merged-documents-end")?.value,
+      startInput?.value,
+      endInput?.value,
     );
     if (!range) {
       showAppToast("날짜 범위를 확인하세요.", "error");
@@ -996,12 +1052,20 @@ function openMergedDocumentsDialog() {
   overlay.querySelector(".merged-documents-close")?.addEventListener("click", close);
   overlay.querySelector(".merged-documents-cancel")?.addEventListener("click", close);
   overlay.querySelector(".merged-documents-run")?.addEventListener("click", run);
+  startInput?.addEventListener("change", handleInputChange);
+  endInput?.addEventListener("change", handleInputChange);
+  calendar?.addEventListener("click", (event) => {
+    const monthButton = event.target?.closest?.("[data-merged-month]");
+    if (monthButton) showCalendarMonth(Number(monthButton.getAttribute("data-merged-month")) || 0);
+  });
+  calendar?.addEventListener("pointerdown", startDrag);
   overlay.addEventListener("keydown", (event) => {
     if (event.key === "Escape") close();
     if (event.key === "Enter") run();
   });
   document.body.append(overlay);
-  requestAnimationFrame(() => overlay.querySelector(".merged-documents-start")?.focus());
+  renderMergedDocumentsCalendar(calendar, calendarMonth, selectedStart, selectedEnd);
+  requestAnimationFrame(() => calendar?.querySelector(".range-start")?.focus?.());
 }
 
 function normalizeMergedDocumentRange(startValue, endValue) {
@@ -1013,16 +1077,57 @@ function normalizeMergedDocumentRange(startValue, endValue) {
   return { start: formatDate(from), end: formatDate(to) };
 }
 
+function renderMergedDocumentsCalendar(calendar, month, startKey, endKey) {
+  if (!calendar) return;
+  const monthStart = new Date(month.getFullYear(), month.getMonth(), 1);
+  const firstCell = addDays(monthStart, -monthStart.getDay());
+  const start = parseDateKey(startKey);
+  const end = parseDateKey(endKey);
+  const startMs = start.getTime();
+  const endMs = end.getTime();
+  const todayKey = formatDate(new Date());
+  const dayNames = ["일", "월", "화", "수", "목", "금", "토"];
+  const cells = [];
+  for (let index = 0; index < 42; index += 1) {
+    const date = addDays(firstCell, index);
+    const dateKey = formatDate(date);
+    const time = date.getTime();
+    const classes = [
+      "merged-documents-day",
+      date.getMonth() === monthStart.getMonth() ? "" : "outside",
+      dateKey === todayKey ? "today" : "",
+      time >= startMs && time <= endMs ? "in-range" : "",
+      time === startMs ? "range-start" : "",
+      time === endMs ? "range-end" : "",
+    ].filter(Boolean).join(" ");
+    cells.push(`<button type="button" class="${classes}" data-merged-date="${escapeAttribute(dateKey)}">${date.getDate()}</button>`);
+  }
+  calendar.innerHTML = `
+    <div class="merged-documents-calendar-header">
+      <button type="button" data-merged-month="-1" aria-label="이전 달">‹</button>
+      <strong>${monthStart.getFullYear()}년 ${monthStart.getMonth() + 1}월</strong>
+      <button type="button" data-merged-month="1" aria-label="다음 달">›</button>
+    </div>
+    <div class="merged-documents-weekdays">${dayNames.map((day) => `<span>${day}</span>`).join("")}</div>
+    <div class="merged-documents-days">${cells.join("")}</div>
+  `;
+}
+
 async function showMergedDocuments(range) {
   state.mergedDocumentRange = range;
-  const tab = activeTab();
-  if (tab) {
-    tab.path = null;
-    tab.view = "merged";
-    tab.title = "문서 합쳐보기";
-    tab.mergedRange = range;
-    renderTabStrip();
-  }
+  const id = generateTabId();
+  state.tabs.push({
+    id,
+    path: null,
+    title: `문서 합쳐보기 ${range.start} - ${range.end}`,
+    pinned: false,
+    scrollTop: 0,
+    view: "merged",
+    calendarKind: null,
+    mergedRange: range,
+  });
+  state.activeTabId = id;
+  renderTabStrip();
   await renderMergedDocuments(range);
 }
 
@@ -4053,6 +4158,7 @@ function copyMindmapImageData(source, target) {
 
 function legacyMindmapDataToSimpleMindMapData(data) {
   const root = prepareMindmapImagesForPreview(legacyMindmapNodeToSimpleMindMapNode(data?.data || createDefaultMindmapData("마인드맵").data));
+  clearGeneratedMindmapBranchStyles(root);
   return applyMindmapBranchTheme(root);
 }
 
@@ -4079,6 +4185,15 @@ function applyMindmapBranchNodeStyle(node, hue, depth, dark) {
   if (Array.isArray(node.children)) {
     node.children.forEach((child) => applyMindmapBranchNodeStyle(child, hue, depth + 1, dark));
   }
+}
+
+function clearGeneratedMindmapBranchStyles(node) {
+  if (!node?.data) return;
+  delete node.data.fillColor;
+  delete node.data.borderColor;
+  delete node.data.lineColor;
+  delete node.data.color;
+  if (Array.isArray(node.children)) node.children.forEach(clearGeneratedMindmapBranchStyles);
 }
 
 function expandMindmapPreviewNodes(node) {
@@ -4635,8 +4750,8 @@ async function saveMindmapEdit() {
 
 async function saveMindmapFromShortcut() {
   finishMindmapTextEditing();
-  await new Promise((resolve) => requestAnimationFrame(resolve));
-  await saveMindmapEdit();
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  await saveMindmapNow({ silent: false });
 }
 
 function finishMindmapTextEditing() {
@@ -4667,6 +4782,7 @@ async function saveMindmapNow({ silent = true } = {}) {
   if (nextContent === previousContent) {
     if (context) context.content = nextContent;
     if (state.currentPath === node.path) state.currentContent = nextContent;
+    state.editorDirty = false;
     if (!silent) showAppToast("변경 사항이 없습니다.", "info");
     return true;
   }
@@ -4676,6 +4792,7 @@ async function saveMindmapNow({ silent = true } = {}) {
     node.content = nextContent;
     if (context) context.content = nextContent;
     if (state.currentPath === node.path) state.currentContent = nextContent;
+    state.editorDirty = false;
     refreshDirectoryMetadata();
     refreshRecentFilesCache();
     renderTree();
