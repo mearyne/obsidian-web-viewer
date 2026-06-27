@@ -3,6 +3,7 @@ const EDITOR_AUTO_SAVE_INTERVAL = 30 * 1000;
 const DOCUMENT_OPEN_SLOW_STEP_MS = 120;
 const DOCUMENT_OPEN_SLOW_TOTAL_MS = 500;
 const CONTENT_HISTORY_LIMIT = 50;
+const MERGED_DOCUMENT_CONFIRM_THRESHOLD = 20;
 function setTasksDirty() { try { localStorage.setItem(TASKS_DIRTY_KEY, "1"); } catch {} }
 function clearTasksDirty() { try { localStorage.removeItem(TASKS_DIRTY_KEY); } catch {} }
 function isTasksDirty() { try { return localStorage.getItem(TASKS_DIRTY_KEY) === "1"; } catch { return false; } }
@@ -1078,7 +1079,7 @@ function openMergedDocumentsDialog() {
     syncInputs();
     renderMergedDocumentsCalendar(calendar, calendarMonth, selectedStart, selectedEnd);
   };
-  const run = () => {
+  const run = async () => {
     const range = normalizeMergedDocumentRange(
       selectedStart,
       selectedEnd,
@@ -1086,6 +1087,14 @@ function openMergedDocumentsDialog() {
     if (!range) {
       showAppToast("날짜 범위를 확인하세요.", "error");
       return;
+    }
+    const fileCount = collectMergedDocumentFiles(range).length;
+    if (fileCount >= MERGED_DOCUMENT_CONFIRM_THRESHOLD) {
+      const ok = await appConfirm(
+        `${range.start} - ${range.end} 범위에 ${fileCount}개 문서가 포함됩니다. 계속 합쳐볼까요?`,
+        "문서 합쳐보기 확인",
+      );
+      if (!ok) return;
     }
     close();
     void showMergedDocuments(range);

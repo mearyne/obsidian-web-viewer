@@ -67,3 +67,4 @@
 - 2026-06-27: Prevent embed refresh clicks from opening links and restore previously rendered document tabs without reloading when switching back.
 - 2026-06-27: Stop refresh-time tab restore fallback from converting incomplete merged-document tabs into calendar tabs.
 - 2026-06-27: Fix merged-document command calendar so two clicked dates create a range and the selected range is used when running.
+- 2026-06-27: Ask for confirmation before opening merged-document view when the selected date range includes many documents.
