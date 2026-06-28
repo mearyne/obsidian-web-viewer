@@ -2472,8 +2472,32 @@ button:disabled {
   width: 100%;
 }
 
-.mindmap-toolbar-row:first-child,
-.mindmap-toolbar-row:nth-child(5) {
+.mindmap-toolbar-layout-row {
+  gap: 6px;
+  grid-template-columns: 1fr;
+  padding: 6px;
+}
+
+.mindmap-toolbar-layout-row span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.mindmap-toolbar-layout-row select {
+  background: color-mix(in srgb, var(--surface) 95%, var(--bg) 5%);
+  border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+  border-radius: 7px;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  height: 32px;
+  padding: 0 7px;
+  width: 100%;
+}
+
+.mindmap-toolbar-mini-row,
+.mindmap-toolbar-search-row {
   grid-template-columns: repeat(2, 34px);
 }
 

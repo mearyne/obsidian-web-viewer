@@ -182,11 +182,22 @@ const state = {
   lastSelectedPath: null,
   treeVisibleOrder: [],
   sidebarDraggedFilePath: "",
+  mindmapDocumentLayouts: new Map(),
 };
 
 const EXCALIDRAW_PREVIEW_ENABLED = false;
 const MINDMAP_DOCUMENT_TYPE = "owv-mindmap";
 const MINDMAP_DATA_BLOCK_PATTERN = /<!--\s*owv-mindmap-data\s*\n([\s\S]*?)\n\s*owv-mindmap-data\s*-->/i;
+const MINDMAP_LAYOUT_OPTIONS = [
+  { value: "mindMap", label: "Mind" },
+  { value: "logicalStructure", label: "Logical" },
+  { value: "logicalStructureLeft", label: "Left" },
+  { value: "organizationStructure", label: "Org" },
+  { value: "catalogOrganization", label: "Catalog" },
+  { value: "timeline", label: "Timeline" },
+  { value: "free", label: "Free" },
+];
+const MINDMAP_LAYOUT_VALUES = new Set(MINDMAP_LAYOUT_OPTIONS.map((option) => option.value));
 
 const MINDMAP_THEME_OPTIONS = [
   { value: "light", label: "라이트 기본" },
@@ -3209,17 +3220,12 @@ function ensureMindmapOptionsSection() {
   section.innerHTML = `
     <summary>&#47560;&#51064;&#46300;&#47605;</summary>
     <div class="option-node-body">
-      <label class="option-field">
-        <span>&#44592;&#48376; &#47112;&#51060;&#50500;&#50883;</span>
-        <select id="mindmapLayoutSelect">
-          <option value="mindMap">Mind</option>
-          <option value="logicalStructure">Logic</option>
-          <option value="logicalStructureLeft">Left</option>
-          <option value="organizationStructure">Org</option>
-          <option value="catalogOrganization">Catalog</option>
-          <option value="timeline">Timeline</option>
-        </select>
-      </label>
+        <label class="option-field">
+          <span>&#44592;&#48376; &#47112;&#51060;&#50500;&#50883;</span>
+          <select id="mindmapLayoutSelect">
+            ${renderMindmapLayoutOptions(state.mindmapOptions.layout)}
+          </select>
+        </label>
       <label class="option-field">
         <span>&#46972;&#51060;&#53944; &#53580;&#47560;</span>
         <select id="mindmapLightThemeSelect">
@@ -3259,7 +3265,7 @@ function loadMindmapOptionsFromLocalStorage() {
 }
 
 function normalizeMindmapOptions(options = {}) {
-  const layouts = new Set(["mindMap", "logicalStructure", "logicalStructureLeft", "organizationStructure", "catalogOrganization", "timeline"]);
+  const layouts = MINDMAP_LAYOUT_VALUES;
   const themes = new Set(MINDMAP_THEME_OPTIONS.map((theme) => theme.value));
   const previous = state.mindmapOptions || { layout: "mindMap", lightTheme: "light", darkTheme: "dark", autoFit: true, advancedTools: true };
   const layout = layouts.has(options.mindmapLayout) ? options.mindmapLayout : (layouts.has(options.layout) ? options.layout : previous.layout);
@@ -3278,6 +3284,61 @@ function normalizeStoredBoolean(value, fallback) {
   if (value === true || value === "true" || value === "1") return true;
   if (value === false || value === "false" || value === "0") return false;
   return Boolean(fallback);
+}
+
+function renderMindmapLayoutOptions(selectedLayout = null) {
+  const layout = normalizeMindmapLayoutValue(selectedLayout, state.mindmapOptions.layout);
+  return MINDMAP_LAYOUT_OPTIONS.map((option) => `<option value="${option.value}"${option.value === layout ? " selected" : ""}>${option.label}</option>`).join("");
+}
+
+function normalizeMindmapLayoutValue(value, fallback = "mindMap") {
+  const normalized = String(value || "").trim();
+  if (!normalized) return fallback;
+  return MINDMAP_LAYOUT_VALUES.has(normalized) ? normalized : fallback;
+}
+
+function extractFrontmatterField(frontmatter, key) {
+  if (!frontmatter) return "";
+  const lines = String(frontmatter).split("\n");
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const index = trimmed.indexOf(":");
+    if (index === -1) continue;
+    const name = trimmed.slice(0, index).trim().toLowerCase();
+    if (name !== key.toLowerCase()) continue;
+    return trimmed.slice(index + 1).trim().replace(/^["']|["']$/g, "");
+  }
+  return "";
+}
+
+function getMindmapLayoutForDocument(path, { fallbackLayout = state.mindmapOptions.layout, frontmatter = null } = {}) {
+  if (!path) return normalizeMindmapLayoutValue(fallbackLayout, "mindMap");
+  if (state.mindmapDocumentLayouts.has(path)) {
+    const cached = state.mindmapDocumentLayouts.get(path);
+    return normalizeMindmapLayoutValue(cached, fallbackLayout);
+  }
+
+  const rawLayout = extractFrontmatterField(frontmatter, "mindmapLayout");
+  return normalizeMindmapLayoutValue(rawLayout, fallbackLayout);
+}
+
+function getMindmapRuntimeLayoutForDocument(path, { fallbackLayout = state.mindmapOptions.layout } = {}) {
+  const layout = getMindmapLayoutForDocument(path, { fallbackLayout, frontmatter: null });
+  return layout === "free" ? "logicalStructure" : layout;
+}
+
+function syncMindmapDocumentLayout(path, { frontmatter = null } = {}) {
+  if (!path) return;
+  const layout = normalizeMindmapLayoutValue(
+    extractFrontmatterField(frontmatter, "mindmapLayout"),
+    "",
+  );
+  if (!layout) {
+    state.mindmapDocumentLayouts.delete(path);
+    return;
+  }
+  state.mindmapDocumentLayouts.set(path, layout);
 }
 
 function applyMindmapOptions(options = {}, { persist = true, applyVisible = true } = {}) {
@@ -3311,7 +3372,7 @@ function persistMindmapOptions() {
 function applyVisibleMindmapOptions() {
   const jm = state.mindmapInstance;
   if (!jm || els.mindmapShell?.hidden) return;
-  jm.setLayout?.(state.mindmapOptions.layout);
+  jm.setLayout?.(getMindmapRuntimeLayoutForDocument(state.currentPath, { fallbackLayout: state.mindmapOptions.layout }));
   jm.setThemeConfig?.(getMindmapThemeConfig());
   refreshVisibleMindmapThemeData();
   updateMindmapAdvancedToolVisibility();
@@ -3633,7 +3694,7 @@ async function createAndOpenMindmap(title, dirPathOverride) {
   }
 
   const cleanTitle = title.replace(/\.md$/i, "");
-  const initialContent = buildMindmapDocumentContent(createDefaultMindmapData(cleanTitle));
+  const initialContent = buildMindmapDocumentContent(createDefaultMindmapData(cleanTitle), "", path);
 
   if (!state.rootHandle && state.serverVaultWritable) {
     const metadata = await writeServerFile(path, initialContent, { backup: false });
@@ -3700,7 +3761,7 @@ async function createLinkedMindmapFromCurrentNote() {
     .trim();
   const fileName = `${safeBase}.md`;
   const path = currentDir ? `${currentDir}/${fileName}` : fileName;
-  const initialContent = buildMindmapDocumentContent(createDefaultMindmapData(safeBase));
+  const initialContent = buildMindmapDocumentContent(createDefaultMindmapData(safeBase), "", path);
 
   let mindmapNode;
   if (!state.rootHandle && state.serverVaultWritable) {
@@ -4165,6 +4226,7 @@ function renderCurrentDocument(showOpenStep = null, diagnostics = null) {
   els.markdownView.hidden = false;
 
   if (isMindmapDocument(state.currentContent)) {
+    syncMindmapDocumentLayout(state.currentPath, { frontmatter: extractFrontmatter(state.currentContent).frontmatter });
     markRenderStep("마인드맵 렌더링 중");
     renderMindmapDocument();
     return;
@@ -4282,27 +4344,29 @@ function createDefaultMindmapData(title) {
   };
 }
 
-function buildMindmapDocumentContent(data, previousContent = "") {
+function buildMindmapDocumentContent(data, previousContent = "", path = state.currentPath) {
   const json = JSON.stringify(data, null, 2);
   const block = "<!-- owv-mindmap-data\n" + json + "\nowv-mindmap-data -->";
   const source = String(previousContent || "");
   const parsed = extractFrontmatter(source);
   const title = data?.data?.topic || data?.meta?.name || "마인드맵";
-  if (!source) return `${buildMindmapFrontmatter("")}# ${title}\n\n${block}\n`;
+  const layout = getMindmapLayoutForDocument(path, { fallbackLayout: state.mindmapOptions.layout, frontmatter: parsed.frontmatter });
+  if (!source) return `${buildMindmapFrontmatter("", layout)}# ${title}\n\n${block}\n`;
 
   const body = parsed.body || "";
   const nextBody = MINDMAP_DATA_BLOCK_PATTERN.test(body)
     ? body.replace(MINDMAP_DATA_BLOCK_PATTERN, block)
     : `${body.replace(/\s*$/u, "") || `# ${title}`}\n\n${block}\n`;
-  return `${buildMindmapFrontmatter(parsed.frontmatter)}${nextBody.endsWith("\n") ? nextBody : `${nextBody}\n`}`;
+  return `${buildMindmapFrontmatter(parsed.frontmatter, layout)}${nextBody.endsWith("\n") ? nextBody : `${nextBody}\n`}`;
 }
 
-function buildMindmapFrontmatter(frontmatter) {
+function buildMindmapFrontmatter(frontmatter, layout = state.mindmapOptions.layout) {
   const lines = String(frontmatter || "")
     .split("\n")
     .map((line) => line.trimEnd())
-    .filter((line) => !/^\s*(?:type|documentType|document-type)\s*:/i.test(line));
+    .filter((line) => !/^\s*(?:type|documentType|document-type|mindmapLayout)\s*:/i.test(line));
   lines.push(`type: ${MINDMAP_DOCUMENT_TYPE}`);
+  lines.push(`mindmapLayout: ${normalizeMindmapLayoutValue(layout, state.mindmapOptions.layout)}`);
   return `---\n${lines.filter(Boolean).join("\n")}\n---\n\n`;
 }
 
@@ -4568,6 +4632,9 @@ function renderMindmapDocument() {
       <div id="mindmapCanvas" class="mindmap-canvas" tabindex="0"></div>
     </section>
   `;
+  if (canEdit) {
+    buildMindmapLayoutToolbarSection();
+  }
   const canvas = els.mindmapShell.querySelector("#mindmapCanvas");
   canvas?.addEventListener("pointerdown", () => {
     state.mindmapKeyCaptureActive = true;
@@ -4586,7 +4653,7 @@ function renderSimpleMindMapDocument(data, canvas) {
     el: canvas,
     data: legacyMindmapDataToSimpleMindMapData(data),
     readonly: !(state.editMode && canEditNode(state.currentNode)),
-    layout: state.mindmapOptions.layout,
+    layout: getMindmapRuntimeLayoutForDocument(state.currentPath, { fallbackLayout: state.mindmapOptions.layout }),
     theme: "default",
     themeConfig: getMindmapThemeConfig(),
     fit: state.mindmapOptions.autoFit,
@@ -4618,10 +4685,53 @@ function renderSimpleMindMapDocument(data, canvas) {
   });
 }
 
+function buildMindmapLayoutToolbarSection() {
+  const toolbar = els.mindmapShell?.querySelector(".mindmap-toolbar");
+  if (!toolbar) return;
+  toolbar.querySelector("[data-mindmap-layout-select]")?.parentElement?.remove();
+  toolbar.querySelectorAll(".mindmap-toolbar-row").forEach((row) => {
+    row.classList.remove("mindmap-toolbar-mini-row", "mindmap-toolbar-search-row");
+    if (row.querySelector("[data-mindmap-search]")) row.classList.add("mindmap-toolbar-search-row");
+  });
+
+  const row = document.createElement("div");
+  row.className = "mindmap-toolbar-row mindmap-toolbar-layout-row";
+  const label = document.createElement("span");
+  label.textContent = "Layout";
+  const select = document.createElement("select");
+  select.setAttribute("data-mindmap-layout-select", "");
+  select.innerHTML = renderMindmapLayoutOptions(getMindmapLayoutForDocument(state.currentPath, { fallbackLayout: state.mindmapOptions.layout }));
+  row.append(label, select);
+  toolbar.insertBefore(row, toolbar.firstElementChild);
+
+  const buttonRows = toolbar.querySelectorAll(".mindmap-toolbar-row:not(.mindmap-toolbar-layout-row)");
+  buttonRows[0]?.classList.add("mindmap-toolbar-mini-row");
+  if (buttonRows[4]) buttonRows[4].classList.add("mindmap-toolbar-mini-row");
+}
+
 function bindMindmapToolbarControls() {
   const canEdit = state.editMode && canEditNode(state.currentNode);
   restoreMindmapToolbarPosition();
   els.mindmapShell?.querySelector(".mindmap-toolbar-toggle")?.addEventListener("pointerdown", startMindmapToolbarDrag);
+  const layoutSelect = els.mindmapShell?.querySelector("[data-mindmap-layout-select]");
+  if (layoutSelect) {
+    layoutSelect.value = getMindmapLayoutForDocument(state.currentPath, { fallbackLayout: state.mindmapOptions.layout });
+    layoutSelect.addEventListener("change", () => {
+      const layout = normalizeMindmapLayoutValue(layoutSelect.value, state.mindmapOptions.layout);
+      const path = state.currentPath || "";
+      if (path) {
+        state.mindmapDocumentLayouts.set(path, layout);
+      }
+      if (state.mindmapInstance) {
+        state.mindmapInstance.setLayout?.(getMindmapRuntimeLayoutForDocument(path, { fallbackLayout: layout }));
+        if (state.mindmapOptions.autoFit) requestAnimationFrame(() => fitMindmapToView());
+      }
+      if (canEdit) {
+        state.editorDirty = true;
+        renderEditSaveButton();
+      }
+    });
+  }
   els.mindmapShell?.querySelectorAll("[data-edit-only]").forEach((button) => {
     button.disabled = !canEdit;
   });
@@ -4738,7 +4848,7 @@ function fitMindmapToView() {
 function handleMindmapKeydown(event) {
   if (!state.mindmapInstance || els.mindmapShell?.hidden) return;
   if (isMindmapTextEditingEvent(event)) return;
-  if (isPlainMindmapKey(event, "e")) {
+  if (isPlainMindmapKey(event, "e") || isPlainMindmapKey(event, "f2")) {
     if (!state.editMode && canEditNode(state.currentNode)) {
       event.preventDefault();
       event.stopPropagation();
@@ -5048,7 +5158,7 @@ async function saveMindmapNow({ silent = true } = {}) {
   }
   const data = simpleMindMapDataToLegacyMindmapData(state.mindmapInstance.getData(), state.mindmapContext?.sourceData);
   const previousContent = context?.content ?? state.currentContent;
-  const nextContent = buildMindmapDocumentContent(data, previousContent);
+  const nextContent = buildMindmapDocumentContent(data, previousContent, node.path);
   if (!isMindmapDocument(nextContent)) {
     if (!silent) showAppToast("Mindmap document format is invalid.", "error");
     return false;
@@ -10867,9 +10977,11 @@ function renderEmbeddedDocumentContent(path, content) {
 function renderMindmapEmbedPreview(content, path) {
   const data = extractMindmapData(content);
   const title = displayDocumentTitle(path.split("/").pop() || path);
+  const parsed = extractFrontmatter(content);
+  const layout = getMindmapLayoutForDocument(path, { fallbackLayout: state.mindmapOptions.layout, frontmatter: parsed?.frontmatter });
   if (!data) return `<a class="wiki-link" href="#" data-wiki="${escapeAttribute(path)}">${escapeHtml(title)}</a>`;
   const id = `mindmap_embed_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-  state.mindmapEmbedData.set(id, { data, path });
+  state.mindmapEmbedData.set(id, { data, path, layout });
   return `
     <div class="mindmap-embed-preview">
       <div class="mindmap-embed-header">
@@ -10927,12 +11039,13 @@ function hydrateMindmapEmbeds(root) {
       return;
     }
     canvas.dataset.mindmapHydrated = "true";
+    const layout = getMindmapRuntimeLayoutForDocument(entry.path, { fallbackLayout: entry.layout || state.mindmapOptions.layout });
     const previewData = expandMindmapPreviewNodes(legacyMindmapDataToSimpleMindMapData(entry.data));
     const mindMap = new window.SimpleMindMap({
       el: canvas,
       data: previewData,
       readonly: true,
-      layout: state.mindmapOptions.layout,
+      layout,
       theme: "default",
       themeConfig: getMindmapThemeConfig(),
       fit: true,
