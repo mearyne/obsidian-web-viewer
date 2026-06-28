@@ -3184,6 +3184,8 @@ async function deleteMergedDocument(path) {
 
   showLoading("문서 삭제 중...");
   const range = state.mergedDocumentRange;
+  const shouldRestoreScroll = state.activeView === "merged" && Boolean(range);
+  const previousScrollTop = shouldRestoreScroll ? els.viewerWrap.scrollTop : 0;
   try {
     if (node.handle && node.dirHandle) {
       await node.dirHandle.removeEntry(node.name);
@@ -3203,6 +3205,7 @@ async function deleteMergedDocument(path) {
     for (const id of tabsToClose) await closeTab(id);
     if (state.activeView === "merged" && range) {
       await renderMergedDocuments(range);
+      els.viewerWrap.scrollTop = Math.min(previousScrollTop, els.viewerWrap.scrollHeight);
       return;
     }
     showAppToast("문서가 삭제되었습니다.", "success");

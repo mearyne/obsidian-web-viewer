@@ -88,3 +88,4 @@
 - 2026-06-28: Remove free from mindmap layout options.
 - 2026-06-28: Proceed with hybrid mindmap tools drawer direction plus markdown import/export, built-in mindmap features, saved-status icon, merged-tab restore, task-dialog Ctrl+S, and 1d matrix urgent grouping.
 - 2026-06-28: Move merged-document delete control to the far right of each document title bar and show it as an emoji icon.
+- 2026-06-28: Preserve scroll position after deleting a document from merged documents view.
