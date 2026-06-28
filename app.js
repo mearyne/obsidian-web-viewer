@@ -3425,6 +3425,18 @@ function renderMindmapLayoutOptions(selectedLayout = null) {
   return MINDMAP_LAYOUT_OPTIONS.map((option) => `<option value="${option.value}"${option.value === layout ? " selected" : ""}>${option.label}</option>`).join("");
 }
 
+function renderMindmapThemeOptions(selectedTheme = null) {
+  const theme = normalizeMindmapThemeValue(selectedTheme, selectedMindmapThemeName());
+  return MINDMAP_ALL_THEME_OPTIONS.map((option) => `<option value="${option.value}"${option.value === theme ? " selected" : ""}>${option.label}</option>`).join("");
+}
+
+function normalizeMindmapThemeValue(value, fallback = "light") {
+  const normalized = String(value || "").trim();
+  if (!normalized) return fallback;
+  const themes = new Set(MINDMAP_ALL_THEME_OPTIONS.map((theme) => theme.value));
+  return themes.has(normalized) ? normalized : fallback;
+}
+
 function normalizeMindmapLayoutValue(value, fallback = "mindMap") {
   const normalized = String(value || "").trim();
   if (!normalized) return fallback;
@@ -3485,11 +3497,13 @@ function syncMindmapOptionInputs() {
   const layout = document.getElementById("mindmapLayoutSelect");
   const lightTheme = document.getElementById("mindmapLightThemeSelect");
   const darkTheme = document.getElementById("mindmapDarkThemeSelect");
+  const toolbarTheme = els.mindmapShell?.querySelector("[data-mindmap-theme-select]");
   const autoFit = document.getElementById("mindmapAutoFitInput");
   const advancedTools = document.getElementById("mindmapAdvancedToolsInput");
   if (layout) layout.value = state.mindmapOptions.layout;
   if (lightTheme) lightTheme.value = state.mindmapOptions.lightTheme;
   if (darkTheme) darkTheme.value = state.mindmapOptions.darkTheme;
+  if (toolbarTheme) toolbarTheme.value = selectedMindmapThemeName();
   if (autoFit) autoFit.checked = state.mindmapOptions.autoFit;
   if (advancedTools) advancedTools.checked = state.mindmapOptions.advancedTools;
 }
@@ -4846,23 +4860,35 @@ function renderSimpleMindMapDocument(data, canvas) {
 function buildMindmapLayoutToolbarSection() {
   const toolbar = els.mindmapShell?.querySelector(".mindmap-toolbar");
   if (!toolbar) return;
-  toolbar.querySelector("[data-mindmap-layout-select]")?.parentElement?.remove();
+  toolbar.querySelector("[data-mindmap-layout-select]")?.closest(".mindmap-toolbar-row")?.remove();
+  toolbar.querySelector("[data-mindmap-theme-select]")?.closest(".mindmap-toolbar-row")?.remove();
   toolbar.querySelectorAll(".mindmap-toolbar-row").forEach((row) => {
     row.classList.remove("mindmap-toolbar-mini-row", "mindmap-toolbar-search-row");
     if (row.querySelector("[data-mindmap-search]")) row.classList.add("mindmap-toolbar-search-row");
   });
 
-  const row = document.createElement("div");
-  row.className = "mindmap-toolbar-row mindmap-toolbar-layout-row";
-  const label = document.createElement("span");
-  label.textContent = "Layout";
-  const select = document.createElement("select");
-  select.setAttribute("data-mindmap-layout-select", "");
-  select.innerHTML = renderMindmapLayoutOptions(getMindmapLayoutForDocument(state.currentPath, { fallbackLayout: state.mindmapOptions.layout }));
-  row.append(label, select);
-  toolbar.insertBefore(row, toolbar.firstElementChild);
+  const layoutRow = document.createElement("div");
+  layoutRow.className = "mindmap-toolbar-row mindmap-toolbar-select-row";
+  const layoutLabel = document.createElement("span");
+  layoutLabel.textContent = "Layout";
+  const layoutSelect = document.createElement("select");
+  layoutSelect.setAttribute("data-mindmap-layout-select", "");
+  layoutSelect.innerHTML = renderMindmapLayoutOptions(getMindmapLayoutForDocument(state.currentPath, { fallbackLayout: state.mindmapOptions.layout }));
+  layoutRow.append(layoutLabel, layoutSelect);
 
-  const buttonRows = toolbar.querySelectorAll(".mindmap-toolbar-row:not(.mindmap-toolbar-layout-row)");
+  const themeRow = document.createElement("div");
+  themeRow.className = "mindmap-toolbar-row mindmap-toolbar-select-row";
+  const themeLabel = document.createElement("span");
+  themeLabel.textContent = "Theme";
+  const themeSelect = document.createElement("select");
+  themeSelect.setAttribute("data-mindmap-theme-select", "");
+  themeSelect.innerHTML = renderMindmapThemeOptions(selectedMindmapThemeName());
+  themeRow.append(themeLabel, themeSelect);
+
+  toolbar.insertBefore(themeRow, toolbar.firstElementChild);
+  toolbar.insertBefore(layoutRow, themeRow);
+
+  const buttonRows = toolbar.querySelectorAll(".mindmap-toolbar-row:not(.mindmap-toolbar-select-row)");
   buttonRows[0]?.classList.add("mindmap-toolbar-mini-row");
   if (buttonRows[4]) buttonRows[4].classList.add("mindmap-toolbar-mini-row");
 }
@@ -4888,6 +4914,18 @@ function bindMindmapToolbarControls() {
         state.editorDirty = true;
         renderEditSaveButton();
       }
+    });
+  }
+  const themeSelect = els.mindmapShell?.querySelector("[data-mindmap-theme-select]");
+  if (themeSelect) {
+    themeSelect.value = selectedMindmapThemeName();
+    themeSelect.addEventListener("change", () => {
+      const field = document.documentElement.dataset.theme === "dark" ? "darkTheme" : "lightTheme";
+      applyMindmapOptions({
+        ...state.mindmapOptions,
+        [field]: normalizeMindmapThemeValue(themeSelect.value, selectedMindmapThemeName()),
+      });
+      scheduleSettingsSave();
     });
   }
   els.mindmapShell?.querySelectorAll("[data-edit-only]").forEach((button) => {

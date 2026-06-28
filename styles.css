@@ -2511,18 +2511,18 @@ button:disabled {
   width: 100%;
 }
 
-.mindmap-toolbar-layout-row {
+.mindmap-toolbar-select-row {
   gap: 6px;
   grid-template-columns: 1fr;
   padding: 6px;
 }
 
-.mindmap-toolbar-layout-row span {
+.mindmap-toolbar-select-row span {
   color: var(--muted);
   font-size: 11px;
 }
 
-.mindmap-toolbar-layout-row select {
+.mindmap-toolbar-select-row select {
   background: color-mix(in srgb, var(--surface) 95%, var(--bg) 5%);
   border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
   border-radius: 7px;
