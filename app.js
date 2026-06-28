@@ -58,6 +58,67 @@ const MINDMAP_COMMAND_RULES = globalThis.MindmapCommandRules || {
     return `${String(content || "").replace(/\s*$/u, "")}\n\n![[${path}]]\n`;
   },
 };
+const MINDMAP_MARKDOWN_RULES = globalThis.MindmapMarkdownRules || {
+  mindmapDataToMarkdown,
+  markdownToMindmapData,
+};
+
+function normalizeMindmapMarkdownTopic(value, fallback = "Untitled") {
+  const text = String(value || "")
+    .replace(/<[^>]*>/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return text || fallback;
+}
+
+function mindmapDataToMarkdown(data) {
+  const root = data?.data || data;
+  const title = normalizeMindmapMarkdownTopic(root?.topic || root?.text, "Mindmap");
+  const lines = [`# ${title}`, ""];
+  const visit = (node, depth) => {
+    const indent = "  ".repeat(depth);
+    lines.push(`${indent}- ${normalizeMindmapMarkdownTopic(node?.topic || node?.text)}`);
+    (node?.children || []).forEach((child) => visit(child, depth + 1));
+  };
+  (root?.children || []).forEach((child) => visit(child, 0));
+  return `${lines.join("\n").replace(/\s+$/u, "")}\n`;
+}
+
+function markdownToMindmapData(markdown) {
+  const lines = String(markdown || "").replace(/\r\n/g, "\n").split("\n");
+  let rootTopic = "";
+  const stack = [];
+  const root = { topic: "Mindmap", children: [] };
+  for (const raw of lines) {
+    const heading = raw.match(/^\s*#\s+(.+?)\s*$/);
+    if (heading && !rootTopic) {
+      rootTopic = heading[1].trim();
+      root.topic = normalizeMindmapMarkdownTopic(rootTopic, "Mindmap");
+      continue;
+    }
+    const bullet = raw.match(/^(\s*)[-*+]\s+(.+?)\s*$/);
+    if (!bullet) continue;
+    const depth = Math.floor(bullet[1].replace(/\t/g, "  ").length / 2);
+    const node = { topic: normalizeMindmapMarkdownTopic(bullet[2]), children: [] };
+    if (depth === 0 || !stack[depth - 1]) {
+      root.children.push(node);
+    } else {
+      stack[depth - 1].children.push(node);
+    }
+    stack[depth] = node;
+    stack.length = depth + 1;
+  }
+  if (!rootTopic && root.children.length === 1) {
+    const only = root.children[0];
+    root.topic = only.topic;
+    root.children = only.children || [];
+  }
+  return {
+    meta: { name: root.topic, author: "obsidian-web-viewer", version: "1.0" },
+    format: "node_tree",
+    data: root,
+  };
+}
 
 const state = {
   files: new Map(),
@@ -962,9 +1023,12 @@ function isTypingTarget(target) {
   return Boolean(target?.closest?.("input, textarea, select, [contenteditable='true']"));
 }
 
+function isSaveShortcut(event) {
+  return (event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "s";
+}
+
 function isMindmapSaveShortcut(event) {
-  if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey) return false;
-  if (event.code !== "KeyS" && event.key.toLowerCase() !== "s") return false;
+  if (!isSaveShortcut(event)) return false;
   if (!state.mindmapInstance || els.mindmapShell?.hidden) return false;
   if (!(state.editMode && canEditNode(state.currentNode))) return false;
   const targetInMindmap = event.target?.closest?.(".mindmap-shell");
@@ -4674,6 +4738,11 @@ function renderMindmapDocument() {
             <button type="button" data-mindmap-action="fit" aria-label="화면에 맞춤" title="화면에 맞춤">⛶</button>
             <button type="button" data-mindmap-action="reset-layout" data-mindmap-advanced aria-label="레이아웃 정리" title="레이아웃 정리">↺</button>
           </div>
+          <div class="mindmap-toolbar-row">
+            <button type="button" data-mindmap-action="export-md" aria-label="Markdown export" title="Markdown export">MD↓</button>
+            <button type="button" data-mindmap-action="import-md" data-edit-only aria-label="Markdown import" title="Markdown import">MD↑</button>
+            <button type="button" data-mindmap-action="tools" aria-label="Tools" title="Tools">Tools</button>
+          </div>
           <div class="mindmap-toolbar-row mindmap-toolbar-search-row">
             <input class="mindmap-search-input" type="search" data-mindmap-search placeholder="검색" aria-label="마인드맵 내부 검색" />
             <button type="button" data-mindmap-action="search-prev" aria-label="이전 검색 결과" title="이전 검색 결과">‹</button>
@@ -4683,6 +4752,20 @@ function renderMindmapDocument() {
           </div>
         </div>
       </details>` : ""}
+      ${canEdit ? `<aside class="mindmap-tools-drawer" data-mindmap-tools-drawer hidden>
+        <header>
+          <strong>Tools</strong>
+          <button type="button" data-mindmap-action="tools-close" aria-label="Close" title="Close">×</button>
+        </header>
+        <div class="mindmap-tools-grid">
+          <button type="button" data-mindmap-action="expand-all">Expand all</button>
+          <button type="button" data-mindmap-action="collapse-all">Collapse all</button>
+          <button type="button" data-mindmap-action="collapse-level-2">Level 2</button>
+          <button type="button" data-mindmap-action="reset-layout">Reset layout</button>
+          <button type="button" data-mindmap-action="export-md">Export MD</button>
+          <button type="button" data-mindmap-action="import-md" data-edit-only>Import MD</button>
+        </div>
+      </aside>` : ""}
       <div id="mindmapCanvas" class="mindmap-canvas" tabindex="0"></div>
     </section>
   `;
@@ -4889,9 +4972,60 @@ function runMindmapToolbarAction(action) {
   if (action === "collapse-level-2") jm.execCommand?.("UNEXPAND_TO_LEVEL", 2);
   if (action === "fit") jm.view?.fit?.();
   if (action === "reset-layout") jm.execCommand?.("RESET_LAYOUT");
+  if (action === "export-md") exportCurrentMindmapMarkdown();
+  if (action === "import-md") importMarkdownIntoCurrentMindmap();
+  if (action === "tools") toggleMindmapToolsDrawer(true);
+  if (action === "tools-close") toggleMindmapToolsDrawer(false);
   if (action === "search-next") runMindmapSearchNext();
   if (action === "search-prev") runMindmapSearchPrevious();
   if (action === "search-clear") clearMindmapSearch();
+}
+
+function toggleMindmapToolsDrawer(open) {
+  const drawer = els.mindmapShell?.querySelector("[data-mindmap-tools-drawer]");
+  if (!drawer) return;
+  drawer.hidden = !open;
+}
+
+function exportCurrentMindmapMarkdown() {
+  const jm = state.mindmapInstance;
+  if (!jm) return;
+  const data = simpleMindMapDataToLegacyMindmapData(jm.getData(), state.mindmapContext?.sourceData);
+  const markdown = MINDMAP_MARKDOWN_RULES.mindmapDataToMarkdown(data);
+  const title = displayDocumentTitle(state.currentNode?.name || state.currentPath || "mindmap").replace(/\.md$/i, "");
+  downloadTextFile(`${title}.mindmap.md`, markdown, "text/markdown;charset=utf-8");
+}
+
+function importMarkdownIntoCurrentMindmap() {
+  if (!(state.editMode && canEditNode(state.currentNode))) {
+    showAppToast("편집 모드에서만 불러올 수 있습니다.", "error");
+    return;
+  }
+  const text = prompt("Markdown 내용을 붙여넣으세요.");
+  if (!text || !text.trim()) return;
+  const data = MINDMAP_MARKDOWN_RULES.markdownToMindmapData(text);
+  if (!data?.data?.topic || !Array.isArray(data.data.children)) {
+    showAppToast("불러올 Markdown 구조를 찾지 못했습니다.", "error");
+    return;
+  }
+  if (!confirm("현재 마인드맵을 Markdown 내용으로 교체할까요?")) return;
+  state.mindmapInstance.updateData?.(legacyMindmapDataToSimpleMindMapData(data));
+  state.editorDirty = true;
+  renderEditSaveButton();
+  toggleMindmapToolsDrawer(false);
+  if (state.mindmapOptions.autoFit) requestAnimationFrame(() => fitMindmapToView());
+}
+
+function downloadTextFile(filename, content, type = "text/plain;charset=utf-8") {
+  const blob = new Blob([String(content || "")], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 function fitMindmapToView() {
@@ -6210,9 +6344,10 @@ function renderEditSaveButton() {
   if (state.editMode) {
     els.webEditButton.classList.add("is-saving-mode");
     els.webEditButton.classList.toggle("is-dirty", state.editorDirty);
-    const label = state.editorDirty ? "저장" : "저장됨";
-    els.webEditButton.setAttribute("aria-label", label);
-    els.webEditButton.title = label;
+    const label = state.editorDirty ? "저장" : "✓";
+    const statusLabel = state.editorDirty ? "저장" : "저장됨";
+    els.webEditButton.setAttribute("aria-label", statusLabel);
+    els.webEditButton.title = statusLabel;
     els.webEditButton.textContent = label;
     return;
   }
@@ -7369,16 +7504,16 @@ function renderEisenhowerMatrix() {
   const unclassified = tasks.filter((task) => !task.priority && !task.isRecurring);
   const quadrants = [
     {
-      key: "do",
-      icon: "🔥",
-      title: "중요 + 긴급",
-      attitude: "바로 즉시 처리",
+      key: "urgent",
+      icon: "⚡",
+      title: "긴급",
+      attitude: "오늘 처리. 중요도는 유지",
       urgent: true,
-      important: true,
+      important: null,
     },
     {
       key: "delegate",
-      icon: "⚡",
+      icon: "▫",
       title: "미중요",
       attitude: "짧게 처리하고 넘기기",
       urgent: false,
@@ -7556,10 +7691,8 @@ function matrixTaskImportant(task) {
 
 function matrixTaskPlacement(task, range = matrixDateRange()) {
   if (task.isRecurring) return "drop";
-  if (matrixTaskUrgent(task, range)) {
-    return matrixTaskImportant(task) ? "do" : "delegate";
-  }
-  return matrixTaskImportant(task) ? "plan" : "drop";
+  if (matrixTaskUrgent(task, range)) return "urgent";
+  return matrixTaskImportant(task) ? "plan" : "delegate";
 }
 
 function bindMatrixEvents() {
@@ -7653,9 +7786,9 @@ function shiftMatrixDate(direction) {
 
 function matrixPlacementFromKey(key) {
   return {
-    do: { key: "do", urgent: true, important: true, recurring: false, priority: "상" },
+    urgent: { key: "urgent", urgent: true, important: null, recurring: false, priority: null },
     plan: { key: "plan", urgent: false, important: true, recurring: false, priority: "상" },
-    delegate: { key: "delegate", urgent: true, important: false, recurring: false, priority: "하" },
+    delegate: { key: "delegate", urgent: false, important: false, recurring: false, priority: "하" },
     drop: { key: "drop", urgent: false, important: false, recurring: true, priority: "하" },
   }[key] || null;
 }
@@ -9157,7 +9290,7 @@ async function moveTaskToMatrixQuadrant(path, lineNumber, placement) {
   const range = matrixDateRange();
   const targetDate = placement.urgent ? formatDate(range.start) : formatDate(addDays(range.end, -1));
   let nextLine = replaceTaskLineDate(lines[index], targetDate, "\u{1F4C5}");
-  nextLine = replaceTaskPriorityTag(nextLine, placement.priority || (placement.important ? "상" : "하"));
+  if (placement.priority) nextLine = replaceTaskPriorityTag(nextLine, placement.priority);
   nextLine = replaceTaskRecurringTag(nextLine, Boolean(placement.recurring));
   if (nextLine === lines[index]) return;
 
@@ -9724,6 +9857,12 @@ function bindTaskCreateDialog() {
   els.taskCreateOutdentButton?.addEventListener("click", () => adjustTaskCreateSubItemDepth(true));
 
   els.taskCreateDialog.addEventListener("keydown", (e) => {
+    if (isSaveShortcut(e)) {
+      e.preventDefault();
+      e.stopPropagation();
+      els.taskCreateConfirmBtn?.click();
+      return;
+    }
     if (e.key === "Escape") { e.preventDefault(); els.taskCreateDialog.close("cancel"); }
     if (e.key === "Enter" && e.target === els.taskTitleInput) { e.preventDefault(); els.taskCreateConfirmBtn?.click(); }
   });
@@ -9880,16 +10019,18 @@ function bindTaskEditDialog() {
     if (e.key === "Escape") { e.preventDefault(); els.taskEditDialog.close("cancel"); }
     if (e.key === "Enter" && e.target === els.taskEditDialogTitle) { e.preventDefault(); els.taskEditConfirmBtn?.click(); }
     const isView = els.taskEditDialog.querySelector(".task-create-form")?.classList.contains("task-mode-view");
+    if (!isView && isSaveShortcut(e)) {
+      e.preventDefault();
+      e.stopPropagation();
+      els.taskEditConfirmBtn?.click();
+      return;
+    }
     if (isView && e.key === "e" && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
       e.preventDefault();
       e.stopPropagation();
       setTaskDialogMode("edit");
       els.taskEditDialogTitle?.focus();
       els.taskEditDialogTitle?.select();
-    }
-    if (!isView && (e.ctrlKey || e.metaKey) && e.key === "s") {
-      e.preventDefault();
-      els.taskEditConfirmBtn?.click();
     }
   });
 }
@@ -12363,6 +12504,8 @@ async function loadOpenTabsFromVault() {
     if (!openTabs?.tabs?.length) return;
     localStorage.setItem(OPEN_TABS_KEY, JSON.stringify(openTabs));
     loadOpenTabs();
+    renderTabStrip();
+    if (state.vaultLoaded) await restoreActiveTab();
   } catch {}
 }
 

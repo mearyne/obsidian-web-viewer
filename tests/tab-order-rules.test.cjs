@@ -53,6 +53,12 @@ test("saved empty new tabs get distinct restore keys", () => {
   assert.notEqual(restoredTabKey(tabs[0], 0), restoredTabKey(tabs[1], 1));
 });
 
+test("merged tabs keep stable restore keys across reload", () => {
+  const tab = { view: "merged", mergedRange: { start: "2026-06-01", end: "2026-06-07" } };
+
+  assert.equal(restoredTabKey(tab, 0), "view:merged:2026-06-01:2026-06-07");
+});
+
 test("first open can restore the newest available device tabs", () => {
   const selected = selectOpenTabsForRestore({
     mine: { updatedAt: 10 },

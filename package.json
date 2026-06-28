@@ -2,9 +2,9 @@
   "scripts": {
     "build:excalidraw": "esbuild vendor-src/excalidraw-preview.jsx --bundle --format=esm --splitting --outdir=vendor --conditions=production --loader:.woff2=file --jsx=automatic --minify",
     "build:simple-mind-map": "esbuild vendor-src/simple-mind-map.js --bundle --format=iife --outfile=vendor/simple-mind-map.js --loader:.css=css --minify",
-    "prebuild:excalidraw": "node --test tests/calendar-gesture-rules.test.cjs tests/tab-order-rules.test.cjs tests/link-open-rules.test.cjs tests/frontmatter-display-rules.test.cjs tests/mindmap-command-rules.test.cjs",
-    "test": "node --test tests/calendar-gesture-rules.test.cjs tests/tab-order-rules.test.cjs tests/link-open-rules.test.cjs tests/frontmatter-display-rules.test.cjs tests/mindmap-command-rules.test.cjs",
-    "predev": "node --test tests/calendar-gesture-rules.test.cjs tests/tab-order-rules.test.cjs tests/link-open-rules.test.cjs tests/frontmatter-display-rules.test.cjs tests/mindmap-command-rules.test.cjs",
+    "prebuild:excalidraw": "node --test tests/calendar-gesture-rules.test.cjs tests/tab-order-rules.test.cjs tests/link-open-rules.test.cjs tests/frontmatter-display-rules.test.cjs tests/mindmap-command-rules.test.cjs tests/mindmap-markdown-rules.test.cjs",
+    "test": "node --test tests/calendar-gesture-rules.test.cjs tests/tab-order-rules.test.cjs tests/link-open-rules.test.cjs tests/frontmatter-display-rules.test.cjs tests/mindmap-command-rules.test.cjs tests/mindmap-markdown-rules.test.cjs",
+    "predev": "node --test tests/calendar-gesture-rules.test.cjs tests/tab-order-rules.test.cjs tests/link-open-rules.test.cjs tests/frontmatter-display-rules.test.cjs tests/mindmap-command-rules.test.cjs tests/mindmap-markdown-rules.test.cjs",
     "dev": "node server.cjs"
   },
   "dependencies": {
