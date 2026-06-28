@@ -4695,8 +4695,15 @@ button:disabled {
 }
 
 .matrix-task-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   color: var(--muted);
   font-size: 11px;
+}
+
+.matrix-task-attitude {
+  color: var(--text);
 }
 
 .matrix-empty {

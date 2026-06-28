@@ -78,3 +78,4 @@
 - 2026-06-28: Reposition empty new tabs immediately after tab changes so merged document tabs open before them.
 - 2026-06-28: Preserve saved empty new tabs across refresh instead of deduplicating them into one.
 - 2026-06-28: Restore the newest available device open tabs on first open when the current device has no saved tabs.
+- 2026-06-28: 매트릭스 4분면을 중요+긴급/중요+미긴급/미중요/반복으로 복구하고, 각 사분면 태도 문구를 작업 라인에 표시하도록 수정

@@ -117,7 +117,7 @@ const state = {
   taskEditPickerMonth: null,
   taskEditMeta: { kind: null, category: null, priority: null, tags: [] },
   taskEditTask: null,
-  calendarTaskFilters: { types: [], categories: [], tags: [], priorities: [] },
+  calendarTaskFilters: { types: [], categories: [], tags: [], priorities: [], recurrences: [] },
   calendarTaskTags: ["게임", "가족", "공부"],
   calendarFilterOpen: false,
   connectionLost: false,
@@ -6841,6 +6841,7 @@ function parseTasks(content, path) {
           kind: meta.kind,
           category: meta.category,
           priority: meta.priority,
+          isRecurring: Boolean(meta.isRecurring),
           tags: meta.tags,
           notify: !/🔕/.test(rawText),
         },
@@ -6962,16 +6963,19 @@ function extractTaskMeta(text) {
   const KIND_SET = new Set(["일정", "할일"]);
   const CAT_SET = new Set(["회사", "개인", "기타"]);
   const PRI_SET = new Set(["상", "중", "하"]);
+  const RECUR_SET = new Set(["반복"]);
   let kind = null, category = null, priority = null;
+  let isRecurring = false;
   const tags = [];
   for (const m of text.matchAll(/#([\p{L}\p{N}_]+)/gu)) {
     const v = m[1];
     if (!kind && KIND_SET.has(v)) { kind = v; continue; }
     if (!category && CAT_SET.has(v)) { category = v; continue; }
     if (!priority && PRI_SET.has(v)) { priority = v; continue; }
+    if (RECUR_SET.has(v)) { isRecurring = true; continue; }
     tags.push(v);
   }
-  return { kind, category, priority, tags };
+  return { kind, category, priority, isRecurring, tags };
 }
 
 function saveCalendarTaskFilters() {
@@ -6984,19 +6988,20 @@ function saveCalendarTaskTags() {
 }
 
 function applyCalendarTaskFilters(tasks) {
-  const { types, categories, tags, priorities } = state.calendarTaskFilters;
-  if (!types.length && !categories.length && !tags.length && !priorities.length) return tasks;
+  const { types, categories, tags, priorities, recurrences } = state.calendarTaskFilters;
+  if (!types.length && !categories.length && !tags.length && !priorities.length && !recurrences.length) return tasks;
   return tasks.filter((task) => {
     if (types.length && !types.includes(task.kind)) return false;
     if (categories.length && !categories.includes(task.category)) return false;
     if (priorities.length && !priorities.includes(task.priority)) return false;
+    if (recurrences.length && !recurrences.includes(task.isRecurring ? "true" : "false")) return false;
     if (tags.length && !tags.some((t) => (task.tags || []).includes(t))) return false;
     return true;
   });
 }
 
 function renderCalendarFilterBar() {
-  const { types, categories, tags, priorities } = state.calendarTaskFilters;
+  const { types, categories, tags, priorities, recurrences } = state.calendarTaskFilters;
   const allTags = state.calendarTaskTags || [];
   const chip = (val, arr, filterType, label) =>
     `<button class="filter-chip${arr.includes(val) ? " active" : ""}" type="button" data-filter-type="${filterType}" data-filter-val="${escapeAttribute(val)}">${label}</button>`;
@@ -7004,9 +7009,10 @@ function renderCalendarFilterBar() {
     { label: "종류", chips: [["일정", "🗓 일정"], ["할일", "✓ 할일"]].map(([v, l]) => chip(v, types, "types", l)).join("") },
     { label: "분류", chips: ["회사", "개인", "기타"].map((v) => chip(v, categories, "categories", v)).join("") },
     { label: "중요도", chips: [["상", "🔴 상"], ["중", "🟡 중"], ["하", "🔵 하"]].map(([v, l]) => chip(v, priorities, "priorities", l)).join("") },
+    { label: "반복", chips: [["true", "🔁 반복"]].map(([v, l]) => chip(v, recurrences, "recurrences", l)).join("") },
     ...(allTags.length ? [{ label: "태그", chips: allTags.map((v) => chip(v, tags, "tags", `#${v}`)).join("") }] : []),
   ];
-  const hasActive = types.length + categories.length + tags.length + priorities.length > 0;
+  const hasActive = types.length + categories.length + tags.length + priorities.length + recurrences.length > 0;
   const isOpen = state.calendarFilterOpen;
   const groupsHtml = groups.map((g, i) =>
     `${i > 0 ? '<span class="filter-group-sep" aria-hidden="true"></span>' : ""}<div class="filter-group"><span class="filter-label">${g.label}</span><div class="filter-chips">${g.chips}</div></div>`
@@ -7046,6 +7052,10 @@ function renderDialogTagChips() {
 
 function renderCalendar() {
   if (state.activeView === "calendar") updateCalendarTitle();
+  if (state.calendarKind === "tasks" && state.calendarMode === "day") {
+    state.calendarKind = "matrix";
+    state.matrixPeriodDays = 1;
+  }
   if (state.calendarKind === "matrix") {
     renderEisenhowerMatrix();
     return;
@@ -7145,15 +7155,43 @@ function renderCalendar() {
 function renderEisenhowerMatrix() {
   const range = matrixDateRange();
   const tasks = matrixVisibleTasks(range);
-  const unclassified = tasks.filter((task) => !task.priority);
+  const unclassified = tasks.filter((task) => !task.priority && !task.isRecurring);
   const quadrants = [
-    { key: "do", icon: "🔥", title: "긴급 · 중요", urgent: true, important: true },
-    { key: "plan", icon: "📌", title: "덜 긴급 · 중요", urgent: false, important: true },
-    { key: "delegate", icon: "⚡", title: "긴급 · 덜 중요", urgent: true, important: false },
-    { key: "drop", icon: "💤", title: "덜 긴급 · 덜 중요", urgent: false, important: false },
+    {
+      key: "do",
+      icon: "🔥",
+      title: "중요 + 긴급",
+      attitude: "바로 즉시 처리",
+      urgent: true,
+      important: true,
+    },
+    {
+      key: "delegate",
+      icon: "⚡",
+      title: "긴급 + 미중요",
+      attitude: "짧게 처리하고 넘기기",
+      urgent: true,
+      important: false,
+    },
+    {
+      key: "plan",
+      icon: "📌",
+      title: "중요 + 미긴급",
+      attitude: "주간/일정 블록에 배치",
+      urgent: false,
+      important: true,
+    },
+    {
+      key: "drop",
+      icon: "🔁",
+      title: "반복",
+      attitude: "루틴 슬롯에 몰아서 처리",
+      urgent: false,
+      important: false,
+    },
   ].map((quadrant) => ({
     ...quadrant,
-    tasks: tasks.filter((task) => matrixTaskUrgent(task, range) === quadrant.urgent && matrixTaskImportant(task) === quadrant.important),
+    tasks: tasks.filter((task) => matrixTaskPlacement(task, range) === quadrant.key),
   }));
 
   els.calendarView.innerHTML = `
@@ -7195,24 +7233,27 @@ function renderCalendarFilterToggleButton(extraClass = "") {
 
 function renderMatrixQuadrant(quadrant) {
   return `
-    <section class="matrix-quadrant ${quadrant.key}" data-matrix-urgent="${quadrant.urgent}" data-matrix-important="${quadrant.important}">
+    <section class="matrix-quadrant ${quadrant.key}" data-matrix-key="${quadrant.key}">
       <header>
         <strong><span aria-hidden="true">${quadrant.icon}</span>${escapeHtml(quadrant.title)}</strong>
         <span>${quadrant.tasks.length}</span>
       </header>
       <div class="matrix-task-list">
-        ${quadrant.tasks.length ? quadrant.tasks.map(renderMatrixTask).join("") : '<div class="matrix-empty">No tasks</div>'}
+        ${quadrant.tasks.length ? quadrant.tasks.map((task) => renderMatrixTask(task, quadrant.attitude)).join("") : '<div class="matrix-empty">No tasks</div>'}
       </div>
     </section>
   `;
 }
 
-function renderMatrixTask(task) {
+function renderMatrixTask(task, attitude) {
   const due = task.dates?.due || task.dates?.end || task.dates?.scheduled || task.dates?.start || task.date || "";
   return `
     <button class="matrix-task ${task.checked ? "done" : task.deferred ? "deferred" : ""}" type="button" draggable="true" data-path="${escapeAttribute(task.path)}" data-line="${task.line}" title="${escapeAttribute(`${task.path}: ${task.rawText || task.text}`)}">
       <span class="matrix-task-title"><span class="matrix-task-icon" aria-hidden="true">${taskDisplayIcon(task)}</span>${escapeHtml(task.text)}</span>
-      <span class="matrix-task-meta">${escapeHtml(due)}${task.priority ? ` · ${escapeHtml(task.priority)}` : ""}</span>
+      <span class="matrix-task-meta">
+        <span>${escapeHtml(due)}${task.priority ? ` · ${escapeHtml(task.priority)}` : ""}</span>
+        ${attitude ? `<span class="matrix-task-attitude">태도: ${escapeHtml(attitude)}</span>` : ""}
+      </span>
     </button>
   `;
 }
@@ -7223,7 +7264,8 @@ function renderMatrixRules(range) {
     <div class="matrix-rules">
       <span>긴급: ${escapeHtml(formatDate(range.start))} - ${escapeHtml(formatDate(cutoff))}</span>
       <span>중요: #상</span>
-      <span>덜 중요: #중/#하/미분류</span>
+      <span>미중요: #중/#하/미분류</span>
+      <span>반복: #반복</span>
     </div>
   `;
 }
@@ -7232,16 +7274,16 @@ function renderMatrixUnclassified(tasks) {
   if (!tasks.length) return "";
   return `
     <section class="matrix-unclassified">
-      <header><strong>미분류 빠른 분류</strong><span>${tasks.length}</span></header>
+      <header><strong>미분류 작업</strong><span>${tasks.length}</span></header>
       <div class="matrix-unclassified-list">
         ${tasks.slice(0, 8).map((task) => `
           <div class="matrix-unclassified-row">
             <span>${taskDisplayIcon(task)} ${escapeHtml(task.text)}</span>
             <div>
-              <button type="button" data-matrix-quick="do" data-path="${escapeAttribute(task.path)}" data-line="${task.line}">🔥</button>
-              <button type="button" data-matrix-quick="plan" data-path="${escapeAttribute(task.path)}" data-line="${task.line}">📌</button>
-              <button type="button" data-matrix-quick="delegate" data-path="${escapeAttribute(task.path)}" data-line="${task.line}">⚡</button>
-              <button type="button" data-matrix-quick="drop" data-path="${escapeAttribute(task.path)}" data-line="${task.line}">💤</button>
+              <button type="button" title="중요 + 긴급" data-matrix-quick="do" data-path="${escapeAttribute(task.path)}" data-line="${task.line}">🔥</button>
+              <button type="button" title="긴급 + 미중요" data-matrix-quick="delegate" data-path="${escapeAttribute(task.path)}" data-line="${task.line}">⚡</button>
+              <button type="button" title="중요 + 미긴급" data-matrix-quick="plan" data-path="${escapeAttribute(task.path)}" data-line="${task.line}">📌</button>
+              <button type="button" title="반복" data-matrix-quick="drop" data-path="${escapeAttribute(task.path)}" data-line="${task.line}">🔁</button>
             </div>
           </div>
         `).join("")}
@@ -7299,6 +7341,14 @@ function matrixTaskUrgent(task, range = matrixDateRange()) {
 
 function matrixTaskImportant(task) {
   return task.priority === "상";
+}
+
+function matrixTaskPlacement(task, range = matrixDateRange()) {
+  if (task.isRecurring) return "drop";
+  if (matrixTaskUrgent(task, range)) {
+    return matrixTaskImportant(task) ? "do" : "delegate";
+  }
+  return matrixTaskImportant(task) ? "plan" : "drop";
 }
 
 function bindMatrixEvents() {
@@ -7378,9 +7428,10 @@ function bindMatrixEvents() {
         payload = {};
       }
       if (!payload.path || !Number.isInteger(payload.line)) return;
-      const urgent = quadrant.getAttribute("data-matrix-urgent") === "true";
-      const important = quadrant.getAttribute("data-matrix-important") === "true";
-      await moveTaskToMatrixQuadrant(payload.path, payload.line, { urgent, important });
+      const key = quadrant.getAttribute("data-matrix-key");
+      const placement = matrixPlacementFromKey(key);
+      if (!placement) return;
+      await moveTaskToMatrixQuadrant(payload.path, payload.line, placement);
     });
   });
 }
@@ -7394,10 +7445,10 @@ function shiftMatrixDate(direction) {
 
 function matrixPlacementFromKey(key) {
   return {
-    do: { urgent: true, important: true },
-    plan: { urgent: false, important: true },
-    delegate: { urgent: true, important: false },
-    drop: { urgent: false, important: false },
+    do: { key: "do", urgent: true, important: true, recurring: false, priority: "상" },
+    plan: { key: "plan", urgent: false, important: true, recurring: false, priority: "상" },
+    delegate: { key: "delegate", urgent: true, important: false, recurring: false, priority: "하" },
+    drop: { key: "drop", urgent: false, important: false, recurring: true, priority: "하" },
   }[key] || null;
 }
 
@@ -7441,9 +7492,10 @@ function bindMatrixTaskPointerDrag(button) {
     if (drag.active && drag.target) {
       event.preventDefault();
       event.stopPropagation();
-      const urgent = drag.target.getAttribute("data-matrix-urgent") === "true";
-      const important = drag.target.getAttribute("data-matrix-important") === "true";
-      await moveTaskToMatrixQuadrant(drag.path, drag.line, { urgent, important });
+      const key = drag.target.getAttribute("data-matrix-key");
+      const placement = matrixPlacementFromKey(key);
+      if (!placement) return;
+      await moveTaskToMatrixQuadrant(drag.path, drag.line, placement);
     }
     window.setTimeout(() => {
       button.dataset.dragged = "";
@@ -7484,7 +7536,7 @@ function bindCalendarFilterEvents() {
   });
 
   els.calendarView.querySelector("[data-filter-reset]")?.addEventListener("click", () => {
-    state.calendarTaskFilters = { types: [], categories: [], tags: [], priorities: [] };
+    state.calendarTaskFilters = { types: [], categories: [], tags: [], priorities: [], recurrences: [] };
     saveCalendarTaskFilters();
     renderCalendar();
   });
@@ -7870,7 +7922,14 @@ function bindCalendarEvents() {
 
   els.calendarView.querySelectorAll("[data-calendar-mode]").forEach((button) => {
     button.addEventListener("click", () => {
-      state.calendarMode = button.getAttribute("data-calendar-mode") || "month";
+      const nextMode = button.getAttribute("data-calendar-mode") || "month";
+      state.calendarMode = nextMode;
+      if (nextMode === "day" && state.calendarKind === "tasks") {
+        state.calendarKind = "matrix";
+        state.matrixPeriodDays = 1;
+      } else if (nextMode !== "day" && state.calendarKind === "matrix") {
+        state.calendarKind = "tasks";
+      }
       renderCalendar();
     });
   });
@@ -8869,6 +8928,7 @@ async function moveCalendarTaskDate(path, lineNumber, targetDate, sourceDate = "
 }
 
 async function moveTaskToMatrixQuadrant(path, lineNumber, placement) {
+  if (!placement) return;
   const node = state.files.get(path);
   if (!canEditNode(node) || !Number.isInteger(lineNumber) || lineNumber < 1) {
     alert("실제 vault 파일에서만 task 위치를 바꿀 수 있습니다.");
@@ -8889,7 +8949,8 @@ async function moveTaskToMatrixQuadrant(path, lineNumber, placement) {
   const range = matrixDateRange();
   const targetDate = placement.urgent ? formatDate(range.start) : formatDate(addDays(range.end, -1));
   let nextLine = replaceTaskLineDate(lines[index], targetDate, "\u{1F4C5}");
-  nextLine = replaceTaskPriorityTag(nextLine, placement.important ? "상" : "하");
+  nextLine = replaceTaskPriorityTag(nextLine, placement.priority || (placement.important ? "상" : "하"));
+  nextLine = replaceTaskRecurringTag(nextLine, Boolean(placement.recurring));
   if (nextLine === lines[index]) return;
 
   lines[index] = nextLine;
@@ -8916,6 +8977,14 @@ async function moveTaskToMatrixQuadrant(path, lineNumber, placement) {
 function replaceTaskPriorityTag(line, priority) {
   const cleaned = line.replace(/\s+#(?:상|중|하)(?=\s|$)/gu, "");
   const target = priority ? ` #${priority}` : "";
+  const dateMarker = cleaned.search(/\s+(?:\u{1F4C5}|\u{1F6EB}|\u{23F3}|\u{2705}|\u{274C})\s*\d{4}-\d{2}-\d{2}/u);
+  if (dateMarker >= 0) return `${cleaned.slice(0, dateMarker)}${target}${cleaned.slice(dateMarker)}`;
+  return `${cleaned}${target}`;
+}
+
+function replaceTaskRecurringTag(line, isRecurring) {
+  const cleaned = line.replace(/\s+#반복(?=\s|$)/gu, "");
+  const target = isRecurring ? " #반복" : "";
   const dateMarker = cleaned.search(/\s+(?:\u{1F4C5}|\u{1F6EB}|\u{23F3}|\u{2705}|\u{274C})\s*\d{4}-\d{2}-\d{2}/u);
   if (dateMarker >= 0) return `${cleaned.slice(0, dateMarker)}${target}${cleaned.slice(dateMarker)}`;
   return `${cleaned}${target}`;
