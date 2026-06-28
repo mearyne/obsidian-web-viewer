@@ -269,6 +269,14 @@ const MINDMAP_THEME_OPTIONS = [
   { value: "dark-green", label: "다크 그린" },
   { value: "branch-depth-dark", label: "다크 분기 명도" },
 ];
+const MINDMAP_DEMO_THEME_PREFIX = "demo:";
+const MINDMAP_DEMO_THEME_OPTIONS = (globalThis.SimpleMindMapThemeList || [])
+  .filter((theme) => theme?.value)
+  .map((theme) => ({
+    value: `${MINDMAP_DEMO_THEME_PREFIX}${theme.value}`,
+    label: `Demo ${theme.value}`,
+  }));
+const MINDMAP_ALL_THEME_OPTIONS = [...MINDMAP_THEME_OPTIONS, ...MINDMAP_DEMO_THEME_OPTIONS];
 
 const MINDMAP_THEME_CONFIGS = {
   light: {
@@ -3355,13 +3363,13 @@ function ensureMindmapOptionsSection() {
       <label class="option-field">
         <span>&#46972;&#51060;&#53944; &#53580;&#47560;</span>
         <select id="mindmapLightThemeSelect">
-          ${MINDMAP_THEME_OPTIONS.map((theme) => `<option value="${theme.value}">${theme.label}</option>`).join("")}
+          ${MINDMAP_ALL_THEME_OPTIONS.map((theme) => `<option value="${theme.value}">${theme.label}</option>`).join("")}
         </select>
       </label>
       <label class="option-field">
         <span>&#45796;&#53356; &#53580;&#47560;</span>
         <select id="mindmapDarkThemeSelect">
-          ${MINDMAP_THEME_OPTIONS.map((theme) => `<option value="${theme.value}">${theme.label}</option>`).join("")}
+          ${MINDMAP_ALL_THEME_OPTIONS.map((theme) => `<option value="${theme.value}">${theme.label}</option>`).join("")}
         </select>
       </label>
       <label class="option-field option-field-row">
@@ -3392,7 +3400,7 @@ function loadMindmapOptionsFromLocalStorage() {
 
 function normalizeMindmapOptions(options = {}) {
   const layouts = MINDMAP_LAYOUT_VALUES;
-  const themes = new Set(MINDMAP_THEME_OPTIONS.map((theme) => theme.value));
+  const themes = new Set(MINDMAP_ALL_THEME_OPTIONS.map((theme) => theme.value));
   const previous = state.mindmapOptions || { layout: "mindMap", lightTheme: "light", darkTheme: "dark", autoFit: true, advancedTools: true };
   const layout = layouts.has(options.mindmapLayout) ? options.mindmapLayout : (layouts.has(options.layout) ? options.layout : previous.layout);
   const lightTheme = themes.has(options.mindmapLightTheme) ? options.mindmapLightTheme : (themes.has(options.lightTheme) ? options.lightTheme : previous.lightTheme);
@@ -4511,7 +4519,13 @@ function selectedMindmapThemeName() {
 }
 
 function getMindmapThemeConfig() {
-  const selectedTheme = MINDMAP_THEME_CONFIGS[selectedMindmapThemeName()];
+  const themeName = selectedMindmapThemeName();
+  if (themeName.startsWith(MINDMAP_DEMO_THEME_PREFIX)) {
+    const demoThemeName = themeName.slice(MINDMAP_DEMO_THEME_PREFIX.length);
+    const demoTheme = globalThis.SimpleMindMapThemeConfigs?.[demoThemeName];
+    if (demoTheme) return JSON.parse(JSON.stringify(demoTheme));
+  }
+  const selectedTheme = MINDMAP_THEME_CONFIGS[themeName];
   if (selectedTheme) return JSON.parse(JSON.stringify(selectedTheme));
   return {
     backgroundColor: getMindmapCssValue("--mindmap-bg", "#fbfcff"),
