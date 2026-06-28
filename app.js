@@ -6437,6 +6437,7 @@ async function buildMatrixView() {
   closeOptionsMenu();
   closeSidebar();
   state.calendarKind = "matrix";
+  state.calendarMode = "day";
   state.matrixPeriodDays = state.matrixPeriodDays || 1;
   showCalendarView();
   renderCalendar();
@@ -7250,9 +7251,9 @@ function renderEisenhowerMatrix() {
         </div>
         <div class="calendar-nav-group">
           <button class="calendar-today-button" type="button" data-matrix-action="today">Today</button>
-          <div class="calendar-mode-switch" aria-label="Matrix range">
-            ${[30, 7, 1].map((days) => `<button type="button" data-matrix-period="${days}" class="${state.matrixPeriodDays === days ? "active" : ""}">${days}d</button>`).join("")}
-          </div>
+          <button type="button" data-matrix-mode="month" class="calendar-mode-btn">30d</button>
+          <button type="button" data-matrix-mode="week" class="calendar-mode-btn">7d</button>
+          <button type="button" data-matrix-mode="day" class="calendar-mode-btn active">1d</button>
         </div>
       </div>
       ${renderCalendarFilterBar()}
@@ -7329,20 +7330,18 @@ function renderMatrixRules(range) {
 
 function renderMatrixUnclassified(tasks) {
   if (!tasks.length) return "";
+  const formatPreview = (task) => task.text ? task.text : "(제목 없음)";
   return `
     <section class="matrix-unclassified">
       <header><strong>미분류 작업</strong><span>${tasks.length}</span></header>
       <div class="matrix-unclassified-list">
         ${tasks.slice(0, 8).map((task) => `
-          <div class="matrix-unclassified-row">
-            <span>${taskDisplayIcon(task)} ${escapeHtml(task.text)}</span>
-            <div>
-              <button type="button" title="중요 + 긴급" data-matrix-quick="do" data-path="${escapeAttribute(task.path)}" data-line="${task.line}">🔥</button>
-              <button type="button" title="미중요" data-matrix-quick="delegate" data-path="${escapeAttribute(task.path)}" data-line="${task.line}">⚡</button>
-              <button type="button" title="중요 + 미긴급" data-matrix-quick="plan" data-path="${escapeAttribute(task.path)}" data-line="${task.line}">📌</button>
-              <button type="button" title="반복" data-matrix-quick="drop" data-path="${escapeAttribute(task.path)}" data-line="${task.line}">🔁</button>
-            </div>
-          </div>
+          <button class="matrix-task" type="button" draggable="true" data-path="${escapeAttribute(task.path)}" data-line="${task.line}" title="${escapeAttribute(`${task.path}: ${task.rawText || task.text}`)}">
+            <span class="matrix-task-title">
+              <span class="matrix-task-icon" aria-hidden="true">${taskDisplayIcon(task)}</span>
+              <span class="matrix-task-text">${escapeHtml(formatPreview(task))}</span>
+            </span>
+          </button>
         `).join("")}
       </div>
     </section>
@@ -7351,28 +7350,18 @@ function renderMatrixUnclassified(tasks) {
 
 function matrixDateRange() {
   const days = state.matrixPeriodDays || 1;
-  if (days === 30) {
-    const start = startOfMonth(state.calendarDate);
-    return { start, end: new Date(start.getFullYear(), start.getMonth() + 1, 1) };
-  }
-  if (days === 7) {
-    const start = startOfWeek(state.calendarDate, 0);
-    return { start, end: addDays(start, 7) };
-  }
+  const safeDays = Math.max(1, Math.min(30, Number(days) || 1));
   const start = new Date(state.calendarDate.getFullYear(), state.calendarDate.getMonth(), state.calendarDate.getDate());
-  return { start, end: addDays(start, 1) };
+  return { start, end: addDays(start, safeDays) };
 }
 
 function matrixTitle() {
   const days = state.matrixPeriodDays || 1;
-  if (days === 1) return formatDate(state.calendarDate);
-  if (days === 7) {
-    const start = new Date(state.calendarDate.getFullYear(), state.calendarDate.getMonth(), state.calendarDate.getDate());
-    const week = Math.ceil((start.getDate() + startOfMonth(start).getDay()) / 7);
-    return `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")} ${week}W`;
-  }
-  const month = startOfMonth(state.calendarDate);
-  return `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, "0")}`;
+  const daysSafe = Math.max(1, Math.min(30, Number(days) || 1));
+  if (daysSafe === 1) return formatDate(state.calendarDate);
+  const start = new Date(state.calendarDate.getFullYear(), state.calendarDate.getMonth(), state.calendarDate.getDate());
+  const end = addDays(start, daysSafe - 1);
+  return `${formatDate(start)}~${formatDate(end)}`;
 }
 
 function matrixVisibleTasks(range = matrixDateRange()) {
@@ -7387,7 +7376,8 @@ function matrixVisibleTasks(range = matrixDateRange()) {
 
 function matrixUrgentCutoff(range) {
   const days = state.matrixPeriodDays || 1;
-  const urgentDays = days >= 30 ? 7 : days >= 7 ? 2 : 1;
+  const safeDays = Math.max(1, Math.min(30, Number(days) || 1));
+  const urgentDays = safeDays >= 30 ? 7 : safeDays >= 7 ? 2 : 1;
   return addDays(range.start, urgentDays);
 }
 
@@ -7411,16 +7401,6 @@ function matrixTaskPlacement(task, range = matrixDateRange()) {
 function bindMatrixEvents() {
   bindCalendarFilterEvents();
 
-  els.calendarView.querySelectorAll("[data-matrix-quick]").forEach((button) => {
-    button.addEventListener("click", async (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      const placement = matrixPlacementFromKey(button.getAttribute("data-matrix-quick"));
-      if (!placement) return;
-      await moveTaskToMatrixQuadrant(button.getAttribute("data-path"), Number(button.getAttribute("data-line")), placement);
-    });
-  });
-
   els.calendarView.querySelectorAll("[data-matrix-action]").forEach((button) => {
     button.addEventListener("click", () => {
       const action = button.getAttribute("data-matrix-action");
@@ -7431,9 +7411,18 @@ function bindMatrixEvents() {
     });
   });
 
-  els.calendarView.querySelectorAll("[data-matrix-period]").forEach((button) => {
+  els.calendarView.querySelectorAll("[data-matrix-mode]").forEach((button) => {
     button.addEventListener("click", () => {
-      state.matrixPeriodDays = Number(button.getAttribute("data-matrix-period")) || 1;
+      const mode = button.getAttribute("data-matrix-mode");
+      if (mode === "month" || mode === "week") {
+        state.calendarKind = "tasks";
+        state.calendarMode = mode;
+        renderCalendar();
+        return;
+      }
+      const current = Number(state.matrixPeriodDays) || 1;
+      const next = Math.min(30, current < 1 ? 1 : current + 1);
+      state.matrixPeriodDays = next;
       renderCalendar();
     });
   });
@@ -7494,9 +7483,7 @@ function bindMatrixEvents() {
 }
 
 function shiftMatrixDate(direction) {
-  const days = state.matrixPeriodDays || 1;
-  if (days === 30) return addMonths(state.calendarDate, direction);
-  if (days === 7) return addDays(state.calendarDate, direction * 7);
+  const days = Math.max(1, Math.min(30, Number(state.matrixPeriodDays) || 1));
   return addDays(state.calendarDate, direction);
 }
 
@@ -7504,7 +7491,7 @@ function matrixPlacementFromKey(key) {
   return {
     do: { key: "do", urgent: true, important: true, recurring: false, priority: "상" },
     plan: { key: "plan", urgent: false, important: true, recurring: false, priority: "상" },
-    delegate: { key: "delegate", urgent: false, important: false, recurring: false, priority: "하" },
+    delegate: { key: "delegate", urgent: true, important: false, recurring: false, priority: "하" },
     drop: { key: "drop", urgent: false, important: false, recurring: true, priority: "하" },
   }[key] || null;
 }
@@ -9254,8 +9241,9 @@ async function showTaskCreateDialog(dueDate, startDate = "", prefill = null) {
 
   // reset state
   state.taskDialogActiveField = null;
+  const prefixedKind = prefill?.isRecurring ? "반복" : prefill?.kind;
   state.taskDialogMeta = prefill
-    ? { kind: prefill.kind || "할일", category: prefill.category || null, priority: prefill.priority || null, tags: [...(prefill.tags || [])] }
+    ? { kind: prefixedKind || "할일", category: prefill.category || null, priority: prefill.priority || null, tags: [...(prefill.tags || [])] }
     : { kind: "할일", category: null, priority: null, tags: [] };
   state.taskCreateSourceDate = startDate || dueDate;
   if (els.taskTitleInput) els.taskTitleInput.value = prefill?.text || "";
@@ -9536,7 +9524,9 @@ function bindTaskCreateDialog() {
     const content = await readFileNode(node);
     const prefix = content.endsWith("\n") ? "" : "\n";
     const { kind, category, priority, tags } = state.taskDialogMeta;
-    const hashParts = [kind, category, priority, ...tags].filter(Boolean).map((v) => `#${v}`);
+    const isRecurring = kind === "반복";
+    const cleanTags = Array.isArray(tags) ? tags.filter((tag) => tag !== "반복") : [];
+    const hashParts = [isRecurring ? null : kind, category, priority, ...cleanTags].filter(Boolean).map((v) => `#${v}`);
     const metaStr = hashParts.length ? ` ${hashParts.join(" ")}` : "";
     const startTime = normalizeTaskTimeInput(els.taskStartTimeInput);
     const dueTime = normalizeTaskTimeInput(els.taskDueTimeInput);
@@ -9546,7 +9536,8 @@ function bindTaskCreateDialog() {
     const notifyPart = notifyOff ? " 🔕" : "";
     const subItemsText = els.taskCreateSubItemsInput?.value || "";
     const subItemLines = normalizeTaskSubItemsInput(subItemsText).map((line) => `  ${line}`);
-    const taskLine = `${prefix}- [ ] ${title}${metaStr}${startPart}${duePart}${notifyPart}`;
+    const rawLine = `${prefix}- [ ] ${title}${metaStr}${startPart}${duePart}${notifyPart}`;
+    const taskLine = replaceTaskRecurringTag(rawLine, isRecurring);
     const subItemsStr = subItemLines.length ? "\n" + subItemLines.join("\n") : "";
     const nextContent = content + taskLine + subItemsStr + "\n";
     await writeNodeContent(node, nextContent, { backup: false, previousContent: content });
@@ -10012,7 +10003,7 @@ async function showTaskEditDialog(task) {
   if (!els.taskEditDialog) return;
   state.taskEditTask = task;
   state.taskEditMeta = {
-    kind: task.kind || null,
+    kind: task.isRecurring ? "반복" : task.kind || null,
     category: task.category || null,
     priority: task.priority || null,
     tags: [...(task.tags || [])],
@@ -10093,14 +10084,17 @@ async function saveTaskEdit(task, title, meta, dueDate, startDate, checked, dueT
     const indentStr = (lines[idx].match(/^(\s*)/)?.[1]) || "";
     const taskIndentLen = normalizeLineIndent(lines[idx]).length;
     const { kind, category, priority, tags } = meta;
-    const hashParts = [kind, category, priority, ...tags].filter(Boolean).map((v) => `#${v}`);
+    const isRecurring = kind === "반복";
+    const cleanTags = Array.isArray(tags) ? tags.filter((tag) => tag !== "반복") : [];
+    const hashParts = [isRecurring ? null : kind, category, priority, ...cleanTags].filter(Boolean).map((v) => `#${v}`);
     const metaStr = hashParts.length ? ` ${hashParts.join(" ")}` : "";
     const startPart = startDate ? ` 🛫 ${startDate}${startTime ? " " + startTime : ""}` : "";
     const duePart = ` 📅 ${dueDate}${dueTime ? " " + dueTime : ""}`;
     const notifyOff = els.taskEditNotifyChip?.dataset.notify === "false";
     const notifyPart = notifyOff ? " 🔕" : "";
     const statusChar = checked ? "x" : deferred ? ">" : " ";
-    lines[idx] = `${indentStr}- [${statusChar}] ${title}${metaStr}${startPart}${duePart}${notifyPart}`;
+    const rawLine = `${indentStr}- [${statusChar}] ${title}${metaStr}${startPart}${duePart}${notifyPart}`;
+    lines[idx] = replaceTaskRecurringTag(rawLine, isRecurring);
     let childEnd = idx + 1;
     while (childEnd < lines.length) {
       if (lines[childEnd].trim() === "") break;

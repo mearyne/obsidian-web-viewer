@@ -82,3 +82,4 @@
 - 2026-06-28: Rename matrix quadrant label '긴급 + 미중요' to '미중요' (and quick-action tooltip)
 - 2026-06-28: Show matrix attitude text in small font next to each quadrant label
 - 2026-06-28: Add 30d kind filters (����/����/�ݺ�), move 1d matrix controls to right, show matrix task title up to configurable lines with content line clamp option.
+- 2026-06-28: 1d matrix 버튼 동작 정리 요청 반영: 30d/7d 이동 동작, 1d 범위 확장, 미분류 드래그 분류, 종류에 반복 추가.
