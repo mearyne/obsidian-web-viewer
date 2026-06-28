@@ -1430,10 +1430,14 @@ function renderMergedDocumentSection(node, content, file, range, index = 0) {
   return `
     <section class="merged-document-section merged-document-color-${colorIndex}">
       <header class="merged-document-title">
-        <span class="merged-document-index">${index + 1}</span>
-        <button type="button" data-wiki="${escapeAttribute(node.path)}">${escapeHtml(displayDocumentTitle(node.name || node.path))}</button>
-        ${deletable ? `<button type="button" class="merged-document-delete-btn" data-merged-document-delete="${escapeAttribute(node.path)}" aria-label="문서 삭제" title="문서 삭제">삭제</button>` : ""}
-        <small>${escapeHtml(mergedDocumentMeta(file, range))}</small>
+        <div class="merged-document-title-main">
+          <span class="merged-document-index">${index + 1}</span>
+          <div class="merged-document-title-text">
+            <button type="button" data-wiki="${escapeAttribute(node.path)}">${escapeHtml(displayDocumentTitle(node.name || node.path))}</button>
+            <small>${escapeHtml(mergedDocumentMeta(file, range))}</small>
+          </div>
+        </div>
+        ${deletable ? `<button type="button" class="merged-document-delete-btn" data-merged-document-delete="${escapeAttribute(node.path)}" aria-label="문서 삭제" title="문서 삭제">🗑️</button>` : ""}
       </header>
       <div class="merged-document-body">${rendered}</div>
     </section>

@@ -1851,10 +1851,18 @@ button:disabled {
   align-items: center;
   border-bottom: 1px solid var(--line);
   display: flex;
-  flex-wrap: wrap;
   gap: 8px 12px;
+  justify-content: space-between;
   margin: -2px 0 16px;
   padding-bottom: 10px;
+}
+
+.merged-document-title-main {
+  align-items: center;
+  display: flex;
+  flex: 1 1 auto;
+  gap: 8px;
+  min-width: 0;
 }
 
 .merged-document-index {
@@ -1873,6 +1881,12 @@ button:disabled {
   padding: 0 7px;
 }
 
+.merged-document-title-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
 .merged-document-title button {
   background: transparent;
   border: 0;
@@ -1887,19 +1901,23 @@ button:disabled {
 .merged-document-title small {
   color: var(--muted);
   font-size: 12px;
-  margin-left: auto;
 }
 
 .merged-document-delete-btn {
-  background: var(--surface-2);
-  border: 1px solid var(--line);
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
   border-radius: 6px;
   color: var(--text);
   cursor: pointer;
-  font-size: 12px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 16px;
   font-weight: 600;
-  min-height: 22px;
-  padding: 0 8px;
+  justify-content: center;
+  min-height: 30px;
+  min-width: 30px;
+  padding: 0;
 }
 
 .merged-document-delete-btn:hover,
@@ -2715,9 +2733,12 @@ button:disabled {
     padding: 13px 12px 16px;
   }
 
-  .merged-document-title small {
-    flex-basis: 100%;
-    margin-left: 36px;
+  .merged-document-title {
+    align-items: flex-start;
+  }
+
+  .merged-document-title-main {
+    align-items: flex-start;
   }
 
   .mindmap-view {
