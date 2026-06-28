@@ -7168,7 +7168,7 @@ function renderEisenhowerMatrix() {
     {
       key: "delegate",
       icon: "⚡",
-      title: "긴급 + 미중요",
+      title: "미중요",
       attitude: "짧게 처리하고 넘기기",
       urgent: true,
       important: false,
@@ -7235,24 +7235,27 @@ function renderMatrixQuadrant(quadrant) {
   return `
     <section class="matrix-quadrant ${quadrant.key}" data-matrix-key="${quadrant.key}">
       <header>
-        <strong><span aria-hidden="true">${quadrant.icon}</span>${escapeHtml(quadrant.title)}</strong>
+        <strong>
+          <span aria-hidden="true">${quadrant.icon}</span>
+          ${escapeHtml(quadrant.title)}
+          ${quadrant.attitude ? `<span class="matrix-quadrant-attitude">${escapeHtml(quadrant.attitude)}</span>` : ""}
+        </strong>
         <span>${quadrant.tasks.length}</span>
       </header>
       <div class="matrix-task-list">
-        ${quadrant.tasks.length ? quadrant.tasks.map((task) => renderMatrixTask(task, quadrant.attitude)).join("") : '<div class="matrix-empty">No tasks</div>'}
+        ${quadrant.tasks.length ? quadrant.tasks.map((task) => renderMatrixTask(task)).join("") : '<div class="matrix-empty">No tasks</div>'}
       </div>
     </section>
   `;
 }
 
-function renderMatrixTask(task, attitude) {
+function renderMatrixTask(task) {
   const due = task.dates?.due || task.dates?.end || task.dates?.scheduled || task.dates?.start || task.date || "";
   return `
     <button class="matrix-task ${task.checked ? "done" : task.deferred ? "deferred" : ""}" type="button" draggable="true" data-path="${escapeAttribute(task.path)}" data-line="${task.line}" title="${escapeAttribute(`${task.path}: ${task.rawText || task.text}`)}">
       <span class="matrix-task-title"><span class="matrix-task-icon" aria-hidden="true">${taskDisplayIcon(task)}</span>${escapeHtml(task.text)}</span>
       <span class="matrix-task-meta">
         <span>${escapeHtml(due)}${task.priority ? ` · ${escapeHtml(task.priority)}` : ""}</span>
-        ${attitude ? `<span class="matrix-task-attitude">태도: ${escapeHtml(attitude)}</span>` : ""}
       </span>
     </button>
   `;
@@ -7281,7 +7284,7 @@ function renderMatrixUnclassified(tasks) {
             <span>${taskDisplayIcon(task)} ${escapeHtml(task.text)}</span>
             <div>
               <button type="button" title="중요 + 긴급" data-matrix-quick="do" data-path="${escapeAttribute(task.path)}" data-line="${task.line}">🔥</button>
-              <button type="button" title="긴급 + 미중요" data-matrix-quick="delegate" data-path="${escapeAttribute(task.path)}" data-line="${task.line}">⚡</button>
+              <button type="button" title="미중요" data-matrix-quick="delegate" data-path="${escapeAttribute(task.path)}" data-line="${task.line}">⚡</button>
               <button type="button" title="중요 + 미긴급" data-matrix-quick="plan" data-path="${escapeAttribute(task.path)}" data-line="${task.line}">📌</button>
               <button type="button" title="반복" data-matrix-quick="drop" data-path="${escapeAttribute(task.path)}" data-line="${task.line}">🔁</button>
             </div>

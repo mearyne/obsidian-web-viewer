@@ -4702,8 +4702,15 @@ button:disabled {
   font-size: 11px;
 }
 
+.matrix-quadrant-attitude {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 400;
+  margin-left: 4px;
+}
+
 .matrix-task-attitude {
-  color: var(--text);
+  display: none;
 }
 
 .matrix-empty {
