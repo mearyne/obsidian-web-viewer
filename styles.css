@@ -1890,6 +1890,26 @@ button:disabled {
   margin-left: auto;
 }
 
+.merged-document-delete-btn {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  min-height: 22px;
+  padding: 0 8px;
+}
+
+.merged-document-delete-btn:hover,
+.merged-document-delete-btn:focus-visible {
+  background: color-mix(in srgb, var(--danger) 14%, var(--surface));
+  border-color: var(--danger);
+  color: var(--danger);
+  outline: none;
+}
+
 .merged-document-body > :first-child {
   margin-top: 0;
 }

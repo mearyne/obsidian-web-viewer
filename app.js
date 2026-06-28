@@ -1324,6 +1324,7 @@ async function renderMergedDocuments(range) {
     hydrateVaultImages(els.markdownView);
     hydrateMindmapEmbeds(els.markdownView);
     hydrateEmbeddedDocuments(els.markdownView);
+    bindMergedDocumentDeleteActions();
     scrollViewerTop();
   } finally {
     hideLoading();
@@ -1362,16 +1363,28 @@ function renderMergedDocumentSection(node, content, file, range, index = 0) {
   const rendered = isMindmapDocument(content) ? renderMindmapEmbedPreview(content, node.path) : renderMarkdown(content, { path: node.path });
   state.currentPath = previousPath;
   const colorIndex = index % 8;
+  const deletable = canDeleteNode(node);
   return `
     <section class="merged-document-section merged-document-color-${colorIndex}">
       <header class="merged-document-title">
         <span class="merged-document-index">${index + 1}</span>
         <button type="button" data-wiki="${escapeAttribute(node.path)}">${escapeHtml(displayDocumentTitle(node.name || node.path))}</button>
+        ${deletable ? `<button type="button" class="merged-document-delete-btn" data-merged-document-delete="${escapeAttribute(node.path)}" aria-label="문서 삭제" title="문서 삭제">삭제</button>` : ""}
         <small>${escapeHtml(mergedDocumentMeta(file, range))}</small>
       </header>
       <div class="merged-document-body">${rendered}</div>
     </section>
   `;
+}
+
+function bindMergedDocumentDeleteActions() {
+  els.markdownView.querySelectorAll("[data-merged-document-delete]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const path = button.getAttribute("data-merged-document-delete");
+      if (!path) return;
+      void deleteMergedDocument(path);
+    });
+  });
 }
 
 function mergedDocumentMeta(file, range) {
@@ -3085,6 +3098,49 @@ async function deleteCurrentFileNode(node) {
     els.markdownView.classList.add("empty-state");
     els.markdownView.innerHTML = "<p>문서를 선택하세요.</p>";
     showNoteView();
+  } finally {
+    hideLoading();
+  }
+}
+
+async function deleteMergedDocument(path) {
+  const node = state.files.get(path);
+  if (!node) {
+    showAppToast("삭제할 문서를 찾지 못했습니다.", "error");
+    return;
+  }
+  if (!canDeleteNode(node)) {
+    showAppToast("해당 문서는 삭제할 수 없습니다.", "error");
+    return;
+  }
+  if (!confirm(`"${displayDocumentTitle(node.name || node.path)}" 문서를 삭제할까요?`)) return;
+
+  showLoading("문서 삭제 중...");
+  const range = state.mergedDocumentRange;
+  try {
+    if (node.handle && node.dirHandle) {
+      await node.dirHandle.removeEntry(node.name);
+    } else {
+      await deleteServerFile(path);
+    }
+
+    removeFileNode(path);
+    state.tasks = state.tasks.filter((task) => task.path !== path);
+    state.calendarTaskFiles.delete(path);
+    saveCalendarCache();
+    refreshDirectoryMetadataFrom(path);
+    renderTree();
+    refreshRecentFilesCache();
+    invalidateRandomMarkdownCache();
+    const tabsToClose = state.tabs.filter((tab) => tab.path === path).map((tab) => tab.id);
+    for (const id of tabsToClose) await closeTab(id);
+    if (state.activeView === "merged" && range) {
+      await renderMergedDocuments(range);
+      return;
+    }
+    showAppToast("문서가 삭제되었습니다.", "success");
+  } catch {
+    showAppToast("문서 삭제 실패", "error");
   } finally {
     hideLoading();
   }
