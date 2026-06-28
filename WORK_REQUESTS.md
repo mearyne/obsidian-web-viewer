@@ -86,3 +86,4 @@
 - 2026-06-28: Add per-document mindmap layout persistence and per-file layout controls in the mindmap edit toolbar.
 - 2026-06-28: Add delete button beside each document in merged documents view.
 - 2026-06-28: Remove free from mindmap layout options.
+- 2026-06-28: Proceed with hybrid mindmap tools drawer direction plus markdown import/export, built-in mindmap features, saved-status icon, merged-tab restore, task-dialog Ctrl+S, and 1d matrix urgent grouping.
