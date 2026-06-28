@@ -1183,7 +1183,7 @@ function normalizeSettings(settings) {
 }
 
 function normalizeMindmapLayout(layout) {
-  return ["mindMap", "logicalStructure", "logicalStructureLeft", "organizationStructure", "catalogOrganization", "timeline", "free"].includes(layout)
+  return ["mindMap", "logicalStructure", "logicalStructureLeft", "organizationStructure", "catalogOrganization", "timeline"].includes(layout)
     ? layout
     : "mindMap";
 }

@@ -195,7 +195,6 @@ const MINDMAP_LAYOUT_OPTIONS = [
   { value: "organizationStructure", label: "Org" },
   { value: "catalogOrganization", label: "Catalog" },
   { value: "timeline", label: "Timeline" },
-  { value: "free", label: "Free" },
 ];
 const MINDMAP_LAYOUT_VALUES = new Set(MINDMAP_LAYOUT_OPTIONS.map((option) => option.value));
 
@@ -3380,8 +3379,7 @@ function getMindmapLayoutForDocument(path, { fallbackLayout = state.mindmapOptio
 }
 
 function getMindmapRuntimeLayoutForDocument(path, { fallbackLayout = state.mindmapOptions.layout } = {}) {
-  const layout = getMindmapLayoutForDocument(path, { fallbackLayout, frontmatter: null });
-  return layout === "free" ? "logicalStructure" : layout;
+  return getMindmapLayoutForDocument(path, { fallbackLayout, frontmatter: null });
 }
 
 function syncMindmapDocumentLayout(path, { frontmatter = null } = {}) {
