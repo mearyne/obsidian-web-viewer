@@ -109,6 +109,7 @@ const state = {
   searchTreeAutoExpand: true,
   renderedSearchQuery: "",
   recentDaysFilter: 0,
+  matrixTaskTitleLines: 3,
   vaultLoaded: false,
   taskDialogActiveField: null,
   taskDialogPickerMonth: null,
@@ -364,6 +365,7 @@ const els = {
   fontResetButton: document.querySelector("#fontResetButton"),
   contentFontSizeInput: document.querySelector("#contentFontSizeInput"),
   calendarRowFontSizeInput: document.querySelector("#calendarRowFontSizeInput"),
+  matrixTaskTitleLinesInput: document.querySelector("#matrixTaskTitleLinesInput"),
   contentAlignSelect: document.querySelector("#contentAlignSelect"),
   contentMaxWidthInput: document.querySelector("#contentMaxWidthInput"),
   hideFrontmatterInput: null,
@@ -519,6 +521,14 @@ els.calendarRowFontSizeInput?.addEventListener("input", () => {
   if (Number.isFinite(v) && v >= 1) document.documentElement.style.setProperty("--calendar-row-font-size", `${Math.max(6, Math.min(22, v))}px`);
 });
 els.calendarRowFontSizeInput?.addEventListener("change", updateCalendarRowFontSize);
+els.matrixTaskTitleLinesInput?.addEventListener("input", () => {
+  const v = Number(els.matrixTaskTitleLinesInput.value);
+  if (Number.isFinite(v)) setMatrixTaskTitleLines(Math.max(1, Math.min(10, v)));
+});
+els.matrixTaskTitleLinesInput?.addEventListener("change", () => {
+  const v = Number(els.matrixTaskTitleLinesInput.value);
+  if (Number.isFinite(v)) setMatrixTaskTitleLines(Math.max(1, Math.min(10, Math.round(v))), { persist: true });
+});
 els.contentAlignSelect?.addEventListener("change", updateContentAlign);
 els.contentMaxWidthInput?.addEventListener("input", () => {
   const v = Number(els.contentMaxWidthInput.value);
@@ -3183,6 +3193,7 @@ function initOptions() {
     const sf = localStorage.getItem("obsidian-web-viewer-task-filters");
     if (sf) Object.assign(state.calendarTaskFilters, JSON.parse(sf));
   } catch {}
+  hydrateCalendarTaskFilters();
   const savedTagsStr = localStorage.getItem("obsidian-web-viewer-task-tags");
   if (savedTagsStr) {
     const parsed = savedTagsStr.split(",").map((t) => t.trim()).filter(Boolean);
@@ -3958,11 +3969,13 @@ function applyDeviceDisplayOptions() {
   state.fontDeviceKey = deviceKey;
   const contentSize = readNumberOption(deviceOptionStorageKey("content-font-size", deviceKey), 16, 10, 28);
   const rowSize = readNumberOption(deviceOptionStorageKey("calendar-row-font-size", deviceKey), deviceKey === "mobile" ? 10.8 : 14.4, 6, 22);
+  const matrixTaskTitleLines = readNumberOption(deviceOptionStorageKey("matrix-task-title-lines", deviceKey), 3, 1, 10);
   const align = readChoiceOption(deviceOptionStorageKey("content-align", deviceKey), "soft-center", ["left", "soft-center", "center"]);
   const maxWidth = readNumberOption("obsidian-web-viewer-content-max-width", 760, 400, 1600);
   localStorage.removeItem(deviceOptionStorageKey("calendar-row-height", deviceKey));
   setContentFontSize(contentSize, { persist: false });
   setCalendarRowFontSize(rowSize, { persist: false });
+  setMatrixTaskTitleLines(matrixTaskTitleLines, { persist: false });
   setCalendarRowHeight(defaultCalendarRowHeight(deviceKey));
   setContentAlign(align, { persist: false });
   setContentMaxWidth(maxWidth, { persist: false });
@@ -4000,6 +4013,14 @@ function setCalendarRowFontSize(size, { persist }) {
   document.documentElement.style.setProperty("--calendar-row-font-size", `${size}px`);
   if (els.calendarRowFontSizeInput) els.calendarRowFontSizeInput.value = String(size);
   if (persist) localStorage.setItem(deviceOptionStorageKey("calendar-row-font-size"), String(size));
+}
+
+function setMatrixTaskTitleLines(lines, { persist } = {}) {
+  const nextLines = Number.isFinite(lines) ? Math.max(1, Math.min(10, Math.round(lines))) : 3;
+  state.matrixTaskTitleLines = nextLines;
+  document.documentElement.style.setProperty("--matrix-task-title-lines", String(nextLines));
+  if (els.matrixTaskTitleLinesInput) els.matrixTaskTitleLinesInput.value = String(nextLines);
+  if (persist) localStorage.setItem(deviceOptionStorageKey("matrix-task-title-lines"), String(nextLines));
 }
 
 function setCalendarRowHeight(height) {
@@ -6982,48 +7003,73 @@ function saveCalendarTaskFilters() {
   localStorage.setItem("obsidian-web-viewer-task-filters", JSON.stringify(state.calendarTaskFilters));
 }
 
+function hydrateCalendarTaskFilters() {
+  const sanitized = {
+    types: Array.isArray(state.calendarTaskFilters?.types) ? [...state.calendarTaskFilters.types] : [],
+    categories: Array.isArray(state.calendarTaskFilters?.categories) ? [...state.calendarTaskFilters.categories] : [],
+    tags: Array.isArray(state.calendarTaskFilters?.tags) ? [...state.calendarTaskFilters.tags] : [],
+    priorities: Array.isArray(state.calendarTaskFilters?.priorities) ? [...state.calendarTaskFilters.priorities] : [],
+    recurrences: Array.isArray(state.calendarTaskFilters?.recurrences) ? [...state.calendarTaskFilters.recurrences] : [],
+  };
+  const legacyRecurringFilter = sanitized.recurrences.includes("true");
+  const hasLegacyRecurringFilter = legacyRecurringFilter && !sanitized.types.includes("반복");
+  if (hasLegacyRecurringFilter) sanitized.types.push("반복");
+  state.calendarTaskFilters = {
+    types: [...new Set(sanitized.types)],
+    categories: [...new Set(sanitized.categories)],
+    tags: [...new Set(sanitized.tags)],
+    priorities: [...new Set(sanitized.priorities)],
+    recurrences: [],
+  };
+  if (hasLegacyRecurringFilter) saveCalendarTaskFilters();
+}
+
 function saveCalendarTaskTags() {
   localStorage.setItem("obsidian-web-viewer-task-tags", state.calendarTaskTags.join(","));
   if (els.taskTagsInput) els.taskTagsInput.value = state.calendarTaskTags.join(", ");
 }
 
 function applyCalendarTaskFilters(tasks) {
-  const { types, categories, tags, priorities, recurrences } = state.calendarTaskFilters;
-  if (!types.length && !categories.length && !tags.length && !priorities.length && !recurrences.length) return tasks;
+  const { types, categories, tags, priorities } = state.calendarTaskFilters;
+  if (!types.length && !categories.length && !tags.length && !priorities.length) return tasks;
   return tasks.filter((task) => {
-    if (types.length && !types.includes(task.kind)) return false;
+    if (types.length) {
+      const wantRecurring = types.includes("반복");
+      const wantKind = types.some((type) => type === "일정" || type === "할일");
+      const kindMatch = wantRecurring && task.isRecurring;
+      const typeMatch = wantKind && types.includes(task.kind);
+      if (!kindMatch && !typeMatch) return false;
+    }
     if (categories.length && !categories.includes(task.category)) return false;
     if (priorities.length && !priorities.includes(task.priority)) return false;
-    if (recurrences.length && !recurrences.includes(task.isRecurring ? "true" : "false")) return false;
     if (tags.length && !tags.some((t) => (task.tags || []).includes(t))) return false;
     return true;
   });
 }
 
 function renderCalendarFilterBar() {
-  const { types, categories, tags, priorities, recurrences } = state.calendarTaskFilters;
+  const { types, categories, tags, priorities } = state.calendarTaskFilters;
   const allTags = state.calendarTaskTags || [];
   const chip = (val, arr, filterType, label) =>
     `<button class="filter-chip${arr.includes(val) ? " active" : ""}" type="button" data-filter-type="${filterType}" data-filter-val="${escapeAttribute(val)}">${label}</button>`;
   const groups = [
-    { label: "종류", chips: [["일정", "🗓 일정"], ["할일", "✓ 할일"]].map(([v, l]) => chip(v, types, "types", l)).join("") },
+    { label: "종류", chips: [["일정", "🗓 일정"], ["할일", "✓ 할일"], ["반복", "🔁 반복"]].map(([v, l]) => chip(v, types, "types", l)).join("") },
     { label: "분류", chips: ["회사", "개인", "기타"].map((v) => chip(v, categories, "categories", v)).join("") },
     { label: "중요도", chips: [["상", "🔴 상"], ["중", "🟡 중"], ["하", "🔵 하"]].map(([v, l]) => chip(v, priorities, "priorities", l)).join("") },
-    { label: "반복", chips: [["true", "🔁 반복"]].map(([v, l]) => chip(v, recurrences, "recurrences", l)).join("") },
     ...(allTags.length ? [{ label: "태그", chips: allTags.map((v) => chip(v, tags, "tags", `#${v}`)).join("") }] : []),
   ];
-  const hasActive = types.length + categories.length + tags.length + priorities.length + recurrences.length > 0;
+  const hasActive = types.length + categories.length + tags.length + priorities.length > 0;
   const isOpen = state.calendarFilterOpen;
   const groupsHtml = groups.map((g, i) =>
     `${i > 0 ? '<span class="filter-group-sep" aria-hidden="true"></span>' : ""}<div class="filter-group"><span class="filter-label">${g.label}</span><div class="filter-chips">${g.chips}</div></div>`
   ).join("");
   return `<div class="calendar-filter-bar${isOpen ? " open" : ""}">
     ${renderCalendarFilterToggleButton()}
-    <div class="filter-bar-body">
-      ${groupsHtml}
-      ${hasActive ? '<button class="filter-reset-btn" type="button" data-filter-reset>초기화</button>' : ""}
-    </div>
-  </div>`;
+      <div class="filter-bar-body">
+        ${groupsHtml}
+        ${hasActive ? '<button class="filter-reset-btn" type="button" data-filter-reset>초기화</button>' : ""}
+      </div>
+    </div>`;
 }
 
 function updateTaskDialogMetaUI() {
@@ -7170,7 +7216,7 @@ function renderEisenhowerMatrix() {
       icon: "⚡",
       title: "미중요",
       attitude: "짧게 처리하고 넘기기",
-      urgent: true,
+      urgent: false,
       important: false,
     },
     {
@@ -7202,9 +7248,11 @@ function renderEisenhowerMatrix() {
           <strong>${escapeHtml(matrixTitle())}</strong>
           <button type="button" data-matrix-action="next">&gt;</button>
         </div>
-        <button class="calendar-today-button" type="button" data-matrix-action="today">Today</button>
-        <div class="calendar-mode-switch" aria-label="Matrix range">
-          ${[30, 7, 1].map((days) => `<button type="button" data-matrix-period="${days}" class="${state.matrixPeriodDays === days ? "active" : ""}">${days}d</button>`).join("")}
+        <div class="calendar-nav-group">
+          <button class="calendar-today-button" type="button" data-matrix-action="today">Today</button>
+          <div class="calendar-mode-switch" aria-label="Matrix range">
+            ${[30, 7, 1].map((days) => `<button type="button" data-matrix-period="${days}" class="${state.matrixPeriodDays === days ? "active" : ""}">${days}d</button>`).join("")}
+          </div>
         </div>
       </div>
       ${renderCalendarFilterBar()}
@@ -7221,7 +7269,8 @@ function renderEisenhowerMatrix() {
 }
 
 function renderCalendarFilterToggleButton(extraClass = "") {
-  const activeCount = Object.values(state.calendarTaskFilters).reduce((sum, arr) => sum + arr.length, 0);
+  const { types, categories, tags, priorities } = state.calendarTaskFilters;
+  const activeCount = types.length + categories.length + tags.length + priorities.length;
   return `
     <button type="button" class="filter-bar-toggle ${extraClass}" data-filter-toggle>
       <span>필터</span>
@@ -7243,17 +7292,22 @@ function renderMatrixQuadrant(quadrant) {
         <span>${quadrant.tasks.length}</span>
       </header>
       <div class="matrix-task-list">
-        ${quadrant.tasks.length ? quadrant.tasks.map((task) => renderMatrixTask(task)).join("") : '<div class="matrix-empty">No tasks</div>'}
+        ${quadrant.tasks.length ? quadrant.tasks.map((task) => renderMatrixTask(task, quadrant)).join("") : '<div class="matrix-empty">No tasks</div>'}
       </div>
     </section>
   `;
 }
 
-function renderMatrixTask(task) {
+function renderMatrixTask(task, quadrant = {}) {
   const due = task.dates?.due || task.dates?.end || task.dates?.scheduled || task.dates?.start || task.date || "";
+  const attitude = quadrant?.attitude || "";
   return `
     <button class="matrix-task ${task.checked ? "done" : task.deferred ? "deferred" : ""}" type="button" draggable="true" data-path="${escapeAttribute(task.path)}" data-line="${task.line}" title="${escapeAttribute(`${task.path}: ${task.rawText || task.text}`)}">
-      <span class="matrix-task-title"><span class="matrix-task-icon" aria-hidden="true">${taskDisplayIcon(task)}</span>${escapeHtml(task.text)}</span>
+      <span class="matrix-task-title">
+        <span class="matrix-task-icon" aria-hidden="true">${taskDisplayIcon(task)}</span>
+        <span class="matrix-task-text">${escapeHtml(task.text)}</span>
+      </span>
+      ${attitude ? `<span class="matrix-task-attitude">${escapeHtml(attitude)}</span>` : ""}
       <span class="matrix-task-meta">
         <span>${escapeHtml(due)}${task.priority ? ` · ${escapeHtml(task.priority)}` : ""}</span>
       </span>
@@ -7450,7 +7504,7 @@ function matrixPlacementFromKey(key) {
   return {
     do: { key: "do", urgent: true, important: true, recurring: false, priority: "상" },
     plan: { key: "plan", urgent: false, important: true, recurring: false, priority: "상" },
-    delegate: { key: "delegate", urgent: true, important: false, recurring: false, priority: "하" },
+    delegate: { key: "delegate", urgent: false, important: false, recurring: false, priority: "하" },
     drop: { key: "drop", urgent: false, important: false, recurring: true, priority: "하" },
   }[key] || null;
 }

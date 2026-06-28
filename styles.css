@@ -21,6 +21,7 @@
   --content-font-size: 16px;
   --calendar-row-font-size: 14.4px;
   --calendar-row-height: 24.5px;
+  --matrix-task-title-lines: 3;
   --range-bg-0: #efeaff;
   --range-border-0: #7057d6;
   --range-bg-1: #e5f7ed;
@@ -4683,15 +4684,26 @@ button:disabled {
 }
 
 .matrix-task-title {
-  align-items: center;
-  display: inline-flex;
+  align-items: flex-start;
+  display: flex;
   font-size: 13px;
   gap: 5px;
   line-height: 1.35;
+  min-width: 0;
+  width: 100%;
+}
+
+.matrix-task-text {
+  min-width: 0;
+  -webkit-box-orient: vertical;
+  display: -webkit-box;
+  -webkit-line-clamp: var(--matrix-task-title-lines, 3);
+  overflow: hidden;
 }
 
 .matrix-task-icon {
   flex: 0 0 auto;
+  margin-top: 1px;
 }
 
 .matrix-task-meta {
@@ -4710,7 +4722,9 @@ button:disabled {
 }
 
 .matrix-task-attitude {
-  display: none;
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 2px;
 }
 
 .matrix-empty {
