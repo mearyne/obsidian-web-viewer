@@ -119,3 +119,4 @@
 - 2026-06-30: Prevent simple-mind-map crashes by adding default imageSize data to mindmap image nodes before rendering.
 - 2026-06-30: Include mindmap node images as Markdown image embeds when copying selected nodes as bullets.
 - 2026-06-30: Keep low-priority calendar tasks visually subdued and sorted last, fix pinned calendar task restore, improve mindmap save color, image-node paste/context/pinch behavior, and make task delete confirmation appear above the task popup.
+- 2026-06-30: Add weekday-based recurring tasks, simplify recurring task dates, show recurring tasks on selected weekdays, and change the matrix into todo/schedule/recurring sections.

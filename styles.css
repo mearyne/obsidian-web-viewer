@@ -3573,6 +3573,35 @@ button:disabled {
   gap: 5px;
 }
 
+.task-repeat-weekdays {
+  align-items: center;
+  display: grid;
+  gap: 5px;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(54px, 1fr) repeat(7, 34px);
+}
+
+.task-repeat-weekdays[hidden] {
+  display: none;
+}
+
+.task-repeat-weekdays button {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  min-height: 30px;
+  padding: 0 6px;
+}
+
+.task-repeat-weekdays button.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
 .task-meta-chip {
   background: var(--surface-2);
   border: 1px solid var(--line);
@@ -4794,19 +4823,16 @@ button:disabled {
   overflow: hidden;
 }
 
-.matrix-quadrant.urgent {
-  border-left: 4px solid #d94848;
+.matrix-quadrant.todo {
+  border-left: 4px solid #44b36b;
+  grid-row: 1 / span 2;
 }
 
-.matrix-quadrant.plan {
+.matrix-quadrant.schedule {
   border-left: 4px solid #2f80ed;
 }
 
-.matrix-quadrant.delegate {
-  border-left: 4px solid #d6a11d;
-}
-
-.matrix-quadrant.drop {
+.matrix-quadrant.recurring {
   border-left: 4px solid #7a8794;
 }
 
@@ -5522,6 +5548,14 @@ button.calendar-more {
 }
 
 @media (max-width: 520px) {
+  .task-repeat-weekdays {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .task-repeat-weekdays .task-repeat-all {
+    grid-column: 1 / -1;
+  }
+
   .matrix-grid {
     gap: 6px;
     grid-template-rows: repeat(2, minmax(180px, 1fr));

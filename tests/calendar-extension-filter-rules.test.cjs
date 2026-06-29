@@ -60,3 +60,37 @@ test("task edit delete closes the native dialog before showing app confirm", () 
   assert.match(body, /await appConfirm/);
   assert.match(body, /await showTaskEditDialog\(task\)/);
 });
+
+test("recurring tasks store weekdays and render only on selected weekdays", () => {
+  assert.match(app, /const TASK_REPEAT_WEEKDAYS = \["월", "화", "수", "목", "금", "토", "일"\]/);
+  assert.match(app, /function extractTaskRepeatWeekdays\(text\)/);
+  assert.match(app, /function replaceTaskRepeatWeekdays\(line, weekdays\)/);
+  assert.match(app, /repeatWeekdays: extractTaskRepeatWeekdays\(rawText\)/);
+  const calendarDatesBody = app.match(/function taskCalendarDates\(task\)[\s\S]*?\n}\r?\n\r?\nfunction taskTypeRank/)?.[0] || "";
+  assert.match(calendarDatesBody, /if \(task\.isRecurring\) return recurringTaskCalendarDates\(task\)/);
+  assert.match(app, /function recurringTaskCalendarDates\(task\)/);
+});
+
+test("recurring task dialogs hide start date and expose weekday toggles", () => {
+  const html = fs.readFileSync("index.html", "utf8");
+  assert.match(html, /id="taskRepeatWeekdays"/);
+  assert.match(html, /id="taskEditRepeatWeekdays"/);
+  assert.match(html, /data-repeat-all/);
+  assert.match(app, /function syncTaskRepeatControls\(scope\)/);
+  assert.match(app, /toggleTaskRepeatWeekday\(scope, weekday\)/);
+  assert.match(app, /setTaskDialogDate\("start", ""\)/);
+  assert.match(app, /setTaskEditDate\("start", ""\)/);
+});
+
+test("matrix uses todo schedule recurring sections and their sort rules", () => {
+  const styles = fs.readFileSync("styles.css", "utf8");
+  assert.match(app, /key: "todo"/);
+  assert.match(app, /key: "schedule"/);
+  assert.match(app, /key: "recurring"/);
+  assert.doesNotMatch(app, /key: "urgent"/);
+  assert.match(app, /function matrixTaskPlacement\(task\)/);
+  assert.match(app, /function compareMatrixTodoTasks\(a, b\)/);
+  assert.match(app, /function compareMatrixDateTasks\(a, b\)/);
+  assert.match(styles, /\.matrix-quadrant\.todo/);
+  assert.match(styles, /grid-row: 1 \/ span 2/);
+});

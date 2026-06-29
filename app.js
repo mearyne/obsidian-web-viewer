@@ -6,6 +6,14 @@ const CONTENT_HISTORY_LIMIT = 50;
 const MERGED_DOCUMENT_CONFIRM_THRESHOLD = 20;
 const DEFAULT_CALENDAR_EXTENSION_EXCLUDES = ["png", "jpg", "gif"];
 const DEFAULT_MINDMAP_IMAGE_SIZE = { width: 120, height: 80, custom: false };
+const TASK_KIND_SCHEDULE = "\uC77C\uC815";
+const TASK_KIND_TODO = "\uD560\uC77C";
+const TASK_KIND_RECURRING = "\uBC18\uBCF5";
+const TASK_PRIORITY_HIGH = "\uC0C1";
+const TASK_PRIORITY_MEDIUM = "\uC911";
+const TASK_PRIORITY_LOW = "\uD558";
+const TASK_REPEAT_WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"];
+const TASK_REPEAT_WEEKDAYS_BY_DATE = ["일", "월", "화", "수", "목", "금", "토"];
 function setTasksDirty() { try { localStorage.setItem(TASKS_DIRTY_KEY, "1"); } catch {} }
 function clearTasksDirty() { try { localStorage.removeItem(TASKS_DIRTY_KEY); } catch {} }
 function isTasksDirty() { try { return localStorage.getItem(TASKS_DIRTY_KEY) === "1"; } catch { return false; } }
@@ -327,10 +335,10 @@ const state = {
   vaultLoaded: false,
   taskDialogActiveField: null,
   taskDialogPickerMonth: null,
-  taskDialogMeta: { kind: null, category: null, priority: null, tags: [] },
+  taskDialogMeta: { kind: null, category: null, priority: null, tags: [], repeatWeekdays: [] },
   taskEditActiveField: null,
   taskEditPickerMonth: null,
-  taskEditMeta: { kind: null, category: null, priority: null, tags: [] },
+  taskEditMeta: { kind: null, category: null, priority: null, tags: [], repeatWeekdays: [] },
   taskEditTask: null,
   calendarTaskFilters: { types: [], categories: [], tags: [], priorities: [], recurrences: [] },
   calendarTaskTags: ["게임", "가족", "공부"],
@@ -556,6 +564,7 @@ const els = {
   taskStartTimeClearBtn: document.querySelector("#taskStartTimeClearBtn"),
   taskDueTimeInput: document.querySelector("#taskDueTimeInput"),
   taskDueTimeClearBtn: document.querySelector("#taskDueTimeClearBtn"),
+  taskRepeatWeekdays: document.querySelector("#taskRepeatWeekdays"),
   taskCreateCancelBtn: document.querySelector("#taskCreateCancelBtn"),
   taskCreateConfirmBtn: document.querySelector("#taskCreateConfirmBtn"),
   taskKindChips: document.querySelector("#taskKindChips"),
@@ -576,6 +585,7 @@ const els = {
   taskEditStartTimeClearBtn: document.querySelector("#taskEditStartTimeClearBtn"),
   taskEditDueTimeInput: document.querySelector("#taskEditDueTimeInput"),
   taskEditDueTimeClearBtn: document.querySelector("#taskEditDueTimeClearBtn"),
+  taskEditRepeatWeekdays: document.querySelector("#taskEditRepeatWeekdays"),
   taskEditCancelBtn: document.querySelector("#taskEditCancelBtn"),
   taskEditConfirmBtn: document.querySelector("#taskEditConfirmBtn"),
   taskEditOpenFileBtn: document.querySelector("#taskEditOpenFileBtn"),
@@ -8012,6 +8022,7 @@ function parseTasks(content, path) {
           category: meta.category,
           priority: meta.priority,
           isRecurring: Boolean(meta.isRecurring),
+          repeatWeekdays: extractTaskRepeatWeekdays(rawText),
           tags: meta.tags,
           notify: !/🔕/.test(rawText),
         },
@@ -8108,6 +8119,7 @@ function findTaskDateByMarkers(text, markers) {
 function cleanTaskText(text) {
   return text
     .replace(/(?:\u{1F4C5}|\u{1F6EB}|\u{23F3}|\u{2705}|\u{274C}|due|start|end|scheduled|done|cancelled|canceled)\s*\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2})?/giu, "")
+    .replace(/\u{1F501}\s*(?:매일|[월화수목금토일](?:\s*,\s*[월화수목금토일])*)/gu, "")
     .replace(/🔕/gu, "")
     .replace(/#[\p{L}\p{N}_/-]+/gu, "")
     .trim();
@@ -8117,6 +8129,30 @@ function findTaskTime(text, marker) {
   const escaped = marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const match = text.match(new RegExp(`${escaped}\\s*\\d{4}-\\d{2}-\\d{2}\\s+(\\d{2}:\\d{2})`, "u"));
   return match ? match[1] : null;
+}
+
+function normalizeTaskRepeatWeekdays(values) {
+  const source = Array.isArray(values) ? values : String(values || "").split(/\s*,\s*/);
+  const selected = new Set(source.map((value) => String(value || "").trim()).filter((value) => TASK_REPEAT_WEEKDAYS.includes(value)));
+  return TASK_REPEAT_WEEKDAYS.filter((weekday) => selected.has(weekday));
+}
+
+function extractTaskRepeatWeekdays(text) {
+  const match = String(text || "").match(/\u{1F501}\s*(매일|[월화수목금토일](?:\s*,\s*[월화수목금토일])*)/u);
+  if (!match) return [];
+  if (match[1] === "매일") return [...TASK_REPEAT_WEEKDAYS];
+  return normalizeTaskRepeatWeekdays(match[1]);
+}
+
+function replaceTaskRepeatWeekdays(line, weekdays) {
+  const normalized = normalizeTaskRepeatWeekdays(weekdays);
+  const cleaned = String(line || "").replace(/\s*\u{1F501}\s*(?:매일|[월화수목금토일](?:\s*,\s*[월화수목금토일])*)/gu, "");
+  if (!normalized.length) return cleaned;
+  const label = normalized.length === TASK_REPEAT_WEEKDAYS.length ? "매일" : normalized.join(",");
+  const target = ` \u{1F501} ${label}`;
+  const dateMarker = cleaned.search(/\s+(?:\u{1F4C5}|\u{1F6EB}|\u{23F3}|\u{2705}|\u{274C})\s*\d{4}-\d{2}-\d{2}/u);
+  if (dateMarker >= 0) return `${cleaned.slice(0, dateMarker)}${target}${cleaned.slice(dateMarker)}`;
+  return `${cleaned}${target}`;
 }
 
 function taskTimeForDate(task, dateKey) {
@@ -8130,10 +8166,10 @@ function taskTimeForDate(task, dateKey) {
 }
 
 function extractTaskMeta(text) {
-  const KIND_SET = new Set(["일정", "할일"]);
+  const KIND_SET = new Set([TASK_KIND_SCHEDULE, TASK_KIND_TODO]);
   const CAT_SET = new Set(["회사", "개인", "기타"]);
-  const PRI_SET = new Set(["상", "중", "하"]);
-  const RECUR_SET = new Set(["반복"]);
+  const PRI_SET = new Set([TASK_PRIORITY_HIGH, TASK_PRIORITY_MEDIUM, TASK_PRIORITY_LOW]);
+  const RECUR_SET = new Set([TASK_KIND_RECURRING]);
   let kind = null, category = null, priority = null;
   let isRecurring = false;
   const tags = [];
@@ -8227,6 +8263,7 @@ function updateTaskDialogMetaUI() {
   els.taskCategoryChips?.querySelectorAll("[data-meta='category']").forEach((b) => b.classList.toggle("active", b.dataset.val === category));
   els.taskPriorityChips?.querySelectorAll("[data-meta='priority']").forEach((b) => b.classList.toggle("active", b.dataset.val === priority));
   els.taskTagChips?.querySelectorAll("[data-meta='tags']").forEach((b) => b.classList.toggle("active", tags.includes(b.dataset.val)));
+  syncTaskRepeatControls("create");
 }
 
 function renderDialogTagChips() {
@@ -8243,6 +8280,68 @@ function renderDialogTagChips() {
       updateTaskDialogMetaUI();
     });
   });
+}
+
+function repeatMetaForScope(scope) {
+  return scope === "edit" ? state.taskEditMeta : state.taskDialogMeta;
+}
+
+function repeatContainerForScope(scope) {
+  return scope === "edit" ? els.taskEditRepeatWeekdays : els.taskRepeatWeekdays;
+}
+
+function syncTaskRepeatControls(scope) {
+  const meta = repeatMetaForScope(scope);
+  const container = repeatContainerForScope(scope);
+  if (!meta || !container) return;
+  const isRecurring = meta.kind === TASK_KIND_RECURRING;
+  container.hidden = !isRecurring;
+  const startField = scope === "edit" ? els.taskEditStartDateBtn?.closest(".task-create-field") : els.taskStartDateBtn?.closest(".task-create-field");
+  if (startField) startField.hidden = isRecurring;
+  if (isRecurring && !Array.isArray(meta.repeatWeekdays)) meta.repeatWeekdays = [];
+  if (isRecurring && meta.repeatWeekdays.length === 0) meta.repeatWeekdays = [...TASK_REPEAT_WEEKDAYS];
+  if (scope === "create" && isRecurring) {
+    setTaskDialogDate("start", "");
+    if (els.taskStartTimeInput) els.taskStartTimeInput.value = "";
+    if (els.taskStartTimeClearBtn) els.taskStartTimeClearBtn.hidden = true;
+  }
+  if (scope === "edit" && isRecurring) {
+    setTaskEditDate("start", "");
+    if (els.taskEditStartTimeInput) els.taskEditStartTimeInput.value = "";
+    if (els.taskEditStartTimeClearBtn) els.taskEditStartTimeClearBtn.hidden = true;
+  }
+  const selected = new Set(normalizeTaskRepeatWeekdays(meta.repeatWeekdays));
+  container.querySelectorAll("[data-repeat-weekday]").forEach((button) => {
+    button.classList.toggle("active", selected.has(button.dataset.repeatWeekday));
+  });
+  container.querySelector("[data-repeat-all]")?.classList.toggle("active", selected.size === TASK_REPEAT_WEEKDAYS.length);
+}
+
+function toggleTaskRepeatWeekday(scope, weekday) {
+  const meta = repeatMetaForScope(scope);
+  if (!meta) return;
+  const selected = new Set(normalizeTaskRepeatWeekdays(meta.repeatWeekdays));
+  if (selected.has(weekday)) selected.delete(weekday);
+  else selected.add(weekday);
+  meta.repeatWeekdays = TASK_REPEAT_WEEKDAYS.filter((item) => selected.has(item));
+  syncTaskRepeatControls(scope);
+}
+
+function setTaskRepeatEveryday(scope) {
+  const meta = repeatMetaForScope(scope);
+  if (!meta) return;
+  meta.repeatWeekdays = [...TASK_REPEAT_WEEKDAYS];
+  syncTaskRepeatControls(scope);
+}
+
+function bindTaskRepeatControls(scope) {
+  const container = repeatContainerForScope(scope);
+  if (!container || container.dataset.bound === "true") return;
+  container.dataset.bound = "true";
+  container.querySelectorAll("[data-repeat-weekday]").forEach((button) => {
+    button.addEventListener("click", () => toggleTaskRepeatWeekday(scope, button.dataset.repeatWeekday));
+  });
+  container.querySelector("[data-repeat-all]")?.addEventListener("click", () => setTaskRepeatEveryday(scope));
 }
 
 function renderCalendar() {
@@ -8350,43 +8449,31 @@ function renderCalendar() {
 function renderEisenhowerMatrix() {
   const range = matrixDateRange();
   const tasks = matrixVisibleTasks(range);
-  const unclassified = tasks.filter((task) => !task.priority && !task.isRecurring);
   const quadrants = [
     {
-      key: "urgent",
-      icon: "⚡",
-      title: "긴급",
-      attitude: "오늘 처리. 중요도는 유지",
-      urgent: true,
-      important: null,
+      key: "todo",
+      icon: "☑",
+      title: "할 일",
+      attitude: "중요도 높은 순, 마감 가까운 순",
+      sorter: compareMatrixTodoTasks,
     },
     {
-      key: "delegate",
-      icon: "▫",
-      title: "미중요",
-      attitude: "짧게 처리하고 넘기기",
-      urgent: false,
-      important: false,
+      key: "schedule",
+      icon: "🗓",
+      title: "일정",
+      attitude: "끝날짜 가까운 순",
+      sorter: compareMatrixDateTasks,
     },
     {
-      key: "plan",
-      icon: "📌",
-      title: "중요 + 미긴급",
-      attitude: "주간/일정 블록에 배치",
-      urgent: false,
-      important: true,
-    },
-    {
-      key: "drop",
+      key: "recurring",
       icon: "🔁",
       title: "반복",
-      attitude: "루틴 슬롯에 몰아서 처리",
-      urgent: false,
-      important: false,
+      attitude: "매일 또는 선택 요일",
+      sorter: compareMatrixDateTasks,
     },
   ].map((quadrant) => ({
     ...quadrant,
-    tasks: tasks.filter((task) => matrixTaskPlacement(task, range) === quadrant.key),
+    tasks: tasks.filter((task) => matrixTaskPlacement(task) === quadrant.key).sort(quadrant.sorter),
   }));
 
   els.calendarView.innerHTML = `
@@ -8406,7 +8493,6 @@ function renderEisenhowerMatrix() {
       </div>
       ${renderCalendarFilterBar()}
       ${renderMatrixRules(range)}
-      ${renderMatrixUnclassified(unclassified)}
       <div class="matrix-grid">
         ${quadrants.map((quadrant) => renderMatrixQuadrant(quadrant)).join("")}
       </div>
@@ -8416,7 +8502,6 @@ function renderEisenhowerMatrix() {
   bindMatrixEvents();
   updateSyncStatus();
 }
-
 function renderCalendarFilterToggleButton(extraClass = "") {
   const { types, categories, tags, priorities } = state.calendarTaskFilters;
   const activeCount = types.length + categories.length + tags.length + priorities.length;
@@ -8465,17 +8550,14 @@ function renderMatrixTask(task, quadrant = {}) {
 }
 
 function renderMatrixRules(range) {
-  const cutoff = addDays(matrixUrgentCutoff(range), -1);
   return `
     <div class="matrix-rules">
-      <span>긴급: ${escapeHtml(formatDate(range.start))} - ${escapeHtml(formatDate(cutoff))}</span>
-      <span>중요: #상</span>
-      <span>미중요: #중/#하/미분류</span>
-      <span>반복: #반복</span>
+      <span>할 일: 중요도 높은 순 → 끝날짜 가까운 순</span>
+      <span>일정: #${TASK_KIND_SCHEDULE}</span>
+      <span>반복: #${TASK_KIND_RECURRING} + 선택 요일</span>
     </div>
   `;
 }
-
 function renderMatrixUnclassified(tasks) {
   if (!tasks.length) return "";
   const formatPreview = (task) => task.text ? task.text : "(제목 없음)";
@@ -8515,35 +8597,40 @@ function matrixTitle() {
 function matrixVisibleTasks(range = matrixDateRange()) {
   return calendarPreviewTasks()
     .filter((task) => !task.checked)
-    .filter((task) => {
-      const date = parseDateKey(task.dates?.due || task.dates?.end || task.dates?.scheduled || task.dates?.start || task.date);
+    .filter((task) => taskCalendarDates(task).some((dateKey) => {
+      const date = parseDateKey(dateKey);
       return date && date >= range.start && date < range.end;
-    })
-    .sort((a, b) => (a.date || "").localeCompare(b.date || "") || taskTypeRank(a.type) - taskTypeRank(b.type) || a.text.localeCompare(b.text, "ko"));
+    }))
+    .sort(compareMatrixDateTasks);
+}
+function matrixPriorityRank(task) {
+  if (task.priority === TASK_PRIORITY_HIGH) return 0;
+  if (task.priority === TASK_PRIORITY_MEDIUM) return 1;
+  if (task.priority === TASK_PRIORITY_LOW) return 2;
+  return 3;
 }
 
-function matrixUrgentCutoff(range) {
-  const days = state.matrixPeriodDays || 1;
-  const safeDays = Math.max(1, Math.min(30, Number(days) || 1));
-  const urgentDays = safeDays >= 30 ? 7 : safeDays >= 7 ? 2 : 1;
-  return addDays(range.start, urgentDays);
+function matrixTaskDateKey(task) {
+  return task.dates?.due || task.dates?.end || task.dates?.scheduled || task.dates?.start || task.date || "";
 }
 
-function matrixTaskUrgent(task, range = matrixDateRange()) {
-  const date = parseDateKey(task.dates?.due || task.dates?.end || task.dates?.scheduled || task.dates?.start || task.date);
-  return Boolean(date && date < matrixUrgentCutoff(range));
+function compareMatrixTodoTasks(a, b) {
+  return matrixPriorityRank(a) - matrixPriorityRank(b)
+    || matrixTaskDateKey(a).localeCompare(matrixTaskDateKey(b))
+    || a.text.localeCompare(b.text, "ko");
 }
 
-function matrixTaskImportant(task) {
-  return task.priority === "상";
+function compareMatrixDateTasks(a, b) {
+  return matrixTaskDateKey(a).localeCompare(matrixTaskDateKey(b))
+    || matrixPriorityRank(a) - matrixPriorityRank(b)
+    || a.text.localeCompare(b.text, "ko");
 }
 
-function matrixTaskPlacement(task, range = matrixDateRange()) {
-  if (task.isRecurring) return "drop";
-  if (matrixTaskUrgent(task, range)) return "urgent";
-  return matrixTaskImportant(task) ? "plan" : "delegate";
+function matrixTaskPlacement(task) {
+  if (task.isRecurring) return "recurring";
+  if (task.kind === TASK_KIND_SCHEDULE) return "schedule";
+  return "todo";
 }
-
 function bindMatrixEvents() {
   bindCalendarFilterEvents();
 
@@ -8635,10 +8722,9 @@ function shiftMatrixDate(direction) {
 
 function matrixPlacementFromKey(key) {
   return {
-    urgent: { key: "urgent", urgent: true, important: null, recurring: false, priority: null },
-    plan: { key: "plan", urgent: false, important: true, recurring: false, priority: "상" },
-    delegate: { key: "delegate", urgent: false, important: false, recurring: false, priority: "하" },
-    drop: { key: "drop", urgent: false, important: false, recurring: true, priority: "하" },
+    todo: { key: "todo", kind: TASK_KIND_TODO, recurring: false, priority: null },
+    schedule: { key: "schedule", kind: TASK_KIND_SCHEDULE, recurring: false, priority: null },
+    recurring: { key: "recurring", kind: TASK_KIND_RECURRING, recurring: true, priority: null },
   }[key] || null;
 }
 
@@ -10167,10 +10253,17 @@ async function moveTaskToMatrixQuadrant(path, lineNumber, placement) {
   if (!lines[index] || !/^\s*[-*+]\s+\[[ xX-]\]/.test(lines[index])) return;
 
   const range = matrixDateRange();
-  const targetDate = placement.urgent ? formatDate(range.start) : formatDate(addDays(range.end, -1));
+  const targetDate = formatDate(addDays(range.end, -1));
   let nextLine = replaceTaskLineDate(lines[index], targetDate, "\u{1F4C5}");
+  if (placement.kind) nextLine = replaceTaskKindTag(nextLine, placement.kind);
   if (placement.priority) nextLine = replaceTaskPriorityTag(nextLine, placement.priority);
   nextLine = replaceTaskRecurringTag(nextLine, Boolean(placement.recurring));
+  if (placement.recurring) {
+    const existingWeekdays = extractTaskRepeatWeekdays(nextLine);
+    nextLine = replaceTaskRepeatWeekdays(nextLine, existingWeekdays.length ? existingWeekdays : TASK_REPEAT_WEEKDAYS);
+  } else {
+    nextLine = replaceTaskRepeatWeekdays(nextLine, []);
+  }
   if (nextLine === lines[index]) return;
 
   lines[index] = nextLine;
@@ -10202,9 +10295,19 @@ function replaceTaskPriorityTag(line, priority) {
   return `${cleaned}${target}`;
 }
 
+function replaceTaskKindTag(line, kind) {
+  const cleaned = String(line || "")
+    .replace(new RegExp(`\\s+#(?:${TASK_KIND_SCHEDULE}|${TASK_KIND_TODO}|${TASK_KIND_RECURRING})(?=\\s|$)`, "gu"), "");
+  if (!kind || kind === TASK_KIND_RECURRING) return cleaned;
+  const target = ` #${kind}`;
+  const dateMarker = cleaned.search(/\s+(?:\u{1F4C5}|\u{1F6EB}|\u{23F3}|\u{2705}|\u{274C})\s*\d{4}-\d{2}-\d{2}/u);
+  if (dateMarker >= 0) return `${cleaned.slice(0, dateMarker)}${target}${cleaned.slice(dateMarker)}`;
+  return `${cleaned}${target}`;
+}
+
 function replaceTaskRecurringTag(line, isRecurring) {
-  const cleaned = line.replace(/\s+#반복(?=\s|$)/gu, "");
-  const target = isRecurring ? " #반복" : "";
+  const cleaned = line.replace(new RegExp(`\\s+#${TASK_KIND_RECURRING}(?=\\s|$)`, "gu"), "");
+  const target = isRecurring ? ` #${TASK_KIND_RECURRING}` : "";
   const dateMarker = cleaned.search(/\s+(?:\u{1F4C5}|\u{1F6EB}|\u{23F3}|\u{2705}|\u{274C})\s*\d{4}-\d{2}-\d{2}/u);
   if (dateMarker >= 0) return `${cleaned.slice(0, dateMarker)}${target}${cleaned.slice(dateMarker)}`;
   return `${cleaned}${target}`;
@@ -10419,8 +10522,8 @@ async function showTaskCreateDialog(dueDate, startDate = "", prefill = null) {
   state.taskDialogActiveField = null;
   const prefixedKind = prefill?.isRecurring ? "반복" : prefill?.kind;
   state.taskDialogMeta = prefill
-    ? { kind: prefixedKind || "할일", category: prefill.category || null, priority: prefill.priority || null, tags: [...(prefill.tags || [])] }
-    : { kind: "할일", category: null, priority: null, tags: [] };
+    ? { kind: prefixedKind || TASK_KIND_TODO, category: prefill.category || null, priority: prefill.priority || null, tags: [...(prefill.tags || [])], repeatWeekdays: normalizeTaskRepeatWeekdays(prefill.repeatWeekdays || []) }
+    : { kind: TASK_KIND_TODO, category: null, priority: null, tags: [], repeatWeekdays: [] };
   state.taskCreateSourceDate = startDate || dueDate;
   if (els.taskTitleInput) els.taskTitleInput.value = prefill?.text || "";
   if (els.taskCreateSubItemsInput) els.taskCreateSubItemsInput.value = prefill ? taskSubItemsToEditableText(prefill.subItems) : "";
@@ -10602,6 +10705,8 @@ function renderTaskDatePicker(field) {
 
 function bindTaskCreateDialog() {
   if (!els.taskCreateDialog) return;
+  bindTaskRepeatControls("create");
+  bindTaskRepeatControls("edit");
 
   // Meta chip bindings (kind, category, priority - single select/toggle)
   [els.taskKindChips, els.taskCategoryChips, els.taskPriorityChips].forEach((container) => {
@@ -10700,20 +10805,20 @@ function bindTaskCreateDialog() {
     const content = await readFileNode(node);
     const prefix = content.endsWith("\n") ? "" : "\n";
     const { kind, category, priority, tags } = state.taskDialogMeta;
-    const isRecurring = kind === "반복";
-    const cleanTags = Array.isArray(tags) ? tags.filter((tag) => tag !== "반복") : [];
+    const isRecurring = kind === TASK_KIND_RECURRING;
+    const cleanTags = Array.isArray(tags) ? tags.filter((tag) => tag !== TASK_KIND_RECURRING) : [];
     const hashParts = [isRecurring ? null : kind, category, priority, ...cleanTags].filter(Boolean).map((v) => `#${v}`);
     const metaStr = hashParts.length ? ` ${hashParts.join(" ")}` : "";
     const startTime = normalizeTaskTimeInput(els.taskStartTimeInput);
     const dueTime = normalizeTaskTimeInput(els.taskDueTimeInput);
-    const startPart = startDate ? ` 🛫 ${startDate}${startTime ? " " + startTime : ""}` : "";
+    const startPart = !isRecurring && startDate ? ` 🛫 ${startDate}${startTime ? " " + startTime : ""}` : "";
     const duePart = ` 📅 ${dueDate}${dueTime ? " " + dueTime : ""}`;
     const notifyOff = els.taskNotifyChip?.dataset.notify === "false";
     const notifyPart = notifyOff ? " 🔕" : "";
     const subItemsText = els.taskCreateSubItemsInput?.value || "";
     const subItemLines = normalizeTaskSubItemsInput(subItemsText).map((line) => `  ${line}`);
     const rawLine = `${prefix}- [ ] ${title}${metaStr}${startPart}${duePart}${notifyPart}`;
-    const taskLine = replaceTaskRecurringTag(rawLine, isRecurring);
+    const taskLine = replaceTaskRepeatWeekdays(replaceTaskRecurringTag(rawLine, isRecurring), isRecurring ? state.taskDialogMeta.repeatWeekdays : []);
     const subItemsStr = subItemLines.length ? "\n" + subItemLines.join("\n") : "";
     const nextContent = content + taskLine + subItemsStr + "\n";
     await writeNodeContent(node, nextContent, { backup: false, previousContent: content });
@@ -11046,6 +11151,7 @@ function updateTaskEditMetaUI() {
   els.taskEditCategoryChips?.querySelectorAll("[data-meta='category']").forEach((b) => b.classList.toggle("active", b.dataset.val === category));
   els.taskEditPriorityChips?.querySelectorAll("[data-meta='priority']").forEach((b) => b.classList.toggle("active", b.dataset.val === priority));
   els.taskEditTagChips?.querySelectorAll("[data-meta='tags']").forEach((b) => b.classList.toggle("active", tags.includes(b.dataset.val)));
+  syncTaskRepeatControls("edit");
 }
 
 function renderEditTagChips() {
@@ -11148,6 +11254,7 @@ function setTaskDialogMode(mode) {
     els.taskEditIndentButton,
     els.taskEditOutdentButton,
   ].forEach((el) => { if (el) el.disabled = isView; });
+  els.taskEditRepeatWeekdays?.querySelectorAll("button").forEach((el) => { el.disabled = isView; });
 
   if (isView) {
     [els.taskEditStartDateClearBtn, els.taskEditDueDateClearBtn,
@@ -11191,10 +11298,11 @@ async function showTaskEditDialog(task) {
   if (!els.taskEditDialog) return;
   state.taskEditTask = task;
   state.taskEditMeta = {
-    kind: task.isRecurring ? "반복" : task.kind || null,
+    kind: task.isRecurring ? TASK_KIND_RECURRING : task.kind || null,
     category: task.category || null,
     priority: task.priority || null,
     tags: [...(task.tags || [])],
+    repeatWeekdays: normalizeTaskRepeatWeekdays(task.repeatWeekdays || []),
   };
   state.taskEditActiveField = null;
   state.taskEditPickerMonth = null;
@@ -11272,17 +11380,17 @@ async function saveTaskEdit(task, title, meta, dueDate, startDate, checked, dueT
     const indentStr = (lines[idx].match(/^(\s*)/)?.[1]) || "";
     const taskIndentLen = normalizeLineIndent(lines[idx]).length;
     const { kind, category, priority, tags } = meta;
-    const isRecurring = kind === "반복";
-    const cleanTags = Array.isArray(tags) ? tags.filter((tag) => tag !== "반복") : [];
+    const isRecurring = kind === TASK_KIND_RECURRING;
+    const cleanTags = Array.isArray(tags) ? tags.filter((tag) => tag !== TASK_KIND_RECURRING) : [];
     const hashParts = [isRecurring ? null : kind, category, priority, ...cleanTags].filter(Boolean).map((v) => `#${v}`);
     const metaStr = hashParts.length ? ` ${hashParts.join(" ")}` : "";
-    const startPart = startDate ? ` 🛫 ${startDate}${startTime ? " " + startTime : ""}` : "";
+    const startPart = !isRecurring && startDate ? ` 🛫 ${startDate}${startTime ? " " + startTime : ""}` : "";
     const duePart = ` 📅 ${dueDate}${dueTime ? " " + dueTime : ""}`;
     const notifyOff = els.taskEditNotifyChip?.dataset.notify === "false";
     const notifyPart = notifyOff ? " 🔕" : "";
     const statusChar = checked ? "x" : deferred ? ">" : " ";
     const rawLine = `${indentStr}- [${statusChar}] ${title}${metaStr}${startPart}${duePart}${notifyPart}`;
-    lines[idx] = replaceTaskRecurringTag(rawLine, isRecurring);
+    lines[idx] = replaceTaskRepeatWeekdays(replaceTaskRecurringTag(rawLine, isRecurring), isRecurring ? meta.repeatWeekdays : []);
     let childEnd = idx + 1;
     while (childEnd < lines.length) {
       if (lines[childEnd].trim() === "") break;
@@ -11442,6 +11550,7 @@ function calendarPreviewTasks() {
 }
 
 function taskCalendarDates(task) {
+  if (task.isRecurring) return recurringTaskCalendarDates(task);
   const start = parseDateKey(task.dates?.start);
   const end = parseDateKey(task.dates?.end || task.dates?.due);
   // For done tasks with a start but no explicit end/due, use the done date as the range end.
@@ -11456,6 +11565,20 @@ function taskCalendarDates(task) {
     dates.push(formatDate(current));
   }
   return dates.length ? dates : [task.date].filter(Boolean);
+}
+
+function recurringTaskCalendarDates(task) {
+  const anchor = parseDateKey(task.dates?.due || task.dates?.end || task.date);
+  if (!anchor) return [task.date].filter(Boolean);
+  const weekdays = normalizeTaskRepeatWeekdays(task.repeatWeekdays || []);
+  if (!weekdays.length) return [formatDate(anchor)];
+  const selected = new Set(weekdays);
+  const dates = [];
+  const horizon = addDays(anchor, 366);
+  for (let current = new Date(anchor); current <= horizon; current = addDays(current, 1)) {
+    if (selected.has(TASK_REPEAT_WEEKDAYS_BY_DATE[current.getDay()])) dates.push(formatDate(current));
+  }
+  return dates.length ? dates : [formatDate(anchor)];
 }
 
 function taskTypeRank(type) {
