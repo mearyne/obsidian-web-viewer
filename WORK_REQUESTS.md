@@ -91,3 +91,4 @@
 - 2026-06-28: Preserve scroll position after deleting a document from merged documents view.
 - 2026-06-28: Add wanglin2 demo mind map themes via simple-mind-map-plugin-themes and expose them in mindmap theme options.
 - 2026-06-28: Add an inline mindmap theme selector to the mindmap toolbar that updates the active light/dark mindmap theme setting.
+- 2026-06-29: Move mindmap settings from the options menu to the mindmap edit bar Tools drawer and save them as shared device settings instead of localStorage.

@@ -659,9 +659,6 @@ els.clipperFolderInput?.addEventListener("input", () => {
 els.clipperRuleAddBtn?.addEventListener("click", () => { addClipperRuleRow("", "", ""); scheduleSettingsSave(); });
 els.searchExcludeInput?.addEventListener("input", handleSearchExcludeInput);
 els.optionsMenu?.addEventListener("change", (event) => {
-  if (event.target?.matches?.("#mindmapLayoutSelect, #mindmapLightThemeSelect, #mindmapDarkThemeSelect, #mindmapAutoFitInput, #mindmapAdvancedToolsInput")) {
-    handleMindmapOptionInput();
-  }
   if (event.target?.matches?.("#hideFrontmatterInput")) {
     handleHideFrontmatterInput();
   }
@@ -3301,8 +3298,6 @@ function setTheme(theme) {
 
 function initOptions() {
   ensureDisplayOptionsSection();
-  ensureMindmapOptionsSection();
-  loadMindmapOptionsFromLocalStorage();
   const savedCalendarPath = localStorage.getItem("obsidian-web-viewer-calendar-paths") || "";
   if (els.calendarPathInput) els.calendarPathInput.value = savedCalendarPath;
   const savedRandomPath = localStorage.getItem("obsidian-web-viewer-random-paths") || "";
@@ -3345,57 +3340,6 @@ function initOptions() {
     if (parsed.length) state.calendarTaskTags = parsed;
   }
   if (els.taskTagsInput) els.taskTagsInput.value = state.calendarTaskTags.join(", ");
-}
-
-function ensureMindmapOptionsSection() {
-  if (!els.optionsMenu || document.getElementById("mindmapLayoutSelect")) return;
-  const section = document.createElement("details");
-  section.className = "option-node";
-  section.innerHTML = `
-    <summary>&#47560;&#51064;&#46300;&#47605;</summary>
-    <div class="option-node-body">
-        <label class="option-field">
-          <span>&#44592;&#48376; &#47112;&#51060;&#50500;&#50883;</span>
-          <select id="mindmapLayoutSelect">
-            ${renderMindmapLayoutOptions(state.mindmapOptions.layout)}
-          </select>
-        </label>
-      <label class="option-field">
-        <span>&#46972;&#51060;&#53944; &#53580;&#47560;</span>
-        <select id="mindmapLightThemeSelect">
-          ${MINDMAP_ALL_THEME_OPTIONS.map((theme) => `<option value="${theme.value}">${theme.label}</option>`).join("")}
-        </select>
-      </label>
-      <label class="option-field">
-        <span>&#45796;&#53356; &#53580;&#47560;</span>
-        <select id="mindmapDarkThemeSelect">
-          ${MINDMAP_ALL_THEME_OPTIONS.map((theme) => `<option value="${theme.value}">${theme.label}</option>`).join("")}
-        </select>
-      </label>
-      <label class="option-field option-field-row">
-        <span>&#47116;&#45908; &#54980; &#54868;&#47732;&#50640; &#47582;&#52644;</span>
-        <input id="mindmapAutoFitInput" type="checkbox" />
-      </label>
-      <label class="option-field option-field-row">
-        <span>&#44256;&#44553; &#46020;&#44396; &#54364;&#49884;</span>
-        <input id="mindmapAdvancedToolsInput" type="checkbox" />
-      </label>
-    </div>
-  `;
-  const searchSection = els.searchExcludeInput?.closest(".option-node");
-  searchSection?.after(section) || els.optionsMenu.append(section);
-}
-
-function loadMindmapOptionsFromLocalStorage() {
-  const legacyTheme = localStorage.getItem("obsidian-web-viewer-mindmap-theme");
-  const options = normalizeMindmapOptions({
-    layout: localStorage.getItem("obsidian-web-viewer-mindmap-layout"),
-    lightTheme: localStorage.getItem("obsidian-web-viewer-mindmap-light-theme") || legacyTheme,
-    darkTheme: localStorage.getItem("obsidian-web-viewer-mindmap-dark-theme") || legacyTheme,
-    autoFit: localStorage.getItem("obsidian-web-viewer-mindmap-auto-fit"),
-    advancedTools: localStorage.getItem("obsidian-web-viewer-mindmap-advanced-tools"),
-  });
-  applyMindmapOptions(options, { persist: false, applyVisible: false });
 }
 
 function normalizeMindmapOptions(options = {}) {
@@ -3486,34 +3430,25 @@ function syncMindmapDocumentLayout(path, { frontmatter = null } = {}) {
   state.mindmapDocumentLayouts.set(path, layout);
 }
 
-function applyMindmapOptions(options = {}, { persist = true, applyVisible = true } = {}) {
+function applyMindmapOptions(options = {}, { applyVisible = true } = {}) {
   state.mindmapOptions = normalizeMindmapOptions(options);
   syncMindmapOptionInputs();
-  if (persist) persistMindmapOptions();
   if (applyVisible) applyVisibleMindmapOptions();
 }
 
 function syncMindmapOptionInputs() {
-  const layout = document.getElementById("mindmapLayoutSelect");
-  const lightTheme = document.getElementById("mindmapLightThemeSelect");
-  const darkTheme = document.getElementById("mindmapDarkThemeSelect");
+  const layout = els.mindmapShell?.querySelector("[data-mindmap-default-layout-select]");
+  const lightTheme = els.mindmapShell?.querySelector("[data-mindmap-light-theme-select]");
+  const darkTheme = els.mindmapShell?.querySelector("[data-mindmap-dark-theme-select]");
   const toolbarTheme = els.mindmapShell?.querySelector("[data-mindmap-theme-select]");
-  const autoFit = document.getElementById("mindmapAutoFitInput");
-  const advancedTools = document.getElementById("mindmapAdvancedToolsInput");
+  const autoFit = els.mindmapShell?.querySelector("[data-mindmap-auto-fit]");
+  const advancedTools = els.mindmapShell?.querySelector("[data-mindmap-advanced-tools]");
   if (layout) layout.value = state.mindmapOptions.layout;
   if (lightTheme) lightTheme.value = state.mindmapOptions.lightTheme;
   if (darkTheme) darkTheme.value = state.mindmapOptions.darkTheme;
   if (toolbarTheme) toolbarTheme.value = selectedMindmapThemeName();
   if (autoFit) autoFit.checked = state.mindmapOptions.autoFit;
   if (advancedTools) advancedTools.checked = state.mindmapOptions.advancedTools;
-}
-
-function persistMindmapOptions() {
-  localStorage.setItem("obsidian-web-viewer-mindmap-layout", state.mindmapOptions.layout);
-  localStorage.setItem("obsidian-web-viewer-mindmap-light-theme", state.mindmapOptions.lightTheme);
-  localStorage.setItem("obsidian-web-viewer-mindmap-dark-theme", state.mindmapOptions.darkTheme);
-  localStorage.setItem("obsidian-web-viewer-mindmap-auto-fit", state.mindmapOptions.autoFit ? "1" : "0");
-  localStorage.setItem("obsidian-web-viewer-mindmap-advanced-tools", state.mindmapOptions.advancedTools ? "1" : "0");
 }
 
 function applyVisibleMindmapOptions() {
@@ -3533,12 +3468,13 @@ function updateMindmapAdvancedToolVisibility() {
 }
 
 function handleMindmapOptionInput() {
+  const root = els.mindmapShell?.querySelector("[data-mindmap-options]");
   applyMindmapOptions({
-    layout: document.getElementById("mindmapLayoutSelect")?.value,
-    lightTheme: document.getElementById("mindmapLightThemeSelect")?.value,
-    darkTheme: document.getElementById("mindmapDarkThemeSelect")?.value,
-    autoFit: document.getElementById("mindmapAutoFitInput")?.checked,
-    advancedTools: document.getElementById("mindmapAdvancedToolsInput")?.checked,
+    layout: root?.querySelector("[data-mindmap-default-layout-select]")?.value,
+    lightTheme: root?.querySelector("[data-mindmap-light-theme-select]")?.value,
+    darkTheme: root?.querySelector("[data-mindmap-dark-theme-select]")?.value,
+    autoFit: root?.querySelector("[data-mindmap-auto-fit]")?.checked,
+    advancedTools: root?.querySelector("[data-mindmap-advanced-tools]")?.checked,
   });
   scheduleSettingsSave();
 }
@@ -4800,6 +4736,34 @@ function renderMindmapDocument() {
           <button type="button" data-mindmap-action="export-md">Export MD</button>
           <button type="button" data-mindmap-action="import-md" data-edit-only>Import MD</button>
         </div>
+        <div class="mindmap-tools-options" data-mindmap-options>
+          <label>
+            <span>Default layout</span>
+            <select data-mindmap-default-layout-select>
+              ${renderMindmapLayoutOptions(state.mindmapOptions.layout)}
+            </select>
+          </label>
+          <label>
+            <span>Light theme</span>
+            <select data-mindmap-light-theme-select>
+              ${renderMindmapThemeOptions(state.mindmapOptions.lightTheme)}
+            </select>
+          </label>
+          <label>
+            <span>Dark theme</span>
+            <select data-mindmap-dark-theme-select>
+              ${renderMindmapThemeOptions(state.mindmapOptions.darkTheme)}
+            </select>
+          </label>
+          <label class="mindmap-tools-check">
+            <span>Fit after render</span>
+            <input type="checkbox" data-mindmap-auto-fit />
+          </label>
+          <label class="mindmap-tools-check">
+            <span>Show advanced tools</span>
+            <input type="checkbox" data-mindmap-advanced-tools />
+          </label>
+        </div>
       </aside>` : ""}
       <div id="mindmapCanvas" class="mindmap-canvas" tabindex="0"></div>
     </section>
@@ -4928,6 +4892,8 @@ function bindMindmapToolbarControls() {
       scheduleSettingsSave();
     });
   }
+  els.mindmapShell?.querySelector("[data-mindmap-options]")?.addEventListener("change", handleMindmapOptionInput);
+  syncMindmapOptionInputs();
   els.mindmapShell?.querySelectorAll("[data-edit-only]").forEach((button) => {
     button.disabled = !canEdit;
   });
