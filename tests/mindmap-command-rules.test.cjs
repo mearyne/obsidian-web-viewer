@@ -1,11 +1,26 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const vm = require("node:vm");
 const {
   canAddMindmapToCurrentDocument,
   appendMindmapEmbed,
   contentForMindmapInsertion,
   resolveSaveShortcutTarget,
 } = require("../mindmap-command-rules.js");
+
+function extractFunction(source, name) {
+  const start = source.indexOf(`function ${name}(`);
+  assert.notEqual(start, -1, `${name} not found`);
+  const braceStart = source.indexOf("{", start);
+  let depth = 0;
+  for (let index = braceStart; index < source.length; index += 1) {
+    if (source[index] === "{") depth += 1;
+    if (source[index] === "}") depth -= 1;
+    if (depth === 0) return source.slice(start, index + 1);
+  }
+  throw new Error(`${name} function body not closed`);
+}
 
 test("mindmap command is available while editing a markdown note", () => {
   assert.equal(canAddMindmapToCurrentDocument({
@@ -142,7 +157,7 @@ test("rich text mindmap editor commits enter and escape before Quill consumes th
 });
 
 test("selected mindmap nodes can be copied as markdown bullets", () => {
-  const app = require("node:fs").readFileSync("app.js", "utf8");
+  const app = fs.readFileSync("app.js", "utf8");
   const body = app.match(/function handleMindmapCopy\(event\)[\s\S]*?\n}\r?\n\r?\nfunction selectedMindmapNodesToMarkdownBullets/)?.[0] || "";
   const serializeBody = app.match(/function selectedMindmapNodesToMarkdownBullets\(\)[\s\S]*?\n}\r?\n\r?\nasync function pasteImageToActiveMindmapNodes/)?.[0] || "";
   assert.match(app, /document\.addEventListener\("copy", handleMindmapCopy, true\)/);
@@ -153,4 +168,61 @@ test("selected mindmap nodes can be copied as markdown bullets", () => {
   assert.match(body, /event\.clipboardData\.setData\("text\/plain", markdown\)/);
   assert.match(serializeBody, /state\.mindmapLastClickedNodeUid/);
   assert.match(serializeBody, /findNodeByUid\?\.\(state\.mindmapLastClickedNodeUid\)/);
+});
+
+test("mindmap copy writes markdown bullets even when focus is outside the shell", () => {
+  const app = fs.readFileSync("app.js", "utf8");
+  const context = {
+    state: {
+      mindmapInstance: {
+        renderer: {
+          activeNodeList: [{
+            nodeData: {
+              data: {
+                text: "<p>Parent</p>",
+                children: [{ data: { text: "<p>Child</p>" }, children: [] }],
+              },
+            },
+          }],
+        },
+      },
+      mindmapKeyCaptureActive: false,
+      mindmapLastClickedNodeUid: null,
+    },
+    els: {
+      mindmapShell: {
+        hidden: false,
+        contains: () => false,
+      },
+    },
+    document: {
+      activeElement: { className: "ql-editor" },
+    },
+    isMindmapTextEditingEvent: () => false,
+  };
+  vm.createContext(context);
+  vm.runInContext([
+    extractFunction(app, "normalizeMindmapMarkdownTopic"),
+    extractFunction(app, "handleMindmapCopy"),
+    extractFunction(app, "hasMindmapNodesForCopy"),
+    extractFunction(app, "selectedMindmapNodesToMarkdownBullets"),
+  ].join("\n"), context);
+
+  const clipboard = new Map([["text/plain", "{\"simpleMindMap\":true}"]]);
+  const calls = [];
+  context.handleMindmapCopy({
+    target: { closest: () => null },
+    preventDefault: () => calls.push("preventDefault"),
+    stopPropagation: () => calls.push("stopPropagation"),
+    stopImmediatePropagation: () => calls.push("stopImmediatePropagation"),
+    clipboardData: {
+      clearData: () => clipboard.clear(),
+      setData: (type, value) => clipboard.set(type, value),
+      getData: (type) => clipboard.get(type) || "",
+    },
+  });
+
+  assert.deepEqual(calls, ["preventDefault", "stopPropagation", "stopImmediatePropagation"]);
+  assert.equal(clipboard.get("text/plain"), "- Parent\n  - Child\n");
+  assert.doesNotMatch(clipboard.get("text/plain"), /simpleMindMap/);
 });

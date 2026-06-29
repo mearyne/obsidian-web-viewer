@@ -5541,7 +5541,7 @@ function handleMindmapCopy(event) {
   if (isMindmapTextEditingEvent(event)) return;
   const targetInMindmap = event.target?.closest?.(".mindmap-shell");
   const activeInMindmap = els.mindmapShell.contains(document.activeElement);
-  if (!targetInMindmap && !activeInMindmap && !state.mindmapKeyCaptureActive) return;
+  if (!targetInMindmap && !activeInMindmap && !state.mindmapKeyCaptureActive && !hasMindmapNodesForCopy()) return;
   const markdown = selectedMindmapNodesToMarkdownBullets();
   if (!markdown) return;
   event.preventDefault();
@@ -5549,6 +5549,11 @@ function handleMindmapCopy(event) {
   event.stopImmediatePropagation?.();
   event.clipboardData.clearData?.();
   event.clipboardData.setData("text/plain", markdown);
+}
+
+function hasMindmapNodesForCopy() {
+  const nodes = state.mindmapInstance?.renderer?.activeNodeList || [];
+  return nodes.length > 0 || Boolean(state.mindmapLastClickedNodeUid);
 }
 
 function selectedMindmapNodesToMarkdownBullets() {

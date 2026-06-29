@@ -109,3 +109,4 @@
 - 2026-06-29: Fix mindmap E shortcut after closing the rich text node editor with Enter or Escape.
 - 2026-06-29: Fix real keyboard E shortcut by remembering the mindmap node on mousedown before text editing.
 - 2026-06-29: Fix pinned calendar tabs staying calendar when opening mindmap links and force selected mindmap node copy as markdown bullets.
+- 2026-06-29: Fix mindmap Ctrl+C copying JSON when focus is outside the mindmap shell and add executable clipboard markdown test.
