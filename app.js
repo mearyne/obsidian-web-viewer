@@ -303,6 +303,7 @@ const state = {
   mindmapDocumentThemes: new Map(),
   hideFrontmatter: false,
   mindmapKeyCaptureActive: false,
+  mindmapLastClickedNodeUid: null,
   mindmapToolbarDrag: null,
   mindmapDirectImagePasteAt: 0,
   mergedDocumentRange: null,
@@ -4975,6 +4976,7 @@ function renderMindmapDocument() {
   if (!els.mindmapShell) return;
   els.mindmapShell.hidden = false;
   state.mindmapKeyCaptureActive = false;
+  state.mindmapLastClickedNodeUid = null;
   const toolbarModeClass = canEdit ? "mindmap-toolbar-panel--edit" : "mindmap-toolbar-panel--readonly";
   els.mindmapShell.innerHTML = `
     <section class="mindmap-view">
@@ -5110,8 +5112,13 @@ function renderSimpleMindMapDocument(data, canvas) {
       renderEditSaveButton();
     }
   });
-  mindMap.on("node_active", () => {
+  mindMap.on("node_active", (node, activeNodeList = []) => {
     state.mindmapKeyCaptureActive = true;
+    state.mindmapLastClickedNodeUid = node?.getData?.("uid") || activeNodeList[0]?.getData?.("uid") || state.mindmapLastClickedNodeUid;
+  });
+  mindMap.on("node_click", (node) => {
+    state.mindmapKeyCaptureActive = true;
+    state.mindmapLastClickedNodeUid = node?.getData?.("uid") || null;
   });
   mindMap.on("search_info_change", updateMindmapSearchStatus);
   bindMindmapToolbarControls();
@@ -5365,24 +5372,16 @@ function fitMindmapToView() {
 function handleMindmapKeydown(event) {
   if (!state.mindmapInstance || els.mindmapShell?.hidden) return;
   if (isMindmapTextEditingEvent(event)) return;
-  if (isPlainMindmapEditKey(event)) {
-    if (!state.editMode && canEditNode(state.currentNode)) {
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation?.();
-      void enterEditMode();
-      return;
-    }
-    if (state.editMode && canEditNode(state.currentNode) && startActiveMindmapNodeTextEdit()) {
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation?.();
-      return;
-    }
+  if (isMindmapNodeTextEditShortcut(event) && canEditNode(state.currentNode)) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation?.();
+    void beginActiveMindmapNodeTextEdit();
+    return;
   }
   if (!(state.editMode && canEditNode(state.currentNode))) return;
   if (event.altKey || event.ctrlKey || event.metaKey || event.isComposing) return;
-  if (event.key !== "Tab" && event.key !== "Enter") return;
+  if (event.key !== "Tab") return;
   const target = event.target;
   if (target?.closest?.(".mindmap-toolbar")) return;
   if (target?.matches?.("input, textarea, select") || target?.isContentEditable) return;
@@ -5394,12 +5393,20 @@ function handleMindmapKeydown(event) {
   event.preventDefault();
   event.stopPropagation();
   event.stopImmediatePropagation?.();
-  if (event.key === "Tab") {
-    state.mindmapInstance.execCommand?.("INSERT_CHILD_NODE");
-    return;
-  }
-  const activeNode = activeNodes[0];
-  state.mindmapInstance.execCommand?.(activeNode?.isRoot ? "INSERT_CHILD_NODE" : "INSERT_NODE");
+  state.mindmapInstance.execCommand?.("INSERT_CHILD_NODE");
+}
+
+function isMindmapNodeTextEditShortcut(event) {
+  return isPlainMindmapEditKey(event) || isPlainMindmapEnterKey(event);
+}
+
+function isPlainMindmapEnterKey(event) {
+  return !event.altKey
+    && !event.ctrlKey
+    && !event.metaKey
+    && !event.shiftKey
+    && !event.isComposing
+    && (event.key === "Enter" || event.key === "NumpadEnter");
 }
 
 function isPlainMindmapEditKey(event) {
@@ -5407,12 +5414,40 @@ function isPlainMindmapEditKey(event) {
     && !event.ctrlKey
     && !event.metaKey
     && !event.shiftKey
-    && (event.key.toLowerCase() === "e" || event.key.toLowerCase() === "f2");
+    && (event.code === "KeyE" || event.key.toLowerCase() === "e" || event.key === "F2");
 }
 
-function startActiveMindmapNodeTextEdit() {
+async function beginActiveMindmapNodeTextEdit() {
   const jm = state.mindmapInstance;
-  const node = jm?.renderer?.activeNodeList?.[0];
+  if (!jm) return false;
+  let node = jm.renderer?.activeNodeList?.[0] || null;
+  const uid = node?.getData?.("uid") || state.mindmapLastClickedNodeUid;
+  if (!node && uid) node = jm.renderer?.findNodeByUid?.(uid) || null;
+  if (!node) return false;
+  if (!state.editMode) {
+    const granted = await ensureNodeWritePermission(state.currentNode);
+    if (!granted) {
+      alert("?뚯씪 ?몄쭛 沅뚰븳???꾩슂?⑸땲??");
+      return false;
+    }
+    holdViewerHeightDuringTransition();
+    state.editMode = true;
+    state.editorDirty = false;
+    stopAutoSave();
+    jm.updateConfig?.({ readonly: false });
+    updateEditButtons();
+  }
+  const editableNode = uid ? (jm.renderer?.findNodeByUid?.(uid) || node) : node;
+  if (!jm.renderer?.activeNodeList?.includes(editableNode)) {
+    jm.execCommand?.("CLEAR_ACTIVE_NODE");
+    jm.execCommand?.("SET_NODE_ACTIVE", editableNode, true);
+  }
+  return startActiveMindmapNodeTextEdit(editableNode);
+}
+
+function startActiveMindmapNodeTextEdit(node = null) {
+  const jm = state.mindmapInstance;
+  node = node || jm?.renderer?.activeNodeList?.[0];
   if (!jm || !node) return false;
   const candidates = [
     [jm.renderer?.textEdit, "show", [{ node, isInserting: false, isFromKeyDown: true }]],

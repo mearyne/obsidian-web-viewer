@@ -68,8 +68,30 @@ test("ctrl s uses normal edit save for non-mindmap notes", () => {
 test("mindmap e shortcut is not blocked by IME composition state", () => {
   const app = require("node:fs").readFileSync("app.js", "utf8");
   assert.match(app, /function isPlainMindmapEditKey\(event\)/);
-  assert.match(app, /event\.key\.toLowerCase\(\) === "e"/);
+  assert.match(app, /event\.code === "KeyE"/);
   assert.doesNotMatch(app.match(/function isPlainMindmapEditKey\(event\)[\s\S]*?\n}/)?.[0] || "", /isComposing/);
+});
+
+test("mindmap e and enter shortcuts start text editing on the selected node", () => {
+  const app = require("node:fs").readFileSync("app.js", "utf8");
+  const keydownBody = app.match(/function handleMindmapKeydown\(event\)[\s\S]*?\n}\r?\n\r?\nfunction isPlainMindmapEditKey/)?.[0] || "";
+  assert.match(app, /async function beginActiveMindmapNodeTextEdit\(\)/);
+  assert.match(app, /function isMindmapNodeTextEditShortcut\(event\)/);
+  assert.match(keydownBody, /isMindmapNodeTextEditShortcut\(event\)/);
+  assert.match(keydownBody, /void beginActiveMindmapNodeTextEdit\(\)/);
+  assert.doesNotMatch(keydownBody, /void enterEditMode\(\)/);
+  assert.match(app, /function isPlainMindmapEnterKey\(event\)/);
+  assert.match(app, /!event\.ctrlKey/);
+  assert.match(app, /event\.key === "Enter" \|\| event\.key === "NumpadEnter"/);
+});
+
+test("mindmap node text edit shortcut enables editing without rerendering away selection", () => {
+  const app = require("node:fs").readFileSync("app.js", "utf8");
+  const body = app.match(/async function beginActiveMindmapNodeTextEdit\(\)[\s\S]*?\n}\r?\n\r?\nfunction startActiveMindmapNodeTextEdit/)?.[0] || "";
+  assert.match(body, /ensureNodeWritePermission\(state\.currentNode\)/);
+  assert.match(body, /state\.editMode = true/);
+  assert.match(body, /jm\.updateConfig\?\.\(\{ readonly: false \}\)/);
+  assert.doesNotMatch(body, /renderCurrentDocument\(/);
 });
 
 test("mindmap text editor keeps ctrl a inside node editing", () => {
