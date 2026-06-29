@@ -5070,11 +5070,19 @@ function mindmapImagePreviewUrl(image) {
 function vaultPathFromMindmapImageUrl(image) {
   const value = String(image || "");
   try {
-    const url = new URL(value, window.location.origin);
-    return url.pathname === "/api/vault-file" ? url.searchParams.get("path") || "" : "";
+    const base = globalThis.location?.origin || "http://localhost";
+    const url = new URL(value, base);
+    return (url.pathname === "/api/vault-file" || url.pathname === "/api/vault-image-thumb") ? url.searchParams.get("path") || "" : "";
   } catch {
     return "";
   }
+}
+
+function mindmapImageToMarkdownEmbed(raw) {
+  const image = typeof raw?.fullImage === "string" && raw.fullImage ? raw.fullImage : raw?.image;
+  if (typeof image !== "string" || !image) return "";
+  const path = vaultPathFromMindmapImageUrl(image);
+  return path ? `![[${path}]]` : `![](${image})`;
 }
 
 function simpleMindMapDataToLegacyMindmapData(data, previousData) {
@@ -5781,7 +5789,14 @@ function selectedMindmapNodesToMarkdownBullets() {
   const visit = (node, depth) => {
     const raw = node?.nodeData?.data || node?.data || node;
     const topic = normalizeMindmapMarkdownTopic(raw?.topic || raw?.text || node?.text || node?.topic, "");
-    if (topic) lines.push(`${"  ".repeat(depth)}- ${topic}`);
+    const image = mindmapImageToMarkdownEmbed(raw);
+    const indent = "  ".repeat(depth);
+    if (image) {
+      lines.push(`${indent}- ${image}`);
+      if (topic) lines.push(`${indent}  ${topic}`);
+    } else if (topic) {
+      lines.push(`${indent}- ${topic}`);
+    }
     const children = raw?.children || node?.children || [];
     children.forEach((child) => visit(child, depth + 1));
   };

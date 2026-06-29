@@ -184,6 +184,7 @@ test("selected mindmap nodes can be copied as markdown bullets", () => {
 test("mindmap copy writes markdown bullets even when focus is outside the shell", () => {
   const app = fs.readFileSync("app.js", "utf8");
   const context = {
+    URL,
     state: {
       mindmapInstance: {
         renderer: {
@@ -214,6 +215,8 @@ test("mindmap copy writes markdown bullets even when focus is outside the shell"
   vm.createContext(context);
   vm.runInContext([
     extractFunction(app, "normalizeMindmapMarkdownTopic"),
+    extractFunction(app, "vaultPathFromMindmapImageUrl"),
+    extractFunction(app, "mindmapImageToMarkdownEmbed"),
     extractFunction(app, "handleMindmapCopy"),
     extractFunction(app, "hasMindmapNodesForCopy"),
     extractFunction(app, "selectedMindmapNodesToMarkdownBullets"),
@@ -236,6 +239,39 @@ test("mindmap copy writes markdown bullets even when focus is outside the shell"
   assert.deepEqual(calls, ["preventDefault", "stopPropagation", "stopImmediatePropagation"]);
   assert.equal(clipboard.get("text/plain"), "- Parent\n  - Child\n");
   assert.doesNotMatch(clipboard.get("text/plain"), /simpleMindMap/);
+});
+
+test("mindmap copy includes pasted images as markdown image embeds", () => {
+  const app = fs.readFileSync("app.js", "utf8");
+  const context = {
+    URL,
+    state: {
+      mindmapInstance: {
+        renderer: {
+          activeNodeList: [{
+            nodeData: {
+              data: {
+                text: "<p>Text</p>",
+                image: "/api/vault-image-thumb?path=Assets%2Fthumb.png&width=360",
+                fullImage: "/api/vault-file?path=Assets%2Foriginal.png",
+                children: [{ data: { text: "<p>Child</p>" }, children: [] }],
+              },
+            },
+          }],
+        },
+      },
+      mindmapLastClickedNodeUid: null,
+    },
+  };
+  vm.createContext(context);
+  vm.runInContext([
+    extractFunction(app, "normalizeMindmapMarkdownTopic"),
+    extractFunction(app, "vaultPathFromMindmapImageUrl"),
+    extractFunction(app, "mindmapImageToMarkdownEmbed"),
+    extractFunction(app, "selectedMindmapNodesToMarkdownBullets"),
+  ].join("\n"), context);
+
+  assert.equal(context.selectedMindmapNodesToMarkdownBullets(), "- ![[Assets/original.png]]\n  Text\n  - Child\n");
 });
 
 test("mindmap paste turns copied markdown bullets back into child nodes", async () => {
@@ -383,6 +419,8 @@ test("mindmap ctrl c keydown writes selected nodes as markdown bullets", () => {
   vm.createContext(context);
   vm.runInContext([
     extractFunction(app, "normalizeMindmapMarkdownTopic"),
+    extractFunction(app, "vaultPathFromMindmapImageUrl"),
+    extractFunction(app, "mindmapImageToMarkdownEmbed"),
     extractFunction(app, "handleMindmapKeydown"),
     extractFunction(app, "isMindmapCopyShortcut"),
     extractFunction(app, "copyMindmapSelectionToClipboard"),
