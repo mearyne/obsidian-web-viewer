@@ -298,7 +298,7 @@ const state = {
   mindmapInstance: null,
   mindmapContext: null,
   mindmapEmbedData: new Map(),
-  mindmapOptions: { layout: "mindMap", lightTheme: "light", darkTheme: "dark", autoFit: true, advancedTools: true },
+  mindmapOptions: { layout: "mindMap", lightTheme: "light", darkTheme: "dark", baseStyle: "boxed", autoFit: true, advancedTools: true },
   hideFrontmatter: false,
   mindmapKeyCaptureActive: false,
   mindmapToolbarDrag: null,
@@ -325,6 +325,11 @@ const MINDMAP_LAYOUT_OPTIONS = [
   { value: "timeline", label: "Timeline" },
 ];
 const MINDMAP_LAYOUT_VALUES = new Set(MINDMAP_LAYOUT_OPTIONS.map((option) => option.value));
+const MINDMAP_BASE_STYLE_OPTIONS = [
+  { value: "boxed", label: "Boxed" },
+  { value: "line", label: "Line" },
+];
+const MINDMAP_BASE_STYLE_VALUES = new Set(MINDMAP_BASE_STYLE_OPTIONS.map((option) => option.value));
 
 const MINDMAP_THEME_OPTIONS = [
   { value: "light", label: "라이트 기본" },
@@ -3437,14 +3442,16 @@ function initOptions() {
 function normalizeMindmapOptions(options = {}) {
   const layouts = MINDMAP_LAYOUT_VALUES;
   const themes = new Set(MINDMAP_ALL_THEME_OPTIONS.map((theme) => theme.value));
-  const previous = state.mindmapOptions || { layout: "mindMap", lightTheme: "light", darkTheme: "dark", autoFit: true, advancedTools: true };
+  const previous = state.mindmapOptions || { layout: "mindMap", lightTheme: "light", darkTheme: "dark", baseStyle: "boxed", autoFit: true, advancedTools: true };
   const layout = layouts.has(options.mindmapLayout) ? options.mindmapLayout : (layouts.has(options.layout) ? options.layout : previous.layout);
   const lightTheme = themes.has(options.mindmapLightTheme) ? options.mindmapLightTheme : (themes.has(options.lightTheme) ? options.lightTheme : previous.lightTheme);
   const darkTheme = themes.has(options.mindmapDarkTheme) ? options.mindmapDarkTheme : (themes.has(options.darkTheme) ? options.darkTheme : previous.darkTheme);
+  const baseStyle = normalizeMindmapBaseStyleValue(options.mindmapBaseStyle ?? options.baseStyle, previous.baseStyle);
   return {
     layout: layout || "mindMap",
     lightTheme: lightTheme || "light",
     darkTheme: darkTheme || "dark",
+    baseStyle,
     autoFit: normalizeStoredBoolean(options.mindmapAutoFit ?? options.autoFit, previous.autoFit),
     advancedTools: normalizeStoredBoolean(options.mindmapAdvancedTools ?? options.advancedTools, previous.advancedTools),
   };
@@ -3466,6 +3473,11 @@ function renderMindmapThemeOptions(selectedTheme = null) {
   return MINDMAP_ALL_THEME_OPTIONS.map((option) => `<option value="${option.value}"${option.value === theme ? " selected" : ""}>${option.label}</option>`).join("");
 }
 
+function renderMindmapBaseStyleOptions(selectedStyle = null) {
+  const style = normalizeMindmapBaseStyleValue(selectedStyle, state.mindmapOptions.baseStyle);
+  return MINDMAP_BASE_STYLE_OPTIONS.map((option) => `<option value="${option.value}"${option.value === style ? " selected" : ""}>${option.label}</option>`).join("");
+}
+
 function normalizeMindmapThemeValue(value, fallback = "light") {
   const normalized = String(value || "").trim();
   if (!normalized) return fallback;
@@ -3477,6 +3489,12 @@ function normalizeMindmapLayoutValue(value, fallback = "mindMap") {
   const normalized = String(value || "").trim();
   if (!normalized) return fallback;
   return MINDMAP_LAYOUT_VALUES.has(normalized) ? normalized : fallback;
+}
+
+function normalizeMindmapBaseStyleValue(value, fallback = "boxed") {
+  const normalized = String(value || "").trim();
+  if (!normalized) return fallback;
+  return MINDMAP_BASE_STYLE_VALUES.has(normalized) ? normalized : fallback;
 }
 
 function extractFrontmatterField(frontmatter, key) {
@@ -3532,12 +3550,14 @@ function syncMindmapOptionInputs() {
   const layout = els.mindmapShell?.querySelector("[data-mindmap-default-layout-select]");
   const lightTheme = els.mindmapShell?.querySelector("[data-mindmap-light-theme-select]");
   const darkTheme = els.mindmapShell?.querySelector("[data-mindmap-dark-theme-select]");
+  const baseStyle = els.mindmapShell?.querySelector("[data-mindmap-base-style-select]");
   const toolbarTheme = els.mindmapShell?.querySelector("[data-mindmap-theme-select]");
   const autoFit = els.mindmapShell?.querySelector("[data-mindmap-auto-fit]");
   const advancedTools = els.mindmapShell?.querySelector("[data-mindmap-advanced-tools]");
   if (layout) layout.value = state.mindmapOptions.layout;
   if (lightTheme) lightTheme.value = state.mindmapOptions.lightTheme;
   if (darkTheme) darkTheme.value = state.mindmapOptions.darkTheme;
+  if (baseStyle) baseStyle.value = state.mindmapOptions.baseStyle;
   if (toolbarTheme) toolbarTheme.value = selectedMindmapThemeName();
   if (autoFit) autoFit.checked = state.mindmapOptions.autoFit;
   if (advancedTools) advancedTools.checked = state.mindmapOptions.advancedTools;
@@ -3565,6 +3585,7 @@ function handleMindmapOptionInput() {
     layout: root?.querySelector("[data-mindmap-default-layout-select]")?.value,
     lightTheme: root?.querySelector("[data-mindmap-light-theme-select]")?.value,
     darkTheme: root?.querySelector("[data-mindmap-dark-theme-select]")?.value,
+    baseStyle: root?.querySelector("[data-mindmap-base-style-select]")?.value,
     autoFit: root?.querySelector("[data-mindmap-auto-fit]")?.checked,
     advancedTools: root?.querySelector("[data-mindmap-advanced-tools]")?.checked,
   });
@@ -4362,6 +4383,7 @@ async function saveServerSettings() {
         mindmapLayout: state.mindmapOptions.layout,
         mindmapLightTheme: state.mindmapOptions.lightTheme,
         mindmapDarkTheme: state.mindmapOptions.darkTheme,
+        mindmapBaseStyle: state.mindmapOptions.baseStyle,
         mindmapAutoFit: state.mindmapOptions.autoFit,
         mindmapAdvancedTools: state.mindmapOptions.advancedTools,
         hideFrontmatter: state.hideFrontmatter,
@@ -4669,14 +4691,15 @@ function selectedMindmapThemeName() {
 
 function getMindmapThemeConfig() {
   const themeName = selectedMindmapThemeName();
+  let themeConfig = null;
   if (themeName.startsWith(MINDMAP_DEMO_THEME_PREFIX)) {
     const demoThemeName = themeName.slice(MINDMAP_DEMO_THEME_PREFIX.length);
     const demoTheme = globalThis.SimpleMindMapThemeConfigs?.[demoThemeName];
-    if (demoTheme) return JSON.parse(JSON.stringify(demoTheme));
+    if (demoTheme) themeConfig = JSON.parse(JSON.stringify(demoTheme));
   }
-  const selectedTheme = MINDMAP_THEME_CONFIGS[themeName];
-  if (selectedTheme) return JSON.parse(JSON.stringify(selectedTheme));
-  return {
+  const selectedTheme = themeConfig ? null : MINDMAP_THEME_CONFIGS[themeName];
+  if (selectedTheme) themeConfig = JSON.parse(JSON.stringify(selectedTheme));
+  themeConfig ||= {
     backgroundColor: getMindmapCssValue("--mindmap-bg", "#fbfcff"),
     lineColor: getMindmapLineColor(),
     root: {
@@ -4695,6 +4718,37 @@ function getMindmapThemeConfig() {
       borderColor: getMindmapCssValue("--mindmap-node-border", "#c9d3e3"),
     },
   };
+  return applyMindmapBaseStyleToThemeConfig(themeConfig, state.mindmapOptions.baseStyle);
+}
+
+function applyMindmapBaseStyleToThemeConfig(config, style = state.mindmapOptions.baseStyle) {
+  const baseStyle = normalizeMindmapBaseStyleValue(style, "boxed");
+  const next = JSON.parse(JSON.stringify(config || {}));
+  const nodeFill = getMindmapCssValue("--mindmap-node-bg", "#ffffff");
+  const nodeText = getMindmapCssValue("--mindmap-node-text", "#1e293b");
+  const nodeBorder = getMindmapCssValue("--mindmap-node-border", "#c9d3e3");
+  const applyBox = (target = {}) => ({
+    ...target,
+    fillColor: target.fillColor || nodeFill,
+    color: target.color || nodeText,
+    borderColor: target.borderColor || nodeBorder,
+    borderWidth: Number.isFinite(Number(target.borderWidth)) ? Math.max(Number(target.borderWidth), 1) : 1,
+    borderRadius: Number.isFinite(Number(target.borderRadius)) ? target.borderRadius : 6,
+    shape: target.shape || "roundedRectangle",
+  });
+  if (baseStyle === "boxed") {
+    next.second = applyBox(next.second);
+    next.node = applyBox(next.node);
+    next.generalization = applyBox(next.generalization);
+  } else {
+    next.node = {
+      ...(next.node || {}),
+      fillColor: "transparent",
+      borderColor: "transparent",
+      borderWidth: 0,
+    };
+  }
+  return next;
 }
 
 function updateVisibleMindmapTheme() {
@@ -4880,9 +4934,10 @@ function renderMindmapDocument() {
   if (!els.mindmapShell) return;
   els.mindmapShell.hidden = false;
   state.mindmapKeyCaptureActive = false;
+  const toolbarModeClass = canEdit ? "mindmap-toolbar-panel--edit" : "mindmap-toolbar-panel--readonly";
   els.mindmapShell.innerHTML = `
     <section class="mindmap-view">
-      ${canEdit ? `<details class="mindmap-toolbar-panel" open data-mindmap-toolbar-panel>
+      <details class="mindmap-toolbar-panel ${toolbarModeClass}"${canEdit ? " open" : ""} data-mindmap-toolbar-panel>
         <summary class="mindmap-toolbar-toggle" aria-label="마인드맵 도구 접기/펼치기" title="마인드맵 도구">☰</summary>
         <div class="mindmap-toolbar" aria-label="마인드맵 도구">
           <div class="mindmap-toolbar-row">
@@ -4921,7 +4976,7 @@ function renderMindmapDocument() {
             <span class="mindmap-search-status" data-mindmap-search-status></span>
           </div>
         </div>
-      </details>` : ""}
+      </details>
       ${canEdit ? `<aside class="mindmap-tools-drawer" data-mindmap-tools-drawer hidden>
         <header>
           <strong>Tools</strong>
@@ -4952,6 +5007,12 @@ function renderMindmapDocument() {
             <span>Dark theme</span>
             <select data-mindmap-dark-theme-select>
               ${renderMindmapThemeOptions(state.mindmapOptions.darkTheme)}
+            </select>
+          </label>
+          <label>
+            <span>Base style</span>
+            <select data-mindmap-base-style-select>
+              ${renderMindmapBaseStyleOptions(state.mindmapOptions.baseStyle)}
             </select>
           </label>
           <label class="mindmap-tools-check">
@@ -5260,7 +5321,7 @@ function fitMindmapToView() {
 function handleMindmapKeydown(event) {
   if (!state.mindmapInstance || els.mindmapShell?.hidden) return;
   if (isMindmapTextEditingEvent(event)) return;
-  if (isPlainMindmapKey(event, "e") || isPlainMindmapKey(event, "f2")) {
+  if (isPlainMindmapEditKey(event)) {
     if (!state.editMode && canEditNode(state.currentNode)) {
       event.preventDefault();
       event.stopPropagation();
@@ -5297,8 +5358,12 @@ function handleMindmapKeydown(event) {
   state.mindmapInstance.execCommand?.(activeNode?.isRoot ? "INSERT_CHILD_NODE" : "INSERT_NODE");
 }
 
-function isPlainMindmapKey(event, key) {
-  return !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.isComposing && event.key.toLowerCase() === key;
+function isPlainMindmapEditKey(event) {
+  return !event.altKey
+    && !event.ctrlKey
+    && !event.metaKey
+    && !event.shiftKey
+    && (event.key.toLowerCase() === "e" || event.key.toLowerCase() === "f2");
 }
 
 function startActiveMindmapNodeTextEdit() {
@@ -5331,27 +5396,8 @@ function startActiveMindmapNodeTextEdit() {
 function guardMindmapTextEditingKeydown(event) {
   if (!isMindmapTextEditingEvent(event)) return;
   if (isMindmapSaveShortcut(event)) return;
-  if (!isMindmapTextEditingControlKey(event)) return;
   event.stopPropagation();
   event.stopImmediatePropagation?.();
-}
-
-function isMindmapTextEditingControlKey(event) {
-  if (event.isComposing) return false;
-  if (event.ctrlKey || event.metaKey) {
-    const key = event.key.toLowerCase();
-    return ["a", "c", "x", "v", "z", "y"].includes(key);
-  }
-  return [
-    "Backspace",
-    "Delete",
-    "ArrowLeft",
-    "ArrowRight",
-    "ArrowUp",
-    "ArrowDown",
-    "Home",
-    "End",
-  ].includes(event.key);
 }
 
 function isMindmapTextEditingEvent(event) {

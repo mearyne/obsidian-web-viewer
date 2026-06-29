@@ -1166,6 +1166,7 @@ function normalizeSettings(settings) {
     mindmapLayout: normalizeMindmapLayout(settings?.mindmapLayout),
     mindmapLightTheme: normalizeMindmapTheme(settings?.mindmapLightTheme, normalizeMindmapTheme(settings?.mindmapTheme, "light")),
     mindmapDarkTheme: normalizeMindmapTheme(settings?.mindmapDarkTheme, normalizeMindmapTheme(settings?.mindmapTheme, "dark")),
+    mindmapBaseStyle: normalizeMindmapBaseStyle(settings?.mindmapBaseStyle),
     mindmapAutoFit: typeof settings?.mindmapAutoFit === "boolean" ? settings.mindmapAutoFit : true,
     mindmapAdvancedTools: typeof settings?.mindmapAdvancedTools === "boolean" ? settings.mindmapAdvancedTools : true,
     hideFrontmatter: typeof settings?.hideFrontmatter === "boolean" ? settings.hideFrontmatter : false,
@@ -1192,6 +1193,10 @@ function normalizeMindmapTheme(theme, fallback = "light") {
   return ["light", "light-blue", "light-green", "branch-depth-light", "dark", "dark-slate", "dark-green", "branch-depth-dark"].includes(theme)
     ? theme
     : fallback;
+}
+
+function normalizeMindmapBaseStyle(style) {
+  return ["boxed", "line"].includes(style) ? style : "boxed";
 }
 
 function settingsFilePath() {

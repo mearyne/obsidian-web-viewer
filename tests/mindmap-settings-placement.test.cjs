@@ -18,3 +18,25 @@ test("mindmap setting changes are saved through shared server settings", () => {
   assert.match(app, /scheduleSettingsSave\(\);/);
   assert.match(app, /mindmapLayout: state\.mindmapOptions\.layout/);
 });
+
+test("mindmap base style is configurable and persisted", () => {
+  assert.match(app, /MINDMAP_BASE_STYLE_OPTIONS/);
+  assert.match(app, /mindmapBaseStyle: state\.mindmapOptions\.baseStyle/);
+  assert.match(app, /data-mindmap-base-style-select/);
+  assert.match(app, /applyMindmapBaseStyleToThemeConfig/);
+});
+
+test("mindmap toolbar remains visible in light mode", () => {
+  assert.match(app, /const toolbarModeClass = canEdit \? "mindmap-toolbar-panel--edit" : "mindmap-toolbar-panel--readonly"/);
+  assert.match(app, /<details class="mindmap-toolbar-panel \$\{toolbarModeClass\}"/);
+  assert.match(fs.readFileSync("styles.css", "utf8"), /\.mindmap-toolbar-panel--readonly/);
+  assert.match(fs.readFileSync("styles.css", "utf8"), /\.mindmap-toolbar-toggle/);
+});
+
+test("mindmap edit input uses the same node box variables", () => {
+  const styles = fs.readFileSync("styles.css", "utf8");
+  const inputRule = styles.match(/\.mindmap-canvas input \{[\s\S]*?\}/)?.[0] || "";
+  assert.match(inputRule, /background: var\(--mindmap-node-bg\)/);
+  assert.match(inputRule, /border: 1px solid var\(--mindmap-node-border\)/);
+  assert.match(inputRule, /color: var\(--mindmap-node-text\)/);
+});

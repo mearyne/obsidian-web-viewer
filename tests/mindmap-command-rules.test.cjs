@@ -64,3 +64,20 @@ test("ctrl s uses normal edit save for non-mindmap notes", () => {
     hasMindmapInstance: false,
   }), "editor");
 });
+
+test("mindmap e shortcut is not blocked by IME composition state", () => {
+  const app = require("node:fs").readFileSync("app.js", "utf8");
+  assert.match(app, /function isPlainMindmapEditKey\(event\)/);
+  assert.match(app, /event\.key\.toLowerCase\(\) === "e"/);
+  assert.doesNotMatch(app.match(/function isPlainMindmapEditKey\(event\)[\s\S]*?\n}/)?.[0] || "", /isComposing/);
+});
+
+test("mindmap text editor keeps ctrl a inside node editing", () => {
+  const app = require("node:fs").readFileSync("app.js", "utf8");
+  const guardBody = app.match(/function guardMindmapTextEditingKeydown\(event\)[\s\S]*?\n}/)?.[0] || "";
+  assert.match(app, /document\.addEventListener\("keydown", guardMindmapTextEditingKeydown\)/);
+  assert.match(guardBody, /event\.stopPropagation\(\)/);
+  assert.match(guardBody, /event\.stopImmediatePropagation\?\.\(\)/);
+  assert.doesNotMatch(guardBody, /preventDefault/);
+  assert.doesNotMatch(guardBody, /isMindmapTextEditingControlKey/);
+});

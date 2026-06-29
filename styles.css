@@ -2437,10 +2437,10 @@ button:disabled {
 }
 
 .mindmap-toolbar-panel {
-  background: color-mix(in srgb, var(--surface) 94%, transparent);
-  border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+  background: color-mix(in srgb, var(--surface) 98%, #ffffff 2%);
+  border: 1px solid color-mix(in srgb, var(--line) 88%, var(--text) 12%);
   border-radius: 10px;
-  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.16);
+  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.2);
   overflow: hidden;
   position: absolute;
   right: 24px;
@@ -2449,14 +2449,18 @@ button:disabled {
   z-index: 3;
 }
 
+.mindmap-toolbar-panel--readonly {
+  width: 44px;
+}
+
 .mindmap-toolbar-panel[open] {
   min-width: 236px;
 }
 
 .mindmap-toolbar-toggle {
   align-items: center;
-  background: color-mix(in srgb, var(--surface) 96%, var(--accent) 4%);
-  border: 0;
+  background: color-mix(in srgb, var(--surface) 88%, var(--accent) 12%);
+  border: 1px solid color-mix(in srgb, var(--line) 88%, var(--text) 12%);
   border-radius: 0;
   color: var(--text);
   cursor: pointer;
@@ -2714,10 +2718,12 @@ button:disabled {
 
 .mindmap-canvas input {
   background: var(--mindmap-node-bg);
-  border: 1px solid var(--mindmap-root-border);
-  border-radius: 5px;
+  border: 1px solid var(--mindmap-node-border);
+  border-radius: 6px;
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.05);
   color: var(--mindmap-node-text);
   outline: none;
+  padding: 3px 6px;
 }
 
 .mindmap-embed-preview {

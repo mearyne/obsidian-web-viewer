@@ -96,3 +96,4 @@
 - 2026-06-29: Fix Ctrl+S while editing a mindmap so active-tab mindmap saves do not fall through to the Markdown editor save path after header focus.
 - 2026-06-29: Restore mindmap-to-Markdown and Markdown-to-mindmap view conversion commands after hard reset.
 - 2026-06-29: Fix mindmap documents not reopening as mindmaps after Markdown conversion preview state remains on the active tab.
+- 2026-06-29: Fix mindmap slash and Ctrl+A text editing, e-key edit entry, light toolbar visibility, read/edit node styling, and add base style settings.
