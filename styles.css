@@ -1977,6 +1977,36 @@ button:disabled {
   tab-size: 2;
 }
 
+.markdown-body.image-document-view {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  max-width: none;
+  min-height: calc(100vh - 180px);
+}
+
+.image-document {
+  margin: 0;
+  max-width: min(100%, 1200px);
+  text-align: center;
+}
+
+.image-document img {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
+  max-height: calc(100vh - 240px);
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.image-document figcaption {
+  color: var(--faint);
+  font-size: 12px;
+  margin-top: 10px;
+  overflow-wrap: anywhere;
+}
+
 .link-embed-wrap {
   margin: 10px 0;
   max-width: 560px;

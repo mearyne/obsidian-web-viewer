@@ -2331,7 +2331,7 @@ function isExcalidrawDocument(name) {
 }
 
 function isOpenableDocument(name) {
-  return isTextVaultFilePath(name);
+  return isTextVaultFilePath(name) || isImageDocument(name);
 }
 
 function isImageDocument(name) {
@@ -2914,7 +2914,7 @@ async function openFile(path, { preserveTabView = false } = {}) {
   markOpenStep("준비 중");
   try {
     markOpenStep("파일 읽는 중");
-    const content = await readFileNode(node);
+    const content = isImageDocument(node.name || path) ? "" : await readFileNode(node);
     readDoneAt = performance.now();
     markOpenStep("탭과 기록 갱신 중");
     state.documentMindmapEnabled = Boolean(preserveTabView && curTab?.path === path && curTab.documentMindmapEnabled);
@@ -2952,7 +2952,7 @@ async function openFile(path, { preserveTabView = false } = {}) {
     renderTabStrip();
     pushRecentlyOpened(path, displayDocumentTitle(node.name));
     updateEditButtons();
-    els.markdownView.classList.remove("empty-state", "plain-text-mode", "code-document", "merged-documents-view");
+    els.markdownView.classList.remove("empty-state", "plain-text-mode", "code-document", "merged-documents-view", "image-document-view");
     els.markdownView.replaceChildren();
     if (els.mindmapShell) {
       els.mindmapShell.hidden = true;
@@ -4519,12 +4519,18 @@ function renderCurrentDocument(showOpenStep = null, diagnostics = null) {
     showOpenStep?.(step);
   };
   markRenderStep("렌더 영역 초기화 중");
-  els.markdownView.classList.remove("empty-state", "plain-text-mode", "code-document", "merged-documents-view");
+  els.markdownView.classList.remove("empty-state", "plain-text-mode", "code-document", "merged-documents-view", "image-document-view");
   els.editorShell.hidden = true;
   if (els.mindmapShell) {
     clearMindmapShell();
   }
   els.markdownView.hidden = false;
+
+  if (isImageDocument(state.currentPath || "")) {
+    markRenderStep("Image view");
+    renderImageDocument(state.currentPath || "");
+    return;
+  }
 
   if (isMindmapDocument(state.currentContent)) {
     const parsed = extractFrontmatter(state.currentContent);
@@ -4595,6 +4601,29 @@ function renderCurrentDocument(showOpenStep = null, diagnostics = null) {
 
   markRenderStep("원문 표시 중");
   renderPlainTextDocument(state.currentContent);
+}
+
+function renderImageDocument(path) {
+  const node = state.files.get(path);
+  els.markdownView.classList.add("image-document-view");
+  const figure = document.createElement("figure");
+  figure.className = "image-document";
+  const image = document.createElement("img");
+  image.alt = displayDocumentTitle(node?.name || path.split("/").pop() || path);
+  const thumb = getThumbnailUrl(path);
+  if (thumb) {
+    image.src = thumb;
+    image.setAttribute("data-full-vault-src", path);
+  } else {
+    const directUrl = getFileUrl(path) || (node?.serverBacked ? vaultFileReadUrl(node) : "");
+    if (directUrl) image.src = directUrl;
+    else getOrCreateFileUrl(path).then((url) => { if (url) image.src = url; });
+  }
+  const caption = document.createElement("figcaption");
+  caption.textContent = node?.path || path;
+  figure.append(image, caption);
+  els.markdownView.replaceChildren(figure);
+  bindImageLightbox(els.markdownView);
 }
 
 function renderDocumentMindmapPreview() {
