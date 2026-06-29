@@ -238,6 +238,85 @@ test("mindmap copy writes markdown bullets even when focus is outside the shell"
   assert.doesNotMatch(clipboard.get("text/plain"), /simpleMindMap/);
 });
 
+test("mindmap paste turns copied markdown bullets back into child nodes", async () => {
+  const app = fs.readFileSync("app.js", "utf8");
+  const commands = [];
+  const context = {
+    state: {
+      mindmapInstance: {
+        renderer: {
+          activeNodeList: [{ getData: (key) => key === "uid" ? "target" : undefined }],
+        },
+        getData: () => ({
+          data: { uid: "root", text: "Root", expand: true },
+          children: [{ data: { uid: "target", text: "Target", expand: true }, children: [] }],
+        }),
+        updateData: (data) => {
+          context.updatedData = data;
+        },
+        execCommand: (command, node, active) => commands.push([command, node?.getData?.("uid"), active]),
+      },
+      mindmapContext: { sourceData: null },
+      editMode: true,
+      currentNode: {},
+      editorDirty: false,
+    },
+    els: {
+      mindmapShell: {
+        hidden: false,
+        contains: () => true,
+      },
+    },
+    document: {
+      activeElement: { className: "mindmap-canvas smm-mind-map-container" },
+    },
+    canEditNode: () => true,
+    createMindmapNodeId: (() => {
+      let count = 0;
+      return () => `new-${++count}`;
+    })(),
+    prepareMindmapImagesForPreview: (node) => node,
+    clearGeneratedMindmapBranchStyles: () => {},
+    applyMindmapBranchTheme: (node) => node,
+    renderEditSaveButton: () => {},
+  };
+  vm.createContext(context);
+  vm.runInContext([
+    extractFunction(app, "normalizeMindmapMarkdownTopic"),
+    extractFunction(app, "stripMindmapMarkdownFrontmatter"),
+    extractFunction(app, "makeMindmapMarkdownNode"),
+    extractFunction(app, "markdownToMindmapData"),
+    extractFunction(app, "normalizeMindmapText"),
+    extractFunction(app, "legacyMindmapNodeToSimpleMindMapNode"),
+    extractFunction(app, "simpleMindMapNodeToLegacyMindmapNode"),
+    extractFunction(app, "simpleMindMapDataToLegacyMindmapData"),
+    extractFunction(app, "legacyMindmapDataToSimpleMindMapData"),
+    extractFunction(app, "copyMindmapImageData"),
+    extractFunction(app, "cloneMindmapLegacyNodeForPaste"),
+    extractFunction(app, "pasteMarkdownBulletsToActiveMindmapNode"),
+    extractFunction(app, "handleMindmapPaste"),
+  ].join("\n"), context);
+
+  const calls = [];
+  await context.handleMindmapPaste({
+    target: { closest: () => null },
+    clipboardData: {
+      items: [],
+      getData: (type) => type === "text/plain" ? "- Copied\n  - Nested\n" : "",
+    },
+    preventDefault: () => calls.push("preventDefault"),
+    stopPropagation: () => calls.push("stopPropagation"),
+    stopImmediatePropagation: () => calls.push("stopImmediatePropagation"),
+  });
+
+  assert.deepEqual(calls, ["preventDefault", "stopPropagation", "stopImmediatePropagation"]);
+  assert.equal(context.updatedData.children[0].data.text, "Target");
+  assert.equal(context.updatedData.children[0].children[0].data.text, "Copied");
+  assert.equal(context.updatedData.children[0].children[0].children[0].data.text, "Nested");
+  assert.deepEqual(commands.at(-1), ["SET_NODE_ACTIVE", "target", true]);
+  assert.equal(context.state.editorDirty, true);
+});
+
 test("mindmap ctrl c keydown writes selected nodes as markdown bullets", () => {
   const app = fs.readFileSync("app.js", "utf8");
   let copied = "";
@@ -375,4 +454,33 @@ test("mindmap enter keydown inserts a sibling instead of starting text edit", ()
 
   assert.deepEqual(calls, ["preventDefault", "stopPropagation", "stopImmediatePropagation"]);
   assert.deepEqual(commands, ["INSERT_NODE"]);
+});
+
+test("hidden rich text editor focus does not block e from reopening node edit", () => {
+  const app = fs.readFileSync("app.js", "utf8");
+  const hiddenWrap = { style: { display: "none", visibility: "visible" }, hidden: false };
+  const hiddenEditor = {
+    nodeType: 1,
+    closest: (selector) => {
+      if (selector.includes(".smm-richtext-node-edit-wrap")) return hiddenWrap;
+      if (selector === ".mindmap-shell") return null;
+      return null;
+    },
+  };
+  const context = {
+    window: {
+      getComputedStyle: (element) => element.style || { display: "block", visibility: "visible" },
+    },
+    document: {
+      activeElement: hiddenEditor,
+    },
+  };
+  vm.createContext(context);
+  vm.runInContext([
+    extractFunction(app, "isElementVisiblyHidden"),
+    extractFunction(app, "isMindmapTextEditingTarget"),
+    extractFunction(app, "isMindmapTextEditingEvent"),
+  ].join("\n"), context);
+
+  assert.equal(context.isMindmapTextEditingEvent({ target: { closest: () => null } }), false);
 });

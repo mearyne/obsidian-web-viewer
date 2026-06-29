@@ -5583,8 +5583,17 @@ function shouldEnableMindmapShortcut(event) {
 function isMindmapTextEditingTarget(target) {
   const element = target?.nodeType === 1 ? target : target?.parentElement;
   if (!element?.closest) return false;
-  if (element.closest(".smm-node-edit-wrap, .smm-richtext-node-edit-wrap, .associative-line-text-edit-wrap, .outer-frame-text-edit-wrap")) return true;
-  return Boolean(element.closest(".mindmap-shell") && element.closest("input, textarea, [contenteditable='true']"));
+  const editWrap = element.closest(".smm-node-edit-wrap, .smm-richtext-node-edit-wrap, .associative-line-text-edit-wrap, .outer-frame-text-edit-wrap");
+  if (editWrap) return !isElementVisiblyHidden(editWrap);
+  const editable = element.closest("input, textarea, [contenteditable='true']");
+  return Boolean(element.closest(".mindmap-shell") && editable && !isElementVisiblyHidden(editable));
+}
+
+function isElementVisiblyHidden(element) {
+  if (!element) return true;
+  if (element.hidden) return true;
+  const style = window.getComputedStyle?.(element);
+  return style?.display === "none" || style?.visibility === "hidden";
 }
 
 function isMindmapRichTextEditingTarget(target) {
@@ -5599,14 +5608,21 @@ async function handleMindmapPaste(event) {
   const activeInMindmap = els.mindmapShell.contains(document.activeElement);
   if (!targetInMindmap && !activeInMindmap) return;
   const imageItem = Array.from(event.clipboardData?.items || []).find((item) => item.type.startsWith("image/"));
-  if (!imageItem) return;
-  const blob = imageItem.getAsFile();
-  if (!blob) return;
+  if (imageItem) {
+    const blob = imageItem.getAsFile();
+    if (!blob) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation?.();
+    state.mindmapDirectImagePasteAt = Date.now();
+    await pasteImageToActiveMindmapNodes(blob);
+    return;
+  }
+  const text = event.clipboardData?.getData("text/plain") || "";
+  if (!pasteMarkdownBulletsToActiveMindmapNode(text)) return;
   event.preventDefault();
   event.stopPropagation();
   event.stopImmediatePropagation?.();
-  state.mindmapDirectImagePasteAt = Date.now();
-  await pasteImageToActiveMindmapNodes(blob);
 }
 
 function handleMindmapCopy(event) {
@@ -5646,6 +5662,56 @@ function selectedMindmapNodesToMarkdownBullets() {
   };
   nodes.forEach((node) => visit(node, 0));
   return lines.length ? `${lines.join("\n")}\n` : "";
+}
+
+function cloneMindmapLegacyNodeForPaste(node) {
+  const next = {
+    ...node,
+    id: createMindmapNodeId(),
+  };
+  if (Array.isArray(node?.children) && node.children.length) {
+    next.children = node.children.map(cloneMindmapLegacyNodeForPaste);
+  } else {
+    delete next.children;
+  }
+  return next;
+}
+
+function pasteMarkdownBulletsToActiveMindmapNode(markdown) {
+  if (!/^\s*(?:[-*+]|\d+[.)])\s+/m.test(String(markdown || ""))) return false;
+  const jm = state.mindmapInstance;
+  let targetNode = jm?.renderer?.activeNodeList?.[0] || null;
+  if (!targetNode && state.mindmapLastClickedNodeUid) {
+    targetNode = jm?.renderer?.findNodeByUid?.(state.mindmapLastClickedNodeUid) || null;
+  }
+  const targetUid = targetNode?.getData?.("uid");
+  if (!jm || !targetUid) return false;
+  const currentData = simpleMindMapDataToLegacyMindmapData(jm.getData(), state.mindmapContext?.sourceData);
+  const stack = [currentData.data];
+  let targetData = null;
+  while (stack.length) {
+    const node = stack.shift();
+    if (node?.id === targetUid) {
+      targetData = node;
+      break;
+    }
+    if (Array.isArray(node?.children)) stack.push(...node.children);
+  }
+  if (!targetData) return false;
+  const parsedRoot = markdownToMindmapData(markdown)?.data;
+  const topLevelBulletCount = String(markdown || "").split(/\r?\n/).filter((line) => /^(?:[-*+]|\d+[.)])\s+/.test(line)).length;
+  const nodes = topLevelBulletCount <= 1
+    ? [parsedRoot].filter(Boolean)
+    : (Array.isArray(parsedRoot?.children) && parsedRoot.children.length ? parsedRoot.children : [parsedRoot].filter(Boolean));
+  if (!nodes.length) return false;
+  targetData.children = Array.isArray(targetData.children) ? targetData.children : [];
+  targetData.children.push(...nodes.map(cloneMindmapLegacyNodeForPaste));
+  jm.updateData?.(legacyMindmapDataToSimpleMindMapData(currentData));
+  jm.execCommand?.("CLEAR_ACTIVE_NODE");
+  jm.execCommand?.("SET_NODE_ACTIVE", targetNode, true);
+  state.editorDirty = true;
+  renderEditSaveButton();
+  return true;
 }
 
 async function pasteImageToActiveMindmapNodes(blob) {

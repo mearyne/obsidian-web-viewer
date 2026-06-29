@@ -112,3 +112,4 @@
 - 2026-06-29: Fix mindmap Ctrl+C copying JSON when focus is outside the mindmap shell and add executable clipboard markdown test.
 - 2026-06-29: Handle mindmap Ctrl+C at keydown when browsers do not dispatch copy events and verify markdown clipboard writes.
 - 2026-06-29: Change mindmap Enter on selected nodes to insert a same-level sibling instead of entering text edit mode.
+- 2026-06-29: Allow mindmap markdown bullet copies to paste back as nodes and prevent hidden rich text editors from blocking E edit mode.
