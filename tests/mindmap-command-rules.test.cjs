@@ -110,6 +110,7 @@ test("mindmap text editor keeps enter inside node editing", () => {
   const guardBody = app.match(/function guardMindmapTextEditingKeydown\(event\)[\s\S]*?\n}/)?.[0] || "";
   assert.match(shortcutBody, /return false;/);
   assert.match(guardBody, /isMindmapTextEditingCommitKey\(event\)/);
+  assert.match(app, /document\.addEventListener\("keydown", handleMindmapRichTextCommitKeydown, true\)/);
   assert.doesNotMatch(shortcutBody, /event\?\.key === "Enter"/);
   assert.doesNotMatch(shortcutBody, /event\?\.key === "NumpadEnter"/);
 });
@@ -119,7 +120,17 @@ test("mindmap text editor lets escape reach the node edit handler", () => {
   const shortcutBody = app.match(/function shouldEnableMindmapShortcut\(event\)[\s\S]*?\n}/)?.[0] || "";
   assert.match(app, /function isMindmapTextEditingCommitKey\(event\)/);
   assert.match(app, /event\?\.key === "Escape"/);
+  assert.match(app, /function handleMindmapRichTextCommitKeydown\(event\)/);
   assert.doesNotMatch(shortcutBody, /event\?\.key === "Escape"/);
+});
+
+test("rich text mindmap editor commits enter and escape before Quill consumes them", () => {
+  const app = require("node:fs").readFileSync("app.js", "utf8");
+  const body = app.match(/function handleMindmapRichTextCommitKeydown\(event\)[\s\S]*?\n}\r?\n\r?\nfunction guardMindmapTextEditingKeydown/)?.[0] || "";
+  assert.match(body, /isMindmapRichTextEditingTarget\(event\?\.target\)/);
+  assert.match(body, /isMindmapTextEditingCommitKey\(event\)/);
+  assert.match(body, /event\.preventDefault\(\)/);
+  assert.match(body, /state\.mindmapInstance\?\.renderer\?\.textEdit\?\.hideEditTextBox\?\.\(\)/);
 });
 
 test("selected mindmap nodes can be copied as markdown bullets", () => {

@@ -786,6 +786,7 @@ els.imageLightboxClose.addEventListener("click", closeImageLightbox);
 document.addEventListener("paste", handleMindmapPaste, true);
 document.addEventListener("copy", handleMindmapCopy);
 document.addEventListener("keydown", handleMindmapKeydown, true);
+document.addEventListener("keydown", handleMindmapRichTextCommitKeydown, true);
 document.addEventListener("keydown", guardMindmapTextEditingKeydown);
 document.addEventListener("pointerdown", (event) => {
   if (!event.target?.closest?.(".mindmap-shell")) state.mindmapKeyCaptureActive = false;
@@ -5472,6 +5473,16 @@ function startActiveMindmapNodeTextEdit(node = null) {
   return true;
 }
 
+function handleMindmapRichTextCommitKeydown(event) {
+  if (!isMindmapRichTextEditingTarget(event?.target)) return;
+  if (!isMindmapTextEditingCommitKey(event)) return;
+  if ((event.key === "Enter" || event.key === "NumpadEnter") && !isPlainMindmapEnterKey(event)) return;
+  event.preventDefault();
+  event.stopPropagation();
+  event.stopImmediatePropagation?.();
+  state.mindmapInstance?.renderer?.textEdit?.hideEditTextBox?.();
+}
+
 function guardMindmapTextEditingKeydown(event) {
   if (!isMindmapTextEditingEvent(event)) return;
   if (isMindmapSaveShortcut(event)) return;
@@ -5498,6 +5509,11 @@ function isMindmapTextEditingTarget(target) {
   if (!element?.closest) return false;
   if (element.closest(".smm-node-edit-wrap, .smm-richtext-node-edit-wrap, .associative-line-text-edit-wrap, .outer-frame-text-edit-wrap")) return true;
   return Boolean(element.closest(".mindmap-shell") && element.closest("input, textarea, [contenteditable='true']"));
+}
+
+function isMindmapRichTextEditingTarget(target) {
+  const element = target?.nodeType === 1 ? target : target?.parentElement;
+  return Boolean(element?.closest?.(".smm-richtext-node-edit-wrap"));
 }
 
 async function handleMindmapPaste(event) {

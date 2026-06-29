@@ -105,3 +105,4 @@
 - 2026-06-29: Fix openFile active tab redeclaration crash when opening a mindmap link from the calendar.
 - 2026-06-29: Fix Enter and Escape key handling while editing mindmap node text.
 - 2026-06-29: Fix selected mindmap node text editing shortcuts for E and Enter after node click.
+- 2026-06-29: Fix Enter and Escape commit handling in rich text mindmap node editor.
