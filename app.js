@@ -8618,6 +8618,7 @@ async function openCalendarPath(path) {
 }
 
 function bindCalendarEvents() {
+  bindWikiLinks(els.calendarView, { calendarLinks: true });
   els.calendarView.querySelectorAll("[data-calendar-action]").forEach((button) => {
     button.addEventListener("click", () => {
       const action = button.getAttribute("data-calendar-action");
@@ -11909,16 +11910,24 @@ function bindWikiLinks(root, options = {}) {
       if (event.defaultPrevented) return;
       if (event.target?.closest?.("a, button, input, textarea, select, [contenteditable='true']")) return;
       event.preventDefault();
+      event.stopPropagation();
       const path = embed.getAttribute("data-embed-wiki");
-      if (path && isOpenableDocument(path)) await openFileInNewTab(path);
+      if (!path || !isOpenableDocument(path)) return;
+      if (options.calendarLinks) await openCalendarPath(path);
+      else await openFileInNewTab(path);
     });
   });
 
   root.querySelectorAll("[data-wiki]").forEach((link) => {
     link.addEventListener("click", async (event) => {
       event.preventDefault();
+      event.stopPropagation();
       const path = link.getAttribute("data-wiki");
       if (!path || !isOpenableDocument(path)) return;
+      if (options.calendarLinks) {
+        await openCalendarPath(path);
+        return;
+      }
       const mode = LINK_OPEN_RULES.resolveWikiLinkOpenMode({
         forceNewTab: Boolean(options.openLinksInNewTab),
         embeddedNote: Boolean(link.closest(".embedded-note")),

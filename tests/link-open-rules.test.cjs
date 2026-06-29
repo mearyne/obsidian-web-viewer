@@ -25,6 +25,12 @@ test("calendar links to mindmap documents open in the current tab", () => {
   assert.match(app, /await openCalendarPath\(path\)/);
 });
 
+test("calendar inline wiki links are bound after calendar render", () => {
+  const app = require("node:fs").readFileSync("app.js", "utf8");
+  assert.match(app, /bindWikiLinks\(els\.calendarView, \{ calendarLinks: true \}\)/);
+  assert.match(app, /event\.stopPropagation\(\)/);
+});
+
 test("normal document wiki links open in the current tab", () => {
   assert.equal(resolveWikiLinkOpenMode({ forceNewTab: false, embeddedNote: false }), "current-tab");
 });
