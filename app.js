@@ -5368,6 +5368,10 @@ function fitMindmapToView() {
 function handleMindmapKeydown(event) {
   if (!state.mindmapInstance || els.mindmapShell?.hidden) return;
   if (isMindmapTextEditingEvent(event)) return;
+  if (isMindmapCopyShortcut(event) && hasMindmapNodesForCopy()) {
+    void copyMindmapSelectionToClipboard(event);
+    return;
+  }
   if (isMindmapNodeTextEditShortcut(event) && canEditNode(state.currentNode)) {
     event.preventDefault();
     event.stopPropagation();
@@ -5390,6 +5394,28 @@ function handleMindmapKeydown(event) {
   event.stopPropagation();
   event.stopImmediatePropagation?.();
   state.mindmapInstance.execCommand?.("INSERT_CHILD_NODE");
+}
+
+function isMindmapCopyShortcut(event) {
+  return !event.altKey
+    && !event.shiftKey
+    && !event.isComposing
+    && (event.ctrlKey || event.metaKey)
+    && (event.code === "KeyC" || event.key?.toLowerCase?.() === "c");
+}
+
+async function copyMindmapSelectionToClipboard(event) {
+  const markdown = selectedMindmapNodesToMarkdownBullets();
+  if (!markdown) return false;
+  event.preventDefault();
+  event.stopPropagation();
+  event.stopImmediatePropagation?.();
+  try {
+    await navigator.clipboard?.writeText(markdown);
+    return true;
+  } catch {
+    return document.execCommand?.("copy") || false;
+  }
 }
 
 function isMindmapNodeTextEditShortcut(event) {

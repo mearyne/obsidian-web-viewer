@@ -10,7 +10,8 @@ const {
 } = require("../mindmap-command-rules.js");
 
 function extractFunction(source, name) {
-  const start = source.indexOf(`function ${name}(`);
+  let start = source.indexOf(`async function ${name}(`);
+  if (start === -1) start = source.indexOf(`function ${name}(`);
   assert.notEqual(start, -1, `${name} not found`);
   const braceStart = source.indexOf("{", start);
   let depth = 0;
@@ -225,4 +226,77 @@ test("mindmap copy writes markdown bullets even when focus is outside the shell"
   assert.deepEqual(calls, ["preventDefault", "stopPropagation", "stopImmediatePropagation"]);
   assert.equal(clipboard.get("text/plain"), "- Parent\n  - Child\n");
   assert.doesNotMatch(clipboard.get("text/plain"), /simpleMindMap/);
+});
+
+test("mindmap ctrl c keydown writes selected nodes as markdown bullets", () => {
+  const app = fs.readFileSync("app.js", "utf8");
+  let copied = "";
+  const calls = [];
+  const context = {
+    state: {
+      mindmapInstance: {
+        renderer: {
+          activeNodeList: [{
+            nodeData: {
+              data: {
+                text: "<p>Keyboard Parent</p>",
+                children: [{ data: { text: "<p>Keyboard Child</p>" }, children: [] }],
+              },
+            },
+          }],
+        },
+      },
+      mindmapKeyCaptureActive: false,
+      mindmapLastClickedNodeUid: null,
+      editMode: false,
+      currentNode: {},
+    },
+    els: {
+      mindmapShell: {
+        hidden: false,
+        contains: () => true,
+      },
+    },
+    document: {
+      activeElement: { className: "mindmap-canvas smm-mind-map-container" },
+      execCommand: () => false,
+    },
+    navigator: {
+      clipboard: {
+        writeText: async (text) => {
+          copied = text;
+        },
+      },
+    },
+    isMindmapTextEditingEvent: () => false,
+    isMindmapNodeTextEditShortcut: () => false,
+    canEditNode: () => false,
+  };
+  vm.createContext(context);
+  vm.runInContext([
+    extractFunction(app, "normalizeMindmapMarkdownTopic"),
+    extractFunction(app, "handleMindmapKeydown"),
+    extractFunction(app, "isMindmapCopyShortcut"),
+    extractFunction(app, "copyMindmapSelectionToClipboard"),
+    extractFunction(app, "hasMindmapNodesForCopy"),
+    extractFunction(app, "selectedMindmapNodesToMarkdownBullets"),
+  ].join("\n"), context);
+
+  context.handleMindmapKeydown({
+    key: "c",
+    code: "KeyC",
+    ctrlKey: true,
+    metaKey: false,
+    altKey: false,
+    shiftKey: false,
+    isComposing: false,
+    target: { closest: () => null },
+    preventDefault: () => calls.push("preventDefault"),
+    stopPropagation: () => calls.push("stopPropagation"),
+    stopImmediatePropagation: () => calls.push("stopImmediatePropagation"),
+  });
+
+  assert.deepEqual(calls, ["preventDefault", "stopPropagation", "stopImmediatePropagation"]);
+  assert.equal(copied, "- Keyboard Parent\n  - Keyboard Child\n");
+  assert.doesNotMatch(copied, /simpleMindMap/);
 });
