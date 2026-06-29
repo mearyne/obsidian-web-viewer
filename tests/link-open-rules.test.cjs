@@ -10,6 +10,10 @@ test("embedded note wiki links open in a new tab", () => {
   assert.equal(resolveWikiLinkOpenMode({ forceNewTab: false, embeddedNote: true }), "new-tab");
 });
 
+test("mindmap embed links open in the current tab", () => {
+  assert.equal(resolveWikiLinkOpenMode({ forceNewTab: false, embeddedNote: true, mindmapEmbed: true }), "current-tab");
+});
+
 test("normal document wiki links open in the current tab", () => {
   assert.equal(resolveWikiLinkOpenMode({ forceNewTab: false, embeddedNote: false }), "current-tab");
 });
