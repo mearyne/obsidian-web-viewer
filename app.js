@@ -2881,7 +2881,7 @@ function nodeInAnyPath(node, paths) {
   return paths.some((prefix) => path === prefix || path.startsWith(`${prefix}/`) || prefix.startsWith(`${path}/`));
 }
 
-async function openFile(path) {
+async function openFile(path, { preserveTabView = false } = {}) {
   const curTab = activeTab();
   if (curTab?.pinned && path !== curTab.path) {
     await openFileInNewTab(path);
@@ -2907,8 +2907,8 @@ async function openFile(path) {
     const content = await readFileNode(node);
     readDoneAt = performance.now();
     markOpenStep("탭과 기록 갱신 중");
-    state.documentMindmapEnabled = Boolean(curTab?.path === path && curTab.documentMindmapEnabled);
-    state.mindmapMarkdownPreviewEnabled = Boolean(curTab?.path === path && curTab.mindmapMarkdownPreviewEnabled);
+    state.documentMindmapEnabled = Boolean(preserveTabView && curTab?.path === path && curTab.documentMindmapEnabled);
+    state.mindmapMarkdownPreviewEnabled = Boolean(preserveTabView && curTab?.path === path && curTab.mindmapMarkdownPreviewEnabled);
     state.currentPath = path;
     state.currentContent = content;
     state.currentNode = node;
@@ -4558,7 +4558,7 @@ function renderDocumentMindmapPreview() {
 
 function renderMindmapMarkdownPreview() {
   const data = extractMindmapData(state.currentContent);
-  const title = displayDocumentTitle(state.currentNode || { name: state.currentPath || "Mindmap" });
+  const title = displayDocumentTitle(state.currentNode?.name || state.currentPath || "Mindmap");
   const markdown = MINDMAP_MARKDOWN_RULES.mindmapDataToMarkdown(data?.data || createDefaultMindmapData(title));
   els.markdownView.innerHTML = renderMarkdown(markdown, { path: state.currentPath || "" });
   bindWikiLinks(els.markdownView);
@@ -11989,7 +11989,7 @@ async function createTab(path = null) {
   else showEmptyTab();
 }
 
-async function switchTab(id) {
+async function switchTab(id, { preserveTabView = true } = {}) {
   if (id === state.activeTabId && state.tabs.find((t) => t.id === id)) return;
   if (state.editMode) {
     if (state.editorDirty && !state.autoSaveInFlight) {
@@ -12027,7 +12027,7 @@ async function switchTab(id) {
     if (restoreTabRender(tab, state.files.get(tab.path))) return;
     const wasNavigating = state.navigatingHistory;
     state.navigatingHistory = true;
-    await openFile(tab.path);
+    await openFile(tab.path, { preserveTabView });
     state.navigatingHistory = wasNavigating;
     requestAnimationFrame(() => { els.viewerWrap.scrollTop = tab.scrollTop || 0; });
   } else {
@@ -12209,7 +12209,7 @@ async function restoreActiveTab() {
   } else if (tab.view === "merged" && tab.mergedRange) {
     await renderMergedDocuments(tab.mergedRange);
   } else if (tab.path && state.files.has(tab.path)) {
-    await openFile(tab.path);
+    await openFile(tab.path, { preserveTabView: true });
     requestAnimationFrame(() => { els.viewerWrap.scrollTop = tab.scrollTop || 0; });
   } else if (!_tabsRestoredFromStorage && !tab.path && !tab.view) {
     showInitialCalendarView();
@@ -12650,7 +12650,8 @@ async function openFileInNewTab(path) {
 
   const existingTab = findTabForPath(normalizedPath);
   if (existingTab) {
-    if (existingTab.id !== state.activeTabId) await switchTab(existingTab.id);
+    if (existingTab.id !== state.activeTabId) await switchTab(existingTab.id, { preserveTabView: false });
+    else await openFile(normalizedPath);
     return;
   }
 

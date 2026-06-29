@@ -36,19 +36,29 @@ test("command palette can show markdown notes as mindmaps without changing the f
 
 test("command palette can convert the current mindmap to markdown without replacing mindmap data", () => {
   const body = functionSlice("convertCurrentMindmapToMarkdown", "updateDocumentMindmapToggleButton");
+  const renderBody = functionSlice("renderMindmapMarkdownPreview", "clearMindmapShell");
   assert.match(app, /data-command="convert-current-mindmap-to-md"/);
   assert.match(app, /function convertCurrentMindmapToMarkdown\(\)/);
   assert.match(app, /MINDMAP_MARKDOWN_RULES\.mindmapDataToMarkdown/);
   assert.match(app, /renderMarkdown\(markdown/);
+  assert.match(renderBody, /displayDocumentTitle\(state\.currentNode\?\.name \|\| state\.currentPath \|\| "Mindmap"\)/);
   assert.doesNotMatch(body, /createTab/);
   assert.doesNotMatch(app, /writeNodeContent\(state\.currentNode,\s*markdown/);
 });
 
 test("opening a document restores conversion preview flags from the active tab", () => {
-  assert.match(app, /state\.documentMindmapEnabled = Boolean\(curTab\?\.path === path && curTab\.documentMindmapEnabled\)/);
-  assert.match(app, /state\.mindmapMarkdownPreviewEnabled = Boolean\(curTab\?\.path === path && curTab\.mindmapMarkdownPreviewEnabled\)/);
+  assert.match(app, /async function openFile\(path, \{ preserveTabView = false \} = \{\}\)/);
+  assert.match(app, /state\.documentMindmapEnabled = Boolean\(preserveTabView && curTab\?\.path === path && curTab\.documentMindmapEnabled\)/);
+  assert.match(app, /state\.mindmapMarkdownPreviewEnabled = Boolean\(preserveTabView && curTab\?\.path === path && curTab\.mindmapMarkdownPreviewEnabled\)/);
+  assert.match(app, /await openFile\(tab\.path, \{ preserveTabView: true \}\)/);
   assert.match(app, /documentMindmapEnabled: Boolean\(t\.documentMindmapEnabled\)/);
   assert.match(app, /mindmapMarkdownPreviewEnabled: Boolean\(t\.mindmapMarkdownPreviewEnabled\)/);
   assert.match(app, /documentMindmapEnabled: Boolean\(t\?\.documentMindmapEnabled\)/);
   assert.match(app, /mindmapMarkdownPreviewEnabled: Boolean\(t\?\.mindmapMarkdownPreviewEnabled\)/);
+});
+
+test("opening an existing document from a link clears conversion preview flags", () => {
+  assert.match(app, /async function switchTab\(id, \{ preserveTabView = true \} = \{\}\)/);
+  assert.match(app, /await openFile\(tab\.path, \{ preserveTabView \}\)/);
+  assert.match(app, /await switchTab\(existingTab\.id, \{ preserveTabView: false \}\)/);
 });
