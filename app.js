@@ -57,6 +57,25 @@ const MINDMAP_COMMAND_RULES = globalThis.MindmapCommandRules || {
   appendMindmapEmbed(content, path) {
     return `${String(content || "").replace(/\s*$/u, "")}\n\n![[${path}]]\n`;
   },
+  resolveSaveShortcutTarget({
+    activeView,
+    activeTabPath,
+    currentPath,
+    editMode,
+    canEdit,
+    isMindmap,
+    hasMindmapInstance,
+    targetInMindmap = false,
+    activeInMindmap = false,
+    keyCaptureActive = false,
+  } = {}) {
+    if (!(editMode && canEdit)) return "none";
+    if (!isMindmap) return "editor";
+    const activeTabMatchesCurrent = !activeTabPath || !currentPath || activeTabPath === currentPath;
+    if (activeView === "note" && activeTabMatchesCurrent && hasMindmapInstance) return "mindmap";
+    if (hasMindmapInstance && (targetInMindmap || activeInMindmap || keyCaptureActive)) return "mindmap";
+    return "none";
+  },
 };
 const MINDMAP_MARKDOWN_RULES = globalThis.MindmapMarkdownRules || {
   mindmapDataToMarkdown,
@@ -1083,11 +1102,20 @@ function isSaveShortcut(event) {
 
 function isMindmapSaveShortcut(event) {
   if (!isSaveShortcut(event)) return false;
-  if (!state.mindmapInstance || els.mindmapShell?.hidden) return false;
-  if (!(state.editMode && canEditNode(state.currentNode))) return false;
   const targetInMindmap = event.target?.closest?.(".mindmap-shell");
   const activeInMindmap = els.mindmapShell.contains(document.activeElement);
-  return Boolean(targetInMindmap || activeInMindmap || state.mindmapKeyCaptureActive);
+  return MINDMAP_COMMAND_RULES.resolveSaveShortcutTarget({
+    activeView: state.activeView,
+    activeTabPath: activeTab()?.path || "",
+    currentPath: state.currentPath || "",
+    editMode: state.editMode,
+    canEdit: canEditNode(state.currentNode),
+    isMindmap: isMindmapDocument(state.currentContent),
+    hasMindmapInstance: Boolean(state.mindmapInstance && !els.mindmapShell?.hidden),
+    targetInMindmap: Boolean(targetInMindmap),
+    activeInMindmap,
+    keyCaptureActive: state.mindmapKeyCaptureActive,
+  }) === "mindmap";
 }
 
 function openCommandPalette() {
@@ -5619,6 +5647,7 @@ async function enterEditMode() {
 
 async function saveCurrentEdit() {
   if (!state.editMode || !canEditNode(state.currentNode)) return;
+  if (isMindmapDocument(state.currentContent)) return saveMindmapFromShortcut();
   return persistCurrentEdit({ closeEditor: true });
 }
 

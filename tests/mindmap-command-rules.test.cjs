@@ -4,6 +4,7 @@ const {
   canAddMindmapToCurrentDocument,
   appendMindmapEmbed,
   contentForMindmapInsertion,
+  resolveSaveShortcutTarget,
 } = require("../mindmap-command-rules.js");
 
 test("mindmap command is available while editing a markdown note", () => {
@@ -35,4 +36,31 @@ test("mindmap command appends embed after current editor content", () => {
     editMode: true,
   }), "# Draft");
   assert.equal(appendMindmapEmbed("# Draft\n", "Map.md"), "# Draft\n\n![[Map.md]]\n");
+});
+
+test("ctrl s saves active mindmap tab even when focus leaves the mindmap shell", () => {
+  assert.equal(resolveSaveShortcutTarget({
+    activeView: "note",
+    activeTabPath: "Map.md",
+    currentPath: "Map.md",
+    editMode: true,
+    canEdit: true,
+    isMindmap: true,
+    hasMindmapInstance: true,
+    targetInMindmap: false,
+    activeInMindmap: false,
+    keyCaptureActive: false,
+  }), "mindmap");
+});
+
+test("ctrl s uses normal edit save for non-mindmap notes", () => {
+  assert.equal(resolveSaveShortcutTarget({
+    activeView: "note",
+    activeTabPath: "Note.md",
+    currentPath: "Note.md",
+    editMode: true,
+    canEdit: true,
+    isMindmap: false,
+    hasMindmapInstance: false,
+  }), "editor");
 });

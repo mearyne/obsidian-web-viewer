@@ -93,3 +93,4 @@
 - 2026-06-28: Add an inline mindmap theme selector to the mindmap toolbar that updates the active light/dark mindmap theme setting.
 - 2026-06-29: Move mindmap settings from the options menu to the mindmap edit bar Tools drawer and save them as shared device settings instead of localStorage.
 - 2026-06-29: Add a document mindmap view for existing Markdown notes using the app-specific Markdown-to-mindmap conversion path.
+- 2026-06-29: Fix Ctrl+S while editing a mindmap so active-tab mindmap saves do not fall through to the Markdown editor save path after header focus.
