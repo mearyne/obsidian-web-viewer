@@ -9,9 +9,16 @@ test("calendar extension exclude options are present in settings UI and state", 
   assert.match(html, /id="calendarCreatedExcludeExtensionsInput"/);
   assert.match(html, /id="calendarUpdatedExcludeExtensionsInput"/);
   assert.match(html, /id="mergedDocumentExcludeExtensionsInput"/);
-  assert.match(app, /calendarCreatedExcludeExtensions: \[\]/);
-  assert.match(app, /calendarUpdatedExcludeExtensions: \[\]/);
-  assert.match(app, /mergedDocumentExcludeExtensions: \[\]/);
+  assert.match(app, /const DEFAULT_CALENDAR_EXTENSION_EXCLUDES = \["png", "jpg", "gif"\]/);
+  assert.match(app, /calendarCreatedExcludeExtensions: \[\.\.\.DEFAULT_CALENDAR_EXTENSION_EXCLUDES\]/);
+  assert.match(app, /calendarUpdatedExcludeExtensions: \[\.\.\.DEFAULT_CALENDAR_EXTENSION_EXCLUDES\]/);
+  assert.match(app, /mergedDocumentExcludeExtensions: \[\.\.\.DEFAULT_CALENDAR_EXTENSION_EXCLUDES\]/);
+});
+
+test("calendar extension exclude options fall back to the default list", () => {
+  assert.match(app, /localStorage\.getItem\("obsidian-web-viewer-calendar-created-exclude-extensions"\) \?\? DEFAULT_CALENDAR_EXTENSION_EXCLUDES/);
+  assert.match(app, /localStorage\.getItem\("obsidian-web-viewer-calendar-updated-exclude-extensions"\) \?\? DEFAULT_CALENDAR_EXTENSION_EXCLUDES/);
+  assert.match(app, /localStorage\.getItem\("obsidian-web-viewer-merged-document-exclude-extensions"\) \?\? DEFAULT_CALENDAR_EXTENSION_EXCLUDES/);
 });
 
 test("created and updated calendar file lists apply separate extension exclusions", () => {

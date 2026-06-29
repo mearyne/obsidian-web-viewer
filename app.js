@@ -4,6 +4,7 @@ const DOCUMENT_OPEN_SLOW_STEP_MS = 120;
 const DOCUMENT_OPEN_SLOW_TOTAL_MS = 500;
 const CONTENT_HISTORY_LIMIT = 50;
 const MERGED_DOCUMENT_CONFIRM_THRESHOLD = 20;
+const DEFAULT_CALENDAR_EXTENSION_EXCLUDES = ["png", "jpg", "gif"];
 function setTasksDirty() { try { localStorage.setItem(TASKS_DIRTY_KEY, "1"); } catch {} }
 function clearTasksDirty() { try { localStorage.removeItem(TASKS_DIRTY_KEY); } catch {} }
 function isTasksDirty() { try { return localStorage.getItem(TASKS_DIRTY_KEY) === "1"; } catch { return false; } }
@@ -251,9 +252,9 @@ const state = {
   newNotePath: "",
   imageSavePath: "",
   searchExcludePaths: [],
-  calendarCreatedExcludeExtensions: [],
-  calendarUpdatedExcludeExtensions: [],
-  mergedDocumentExcludeExtensions: [],
+  calendarCreatedExcludeExtensions: [...DEFAULT_CALENDAR_EXTENSION_EXCLUDES],
+  calendarUpdatedExcludeExtensions: [...DEFAULT_CALENDAR_EXTENSION_EXCLUDES],
+  mergedDocumentExcludeExtensions: [...DEFAULT_CALENDAR_EXTENSION_EXCLUDES],
   contentSearchTimer: null,
   contentSearchQuery: "",
   contentSearchMatches: null,
@@ -3452,9 +3453,9 @@ function initOptions() {
   state.searchExcludePaths = parsePathList(savedSearchExclude);
   if (els.searchExcludeInput) els.searchExcludeInput.value = savedSearchExclude;
   applyCalendarExtensionExcludeSettings({
-    calendarCreatedExcludeExtensions: localStorage.getItem("obsidian-web-viewer-calendar-created-exclude-extensions") || "",
-    calendarUpdatedExcludeExtensions: localStorage.getItem("obsidian-web-viewer-calendar-updated-exclude-extensions") || "",
-    mergedDocumentExcludeExtensions: localStorage.getItem("obsidian-web-viewer-merged-document-exclude-extensions") || "",
+    calendarCreatedExcludeExtensions: localStorage.getItem("obsidian-web-viewer-calendar-created-exclude-extensions") ?? DEFAULT_CALENDAR_EXTENSION_EXCLUDES,
+    calendarUpdatedExcludeExtensions: localStorage.getItem("obsidian-web-viewer-calendar-updated-exclude-extensions") ?? DEFAULT_CALENDAR_EXTENSION_EXCLUDES,
+    mergedDocumentExcludeExtensions: localStorage.getItem("obsidian-web-viewer-merged-document-exclude-extensions") ?? DEFAULT_CALENDAR_EXTENSION_EXCLUDES,
   }, { persist: false, refresh: false });
   applyHideFrontmatterOption(localStorage.getItem("obsidian-web-viewer-hide-frontmatter"), { persist: false, rerender: false });
   // Discord 알림 목록 기본 렌더링 (서버 설정 로드 전 기본값)
