@@ -255,7 +255,20 @@
             <span>매트릭스 task 표시 줄 수</span>
             <input id="matrixTaskTitleLinesInput" type="number" min="1" max="10" step="1" />
           </label>
+          <label class="option-field">
+            <span>추가한 파일 리스트 제외 확장자</span>
+            <input id="calendarCreatedExcludeExtensionsInput" type="text" placeholder="png, jpg, gif" />
+          </label>
+          <label class="option-field">
+            <span>수정한 파일 리스트 제외 확장자</span>
+            <input id="calendarUpdatedExcludeExtensionsInput" type="text" placeholder="png, jpg, gif" />
+          </label>
+          <label class="option-field">
+            <span>문서 합쳐보기 제외 확장자</span>
+            <input id="mergedDocumentExcludeExtensionsInput" type="text" placeholder="png, jpg, gif" />
+          </label>
           <p class="option-help">Task 캘린더에 포함할 Markdown 폴더 경로를 줄바꿈 또는 쉼표로 지정합니다. 비워두면 전체 vault의 task를 표시합니다.</p>
+          <p class="option-help">확장자는 쉼표, 공백, 줄바꿈으로 구분합니다. 점을 붙여도 같은 값으로 저장됩니다.</p>
         </div>
       </details>
 
@@ -546,6 +559,7 @@
     <script src="./tab-order-rules.js"></script>
     <script src="./link-open-rules.js"></script>
     <script src="./frontmatter-display-rules.js"></script>
+    <script src="./file-extension-filter-rules.js"></script>
     <script src="./mindmap-command-rules.js"></script>
     <script src="./vendor/simple-mind-map.js"></script>
     <script src="./app.js"></script>

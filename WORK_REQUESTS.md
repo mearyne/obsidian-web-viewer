@@ -114,3 +114,4 @@
 - 2026-06-29: Change mindmap Enter on selected nodes to insert a same-level sibling instead of entering text edit mode.
 - 2026-06-29: Allow mindmap markdown bullet copies to paste back as nodes and prevent hidden rich text editors from blocking E edit mode.
 - 2026-06-29: Render image files such as PNG, JPG, GIF, WebP, SVG, and BMP when opened from the vault.
+- 2026-06-30: Add option fields to exclude extensions from calendar created-file lists, calendar updated-file lists, and merged document view.

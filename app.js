@@ -48,6 +48,26 @@ const FRONTMATTER_DISPLAY_RULES = globalThis.FrontmatterDisplayRules || {
     return Boolean(String(frontmatter || "").trim()) && !this.normalizeHideFrontmatter(hideFrontmatter);
   },
 };
+const FILE_EXTENSION_FILTER_RULES = globalThis.FileExtensionFilterRules || {
+  normalizeExcludedExtensions(value) {
+    const items = Array.isArray(value) ? value : String(value || "").split(/[\s,;]+/);
+    const seen = new Set();
+    return items
+      .map((item) => String(item || "").trim().replace(/^\.+/, "").toLowerCase())
+      .filter(Boolean)
+      .filter((item) => {
+        if (seen.has(item)) return false;
+        seen.add(item);
+        return true;
+      });
+  },
+  isExcludedByExtension(pathOrName, excludedExtensions) {
+    const name = String(pathOrName || "").split(/[\\/]/).pop() || "";
+    const match = name.match(/\.([^.]+)$/);
+    if (!match) return false;
+    return this.normalizeExcludedExtensions(excludedExtensions).includes(match[1].toLowerCase());
+  },
+};
 const MINDMAP_COMMAND_RULES = globalThis.MindmapCommandRules || {
   canAddMindmapToCurrentDocument({ activeView, currentPath, currentContent, canEdit, isMindmap } = {}) {
     return activeView === "note" && Boolean(currentPath) && /\.md$/i.test(String(currentPath)) && !isMindmap && Boolean(canEdit) && typeof currentContent === "string";
@@ -231,6 +251,9 @@ const state = {
   newNotePath: "",
   imageSavePath: "",
   searchExcludePaths: [],
+  calendarCreatedExcludeExtensions: [],
+  calendarUpdatedExcludeExtensions: [],
+  mergedDocumentExcludeExtensions: [],
   contentSearchTimer: null,
   contentSearchQuery: "",
   contentSearchMatches: null,
@@ -443,6 +466,9 @@ const els = {
   clipperRuleList: document.querySelector("#clipperRuleList"),
   clipperRuleAddBtn: document.querySelector("#clipperRuleAddBtn"),
   searchExcludeInput: document.querySelector("#searchExcludeInput"),
+  calendarCreatedExcludeExtensionsInput: document.querySelector("#calendarCreatedExcludeExtensionsInput"),
+  calendarUpdatedExcludeExtensionsInput: document.querySelector("#calendarUpdatedExcludeExtensionsInput"),
+  mergedDocumentExcludeExtensionsInput: document.querySelector("#mergedDocumentExcludeExtensionsInput"),
   discordWebhookInput: document.querySelector("#discordWebhookInput"),
   discordNotifyListTodo: document.querySelector("#discordNotifyListTodo"),
   discordNotifyListEvent: document.querySelector("#discordNotifyListEvent"),
@@ -735,6 +761,9 @@ els.clipperFolderInput?.addEventListener("input", () => {
 });
 els.clipperRuleAddBtn?.addEventListener("click", () => { addClipperRuleRow("", "", ""); scheduleSettingsSave(); });
 els.searchExcludeInput?.addEventListener("input", handleSearchExcludeInput);
+els.calendarCreatedExcludeExtensionsInput?.addEventListener("input", handleCalendarExtensionExcludeInput);
+els.calendarUpdatedExcludeExtensionsInput?.addEventListener("input", handleCalendarExtensionExcludeInput);
+els.mergedDocumentExcludeExtensionsInput?.addEventListener("input", handleCalendarExtensionExcludeInput);
 els.optionsMenu?.addEventListener("change", (event) => {
   if (event.target?.matches?.("#hideFrontmatterInput")) {
     handleHideFrontmatterInput();
@@ -1503,7 +1532,8 @@ function collectMergedDocumentFiles(range) {
   const end = addDays(parseDateKey(range.end), 1).getTime() - 1;
   const startMs = start.getTime();
   return [...state.files.values()]
-    .filter((node) => node.kind === "file" && isOpenableDocument(node.name))
+    .filter((node) => node.kind === "file" && isTextVaultFilePath(node.name))
+    .filter((node) => !FILE_EXTENSION_FILTER_RULES.isExcludedByExtension(node.path || node.name, state.mergedDocumentExcludeExtensions))
     .map((node) => ({
       path: node.path,
       name: node.name,
@@ -3421,6 +3451,11 @@ function initOptions() {
   const savedSearchExclude = localStorage.getItem("obsidian-web-viewer-search-exclude") || "";
   state.searchExcludePaths = parsePathList(savedSearchExclude);
   if (els.searchExcludeInput) els.searchExcludeInput.value = savedSearchExclude;
+  applyCalendarExtensionExcludeSettings({
+    calendarCreatedExcludeExtensions: localStorage.getItem("obsidian-web-viewer-calendar-created-exclude-extensions") || "",
+    calendarUpdatedExcludeExtensions: localStorage.getItem("obsidian-web-viewer-calendar-updated-exclude-extensions") || "",
+    mergedDocumentExcludeExtensions: localStorage.getItem("obsidian-web-viewer-merged-document-exclude-extensions") || "",
+  }, { persist: false, refresh: false });
   applyHideFrontmatterOption(localStorage.getItem("obsidian-web-viewer-hide-frontmatter"), { persist: false, rerender: false });
   // Discord 알림 목록 기본 렌더링 (서버 설정 로드 전 기본값)
   renderDiscordNotifyList("todo", [60]);
@@ -3692,6 +3727,7 @@ async function loadServerSettings() {
         localStorage.setItem("obsidian-web-viewer-search-exclude", settings.searchExclude);
       }
     }
+    applyCalendarExtensionExcludeSettings(settings, { persist: true, refresh: true });
     applyMindmapOptions(settings, { persist: true, applyVisible: true });
     if ("hideFrontmatter" in settings) {
       applyHideFrontmatterOption(settings.hideFrontmatter, { persist: true, rerender: true });
@@ -3760,6 +3796,58 @@ function handleSearchExcludeInput() {
   localStorage.setItem("obsidian-web-viewer-search-exclude", els.searchExcludeInput?.value || "");
   scheduleSettingsSave();
   renderTree();
+}
+
+function extensionListInputValue(value) {
+  return FILE_EXTENSION_FILTER_RULES.normalizeExcludedExtensions(value).join(", ");
+}
+
+function applyCalendarExtensionExcludeSettings(settings = {}, { persist = true, refresh = true } = {}) {
+  const values = {
+    calendarCreatedExcludeExtensions: settings.calendarCreatedExcludeExtensions,
+    calendarUpdatedExcludeExtensions: settings.calendarUpdatedExcludeExtensions,
+    mergedDocumentExcludeExtensions: settings.mergedDocumentExcludeExtensions,
+  };
+  if (!("calendarCreatedExcludeExtensions" in settings)) values.calendarCreatedExcludeExtensions = state.calendarCreatedExcludeExtensions;
+  if (!("calendarUpdatedExcludeExtensions" in settings)) values.calendarUpdatedExcludeExtensions = state.calendarUpdatedExcludeExtensions;
+  if (!("mergedDocumentExcludeExtensions" in settings)) values.mergedDocumentExcludeExtensions = state.mergedDocumentExcludeExtensions;
+
+  const nextCreated = FILE_EXTENSION_FILTER_RULES.normalizeExcludedExtensions(values.calendarCreatedExcludeExtensions);
+  const nextUpdated = FILE_EXTENSION_FILTER_RULES.normalizeExcludedExtensions(values.calendarUpdatedExcludeExtensions);
+  const nextMerged = FILE_EXTENSION_FILTER_RULES.normalizeExcludedExtensions(values.mergedDocumentExcludeExtensions);
+  const changed =
+    extensionListInputValue(nextCreated) !== extensionListInputValue(state.calendarCreatedExcludeExtensions) ||
+    extensionListInputValue(nextUpdated) !== extensionListInputValue(state.calendarUpdatedExcludeExtensions) ||
+    extensionListInputValue(nextMerged) !== extensionListInputValue(state.mergedDocumentExcludeExtensions);
+
+  state.calendarCreatedExcludeExtensions = nextCreated;
+  state.calendarUpdatedExcludeExtensions = nextUpdated;
+  state.mergedDocumentExcludeExtensions = nextMerged;
+  if (els.calendarCreatedExcludeExtensionsInput) els.calendarCreatedExcludeExtensionsInput.value = extensionListInputValue(nextCreated);
+  if (els.calendarUpdatedExcludeExtensionsInput) els.calendarUpdatedExcludeExtensionsInput.value = extensionListInputValue(nextUpdated);
+  if (els.mergedDocumentExcludeExtensionsInput) els.mergedDocumentExcludeExtensionsInput.value = extensionListInputValue(nextMerged);
+
+  if (persist) {
+    localStorage.setItem("obsidian-web-viewer-calendar-created-exclude-extensions", extensionListInputValue(nextCreated));
+    localStorage.setItem("obsidian-web-viewer-calendar-updated-exclude-extensions", extensionListInputValue(nextUpdated));
+    localStorage.setItem("obsidian-web-viewer-merged-document-exclude-extensions", extensionListInputValue(nextMerged));
+  }
+  if (refresh && changed) refreshCalendarExtensionFilteredViews();
+}
+
+function handleCalendarExtensionExcludeInput() {
+  applyCalendarExtensionExcludeSettings({
+    calendarCreatedExcludeExtensions: els.calendarCreatedExcludeExtensionsInput?.value || "",
+    calendarUpdatedExcludeExtensions: els.calendarUpdatedExcludeExtensionsInput?.value || "",
+    mergedDocumentExcludeExtensions: els.mergedDocumentExcludeExtensionsInput?.value || "",
+  }, { persist: true, refresh: true });
+  scheduleSettingsSave();
+}
+
+function refreshCalendarExtensionFilteredViews() {
+  state.recentFiles = buildRecentFiles();
+  if (state.activeView === "calendar" && !isTaskCalendarKind()) renderCalendar();
+  if (state.activeView === "merged" && state.mergedDocumentRange) void renderMergedDocuments(state.mergedDocumentRange);
 }
 
 function applyHideFrontmatterOption(value, { persist = true, rerender = true } = {}) {
@@ -4412,6 +4500,9 @@ async function saveServerSettings() {
         newNotePath: state.newNotePath || "",
         imagePath: state.imageSavePath || "",
         searchExclude: els.searchExcludeInput?.value || "",
+        calendarCreatedExcludeExtensions: extensionListInputValue(state.calendarCreatedExcludeExtensions),
+        calendarUpdatedExcludeExtensions: extensionListInputValue(state.calendarUpdatedExcludeExtensions),
+        mergedDocumentExcludeExtensions: extensionListInputValue(state.mergedDocumentExcludeExtensions),
         discordWebhookUrl: els.discordWebhookInput?.value || "",
         discordNotifyOffsetsTodo: getDiscordNotifyOffsets("todo"),
         discordNotifyOffsetsEvent: getDiscordNotifyOffsets("event"),
@@ -7581,8 +7672,14 @@ function buildRecentFiles() {
     }));
 
   return {
-    updated: files.slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 80),
-    created: files.slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 80),
+    updated: files
+      .filter((file) => !FILE_EXTENSION_FILTER_RULES.isExcludedByExtension(file.path || file.name, state.calendarUpdatedExcludeExtensions))
+      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+      .slice(0, 80),
+    created: files
+      .filter((file) => !FILE_EXTENSION_FILTER_RULES.isExcludedByExtension(file.path || file.name, state.calendarCreatedExcludeExtensions))
+      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+      .slice(0, 80),
   };
 }
 
