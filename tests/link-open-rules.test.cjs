@@ -18,6 +18,13 @@ test("mindmap document links open in the current tab even inside embeds", () => 
   assert.equal(resolveWikiLinkOpenMode({ forceNewTab: false, embeddedNote: true, targetMindmap: true }), "current-tab");
 });
 
+test("calendar links to mindmap documents open in the current tab", () => {
+  const app = require("node:fs").readFileSync("app.js", "utf8");
+  assert.match(app, /async function openCalendarPath\(path\)/);
+  assert.match(app, /targetMindmap: isMindmapDocument\(state\.files\.get\(normalizedPath\)\?\.content \|\| ""\)/);
+  assert.match(app, /await openCalendarPath\(path\)/);
+});
+
 test("normal document wiki links open in the current tab", () => {
   assert.equal(resolveWikiLinkOpenMode({ forceNewTab: false, embeddedNote: false }), "current-tab");
 });

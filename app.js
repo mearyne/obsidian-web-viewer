@@ -8592,6 +8592,31 @@ function renderCalendarFile(file, field, showDelete = false) {
   `;
 }
 
+async function openCalendarPath(path) {
+  const normalizedPath = normalizeVaultPath(path || "");
+  if (!normalizedPath) return;
+  const mode = LINK_OPEN_RULES.resolveWikiLinkOpenMode({
+    forceNewTab: true,
+    calendarLink: true,
+    targetMindmap: isMindmapDocument(state.files.get(normalizedPath)?.content || ""),
+  });
+  if (mode === "new-tab") {
+    await openFileInNewTab(normalizedPath);
+    return;
+  }
+  const tab = activeTab();
+  if (tab) {
+    tab.view = null;
+    tab.calendarKind = null;
+    tab.mergedRange = null;
+    if (tab.pinned) {
+      tab.path = normalizedPath;
+      tab.title = displayDocumentTitle(normalizedPath.split("/").pop());
+    }
+  }
+  await openFile(normalizedPath, { preserveTabView: false });
+}
+
 function bindCalendarEvents() {
   els.calendarView.querySelectorAll("[data-calendar-action]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -8662,9 +8687,9 @@ function bindCalendarEvents() {
         event.stopPropagation();
         const task = state.tasks.find((t) => t.path === path && t.line === line);
         if (task) await showTaskEditDialog(task);
-        else await openFileInNewTab(path);
+        else await openCalendarPath(path);
       } else if (path) {
-        await openFileInNewTab(path);
+        await openCalendarPath(path);
       }
     });
   });

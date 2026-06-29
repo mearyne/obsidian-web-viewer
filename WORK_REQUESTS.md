@@ -100,3 +100,4 @@
 - 2026-06-29: Fix mindmap refresh/read-mode rendering, node-edit Enter handling, Markdown conversion preview, selected-node Markdown bullet copy, and per-document theme persistence.
 - 2026-06-29: Fix mindmap embed links opening in a new tab by keeping mindmap preview links in the current tab.
 - 2026-06-29: Fix all links targeting mindmap documents so they open in the current tab even from embedded notes.
+- 2026-06-29: Fix calendar 7d mindmap file clicks so mindmap targets replace the calendar tab instead of opening a new tab.
