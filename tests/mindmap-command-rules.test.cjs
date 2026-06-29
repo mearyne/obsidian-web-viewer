@@ -88,17 +88,27 @@ test("mindmap e shortcut is not blocked by IME composition state", () => {
   assert.doesNotMatch(app.match(/function isPlainMindmapEditKey\(event\)[\s\S]*?\n}/)?.[0] || "", /isComposing/);
 });
 
-test("mindmap e and enter shortcuts start text editing on the selected node", () => {
+test("mindmap e shortcut starts text editing on the selected node", () => {
   const app = require("node:fs").readFileSync("app.js", "utf8");
-  const keydownBody = app.match(/function handleMindmapKeydown\(event\)[\s\S]*?\n}\r?\n\r?\nfunction isPlainMindmapEditKey/)?.[0] || "";
+  const keydownBody = app.match(/function handleMindmapKeydown\(event\)[\s\S]*?\n}\r?\n\r?\nfunction isMindmapCopyShortcut/)?.[0] || "";
   assert.match(app, /async function beginActiveMindmapNodeTextEdit\(\)/);
   assert.match(app, /function isMindmapNodeTextEditShortcut\(event\)/);
   assert.match(keydownBody, /isMindmapNodeTextEditShortcut\(event\)/);
   assert.match(keydownBody, /void beginActiveMindmapNodeTextEdit\(\)/);
   assert.doesNotMatch(keydownBody, /void enterEditMode\(\)/);
-  assert.match(app, /function isPlainMindmapEnterKey\(event\)/);
-  assert.match(app, /!event\.ctrlKey/);
-  assert.match(app, /event\.key === "Enter" \|\| event\.key === "NumpadEnter"/);
+  const editShortcutBody = app.match(/function isMindmapNodeTextEditShortcut\(event\)[\s\S]*?\n}/)?.[0] || "";
+  assert.doesNotMatch(editShortcutBody, /isPlainMindmapEnterKey/);
+});
+
+test("mindmap enter shortcut inserts a same-level sibling node", () => {
+  const app = fs.readFileSync("app.js", "utf8");
+  const keydownBody = app.match(/function handleMindmapKeydown\(event\)[\s\S]*?\n}\r?\n\r?\nfunction isMindmapCopyShortcut/)?.[0] || "";
+  assert.match(app, /function isMindmapSiblingInsertShortcut\(event\)/);
+  assert.match(app, /async function insertMindmapSiblingNodeFromKeyboard\(event\)/);
+  assert.match(keydownBody, /isMindmapSiblingInsertShortcut\(event\)/);
+  assert.match(keydownBody, /void insertMindmapSiblingNodeFromKeyboard\(event\)/);
+  assert.match(app, /execCommand\?\.\("INSERT_NODE"\)/);
+  assert.doesNotMatch(keydownBody, /isPlainMindmapEnterKey\(event\)[\s\S]*beginActiveMindmapNodeTextEdit/);
 });
 
 test("mindmap node text edit shortcut enables editing without rerendering away selection", () => {
@@ -299,4 +309,70 @@ test("mindmap ctrl c keydown writes selected nodes as markdown bullets", () => {
   assert.deepEqual(calls, ["preventDefault", "stopPropagation", "stopImmediatePropagation"]);
   assert.equal(copied, "- Keyboard Parent\n  - Keyboard Child\n");
   assert.doesNotMatch(copied, /simpleMindMap/);
+});
+
+test("mindmap enter keydown inserts a sibling instead of starting text edit", () => {
+  const app = fs.readFileSync("app.js", "utf8");
+  const commands = [];
+  const calls = [];
+  const context = {
+    state: {
+      mindmapInstance: {
+        renderer: {
+          activeNodeList: [{ id: "node-a" }],
+        },
+        execCommand: (command) => commands.push(command),
+        updateConfig: () => {},
+      },
+      mindmapKeyCaptureActive: false,
+      mindmapLastClickedNodeUid: null,
+      editMode: true,
+      currentNode: {},
+    },
+    els: {
+      mindmapShell: {
+        hidden: false,
+        contains: () => true,
+      },
+    },
+    document: {
+      activeElement: { className: "mindmap-canvas smm-mind-map-container" },
+    },
+    navigator: { clipboard: { writeText: async () => {} } },
+    isMindmapTextEditingEvent: () => false,
+    canEditNode: () => true,
+  };
+  vm.createContext(context);
+  vm.runInContext([
+    extractFunction(app, "handleMindmapKeydown"),
+    extractFunction(app, "isMindmapCopyShortcut"),
+    extractFunction(app, "copyMindmapSelectionToClipboard"),
+    extractFunction(app, "hasMindmapNodesForCopy"),
+    extractFunction(app, "selectedMindmapNodesToMarkdownBullets"),
+    extractFunction(app, "isMindmapSiblingInsertShortcut"),
+    extractFunction(app, "insertMindmapSiblingNodeFromKeyboard"),
+    extractFunction(app, "isMindmapNodeTextEditShortcut"),
+    extractFunction(app, "isPlainMindmapEditKey"),
+  ].join("\n"), context);
+
+  context.handleMindmapKeydown({
+    key: "Enter",
+    code: "Enter",
+    ctrlKey: false,
+    metaKey: false,
+    altKey: false,
+    shiftKey: false,
+    isComposing: false,
+    target: {
+      closest: () => null,
+      matches: () => false,
+      isContentEditable: false,
+    },
+    preventDefault: () => calls.push("preventDefault"),
+    stopPropagation: () => calls.push("stopPropagation"),
+    stopImmediatePropagation: () => calls.push("stopImmediatePropagation"),
+  });
+
+  assert.deepEqual(calls, ["preventDefault", "stopPropagation", "stopImmediatePropagation"]);
+  assert.deepEqual(commands, ["INSERT_NODE"]);
 });

@@ -5372,6 +5372,10 @@ function handleMindmapKeydown(event) {
     void copyMindmapSelectionToClipboard(event);
     return;
   }
+  if (isMindmapSiblingInsertShortcut(event)) {
+    void insertMindmapSiblingNodeFromKeyboard(event);
+    return;
+  }
   if (isMindmapNodeTextEditShortcut(event) && canEditNode(state.currentNode)) {
     event.preventDefault();
     event.stopPropagation();
@@ -5394,6 +5398,49 @@ function handleMindmapKeydown(event) {
   event.stopPropagation();
   event.stopImmediatePropagation?.();
   state.mindmapInstance.execCommand?.("INSERT_CHILD_NODE");
+}
+
+function isMindmapSiblingInsertShortcut(event) {
+  return !event.altKey
+    && !event.ctrlKey
+    && !event.metaKey
+    && !event.shiftKey
+    && !event.isComposing
+    && (event.key === "Enter" || event.key === "NumpadEnter");
+}
+
+async function insertMindmapSiblingNodeFromKeyboard(event) {
+  const target = event.target;
+  if (target?.closest?.(".mindmap-toolbar")) return false;
+  if (target?.matches?.("input, textarea, select") || target?.isContentEditable) return false;
+  const targetInMindmap = target?.closest?.(".mindmap-shell");
+  const activeInMindmap = els.mindmapShell.contains(document.activeElement);
+  if (!targetInMindmap && !activeInMindmap && !state.mindmapKeyCaptureActive) return false;
+  const jm = state.mindmapInstance;
+  let node = jm?.renderer?.activeNodeList?.[0] || null;
+  if (!node && state.mindmapLastClickedNodeUid) {
+    node = jm?.renderer?.findNodeByUid?.(state.mindmapLastClickedNodeUid) || null;
+    if (node) {
+      jm.execCommand?.("CLEAR_ACTIVE_NODE");
+      jm.execCommand?.("SET_NODE_ACTIVE", node, true);
+    }
+  }
+  if (!node) return false;
+  if (!state.editMode) {
+    const granted = await ensureNodeWritePermission(state.currentNode);
+    if (!granted) return false;
+    state.editMode = true;
+    state.editorDirty = false;
+    stopAutoSave();
+    jm.updateConfig?.({ readonly: false });
+    updateEditButtons();
+  }
+  if (!canEditNode(state.currentNode)) return false;
+  event.preventDefault();
+  event.stopPropagation();
+  event.stopImmediatePropagation?.();
+  jm.execCommand?.("INSERT_NODE");
+  return true;
 }
 
 function isMindmapCopyShortcut(event) {
@@ -5419,7 +5466,7 @@ async function copyMindmapSelectionToClipboard(event) {
 }
 
 function isMindmapNodeTextEditShortcut(event) {
-  return isPlainMindmapEditKey(event) || isPlainMindmapEnterKey(event);
+  return isPlainMindmapEditKey(event);
 }
 
 function isPlainMindmapEnterKey(event) {
