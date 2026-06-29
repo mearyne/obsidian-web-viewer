@@ -320,6 +320,9 @@ test("mindmap paste turns copied markdown bullets back into child nodes", async 
   vm.runInContext([
     extractFunction(app, "normalizeMindmapMarkdownTopic"),
     extractFunction(app, "stripMindmapMarkdownFrontmatter"),
+    extractFunction(app, "mindmapMarkdownImageUrl"),
+    extractFunction(app, "extractMindmapMarkdownImage"),
+    extractFunction(app, "cleanupMindmapMarkdownNode"),
     extractFunction(app, "makeMindmapMarkdownNode"),
     extractFunction(app, "markdownToMindmapData"),
     extractFunction(app, "normalizeMindmapText"),
@@ -351,6 +354,100 @@ test("mindmap paste turns copied markdown bullets back into child nodes", async 
   assert.equal(context.updatedData.children[0].children[0].children[0].data.text, "Nested");
   assert.deepEqual(commands.at(-1), ["SET_NODE_ACTIVE", "target", true]);
   assert.equal(context.state.editorDirty, true);
+});
+
+test("mindmap pasted image bullets become visible image nodes", async () => {
+  const app = fs.readFileSync("app.js", "utf8");
+  const commands = [];
+  const context = {
+    DEFAULT_MINDMAP_IMAGE_SIZE: { width: 120, height: 80, custom: false },
+    encodeURIComponent,
+    state: {
+      mindmapInstance: {
+        renderer: {
+          activeNodeList: [{ getData: (key) => key === "uid" ? "target" : undefined }],
+        },
+        getData: () => ({
+          data: { uid: "root", text: "Root", expand: true },
+          children: [{ data: { uid: "target", text: "Target", expand: true }, children: [] }],
+        }),
+        updateData: (data) => {
+          context.updatedData = data;
+        },
+        execCommand: (command, node, active) => commands.push([command, node?.getData?.("uid"), active]),
+      },
+      mindmapContext: { sourceData: null },
+      editMode: true,
+      currentNode: {},
+      editorDirty: false,
+    },
+    els: {
+      mindmapShell: {
+        hidden: false,
+        contains: () => true,
+      },
+    },
+    document: {
+      activeElement: { className: "mindmap-canvas smm-mind-map-container" },
+    },
+    canEditNode: () => true,
+    createMindmapNodeId: (() => {
+      let count = 0;
+      return () => `new-${++count}`;
+    })(),
+    prepareMindmapImagesForPreview: (node) => node,
+    clearGeneratedMindmapBranchStyles: () => {},
+    applyMindmapBranchTheme: (node) => node,
+    renderEditSaveButton: () => {},
+  };
+  vm.createContext(context);
+  vm.runInContext([
+    extractFunction(app, "normalizeMindmapMarkdownTopic"),
+    extractFunction(app, "stripMindmapMarkdownFrontmatter"),
+    extractFunction(app, "mindmapMarkdownImageUrl"),
+    extractFunction(app, "extractMindmapMarkdownImage"),
+    extractFunction(app, "cleanupMindmapMarkdownNode"),
+    extractFunction(app, "makeMindmapMarkdownNode"),
+    extractFunction(app, "markdownToMindmapData"),
+    extractFunction(app, "normalizeMindmapText"),
+    extractFunction(app, "legacyMindmapNodeToSimpleMindMapNode"),
+    extractFunction(app, "simpleMindMapNodeToLegacyMindmapNode"),
+    extractFunction(app, "simpleMindMapDataToLegacyMindmapData"),
+    extractFunction(app, "legacyMindmapDataToSimpleMindMapData"),
+    extractFunction(app, "copyMindmapImageData"),
+    extractFunction(app, "cloneMindmapLegacyNodeForPaste"),
+    extractFunction(app, "pasteMarkdownBulletsToActiveMindmapNode"),
+    extractFunction(app, "handleMindmapPaste"),
+  ].join("\n"), context);
+
+  await context.handleMindmapPaste({
+    target: { closest: () => null },
+    clipboardData: {
+      items: [],
+      getData: (type) => type === "text/plain" ? "- ![[Assets/original.png]]\n  Image Text\n" : "",
+    },
+    preventDefault: () => {},
+    stopPropagation: () => {},
+    stopImmediatePropagation: () => {},
+  });
+
+  const pasted = context.updatedData.children[0].children[0].data;
+  assert.equal(pasted.text, "Image Text");
+  assert.equal(pasted.image, "/api/vault-file?path=Assets%2Foriginal.png");
+  assert.equal(pasted.fullImage, "/api/vault-file?path=Assets%2Foriginal.png");
+  assert.equal(pasted.imageSize.width, 120);
+  assert.equal(pasted.imageSize.height, 80);
+});
+
+test("mindmap canvas exposes context menu copy paste and mobile pinch zoom", () => {
+  const app = fs.readFileSync("app.js", "utf8");
+  assert.match(app, /function showMindmapContextMenu\(event\)/);
+  assert.match(app, /data-action="copy"/);
+  assert.match(app, /data-action="paste"/);
+  assert.match(app, /canvas\?\.addEventListener\("contextmenu", showMindmapContextMenu\)/);
+  assert.match(app, /function handleMindmapPinchMove\(event\)/);
+  assert.match(app, /canvas\?\.addEventListener\("touchmove", handleMindmapPinchMove, \{ passive: false \}\)/);
+  assert.match(app, /state\.mindmapInstance\?\.view\?\.setScale/);
 });
 
 test("mindmap image nodes get a default imageSize before rendering", () => {

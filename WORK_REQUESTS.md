@@ -118,3 +118,4 @@
 - 2026-06-30: Set png, jpg, and gif as default calendar and merged-document exclude extensions while preserving saved overrides.
 - 2026-06-30: Prevent simple-mind-map crashes by adding default imageSize data to mindmap image nodes before rendering.
 - 2026-06-30: Include mindmap node images as Markdown image embeds when copying selected nodes as bullets.
+- 2026-06-30: Keep low-priority calendar tasks visually subdued and sorted last, fix pinned calendar task restore, improve mindmap save color, image-node paste/context/pinch behavior, and make task delete confirmation appear above the task popup.

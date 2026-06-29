@@ -19,8 +19,52 @@ function stripMarkdownFrontmatter(markdown) {
   return String(markdown || "").replace(/^\s*---\n[\s\S]*?\n---\s*(?:\n|$)/, "");
 }
 
+function mindmapMarkdownImageUrl(target) {
+  const value = String(target || "").trim();
+  if (!value) return "";
+  if (/^(?:https?:|data:|blob:|\/api\/)/i.test(value)) return value;
+  return `/api/vault-file?path=${encodeURIComponent(value)}`;
+}
+
+function extractMindmapMarkdownImage(value) {
+  const source = String(value || "").trim();
+  const wiki = source.match(/^!\[\[([^\]|]+)(?:\|([^\]]+))?\]\]\s*(.*)$/);
+  if (wiki) {
+    const path = wiki[1].trim();
+    return {
+      path,
+      label: normalizeMindmapTopic(wiki[2] || wiki[3], ""),
+      fallbackLabel: normalizeMindmapTopic(path, ""),
+    };
+  }
+  const markdown = source.match(/^!\[([^\]]*)\]\(([^)]+)\)\s*(.*)$/);
+  if (!markdown) return null;
+  const path = markdown[2].trim();
+  return {
+    path,
+    label: normalizeMindmapTopic(markdown[1] || markdown[3], ""),
+    fallbackLabel: normalizeMindmapTopic(markdown[1] || path, ""),
+  };
+}
+
 function makeMindmapNode(topic) {
-  return { topic: normalizeMindmapTopic(topic), children: [] };
+  const image = extractMindmapMarkdownImage(topic);
+  if (!image) return { topic: normalizeMindmapTopic(topic), children: [] };
+  const url = mindmapMarkdownImageUrl(image.path);
+  return {
+    topic: image.label || image.fallbackLabel || "Image",
+    image: url,
+    fullImage: url,
+    _imageTopicFallback: !image.label,
+    children: [],
+  };
+}
+
+function cleanupMindmapNode(node) {
+  if (!node || typeof node !== "object") return node;
+  delete node._imageTopicFallback;
+  if (Array.isArray(node.children)) node.children.forEach(cleanupMindmapNode);
+  return node;
 }
 
 function mindmapDataToMarkdown(data) {
@@ -86,6 +130,22 @@ function markdownToMindmapData(markdown) {
       continue;
     }
 
+    const continuation = raw.match(/^(\s+)(\S.*?)\s*$/);
+    if (continuation && listStack.length) {
+      const depth = Math.max(0, Math.floor(continuation[1].replace(/\t/g, "  ").length / 2) - 1);
+      const target = listStack[depth] || listStack[listStack.length - 1];
+      const text = normalizeMindmapTopic(continuation[2], "");
+      if (target && text) {
+        if (target._imageTopicFallback) {
+          target.topic = text;
+          delete target._imageTopicFallback;
+        } else {
+          target.topic = [target.topic, text].filter(Boolean).join(" ");
+        }
+      }
+      continue;
+    }
+
     const paragraph = normalizeMindmapTopic(raw, "");
     if (!paragraph || /^[-:|]+$/.test(paragraph)) continue;
     listStack.length = 0;
@@ -95,14 +155,14 @@ function markdownToMindmapData(markdown) {
 
   if (!rootTopic && root.children.length === 1) {
     const only = root.children[0];
-    root.topic = only.topic;
+    Object.assign(root, only);
     root.children = only.children || [];
   }
 
   return {
     meta: { name: root.topic, author: "obsidian-web-viewer", version: "1.0" },
     format: "node_tree",
-    data: root,
+    data: cleanupMindmapNode(root),
   };
 }
 

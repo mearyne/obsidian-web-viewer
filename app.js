@@ -126,8 +126,52 @@ function stripMindmapMarkdownFrontmatter(markdown) {
   return String(markdown || "").replace(/^\s*---\n[\s\S]*?\n---\s*(?:\n|$)/, "");
 }
 
+function mindmapMarkdownImageUrl(target) {
+  const value = String(target || "").trim();
+  if (!value) return "";
+  if (/^(?:https?:|data:|blob:|\/api\/)/i.test(value)) return value;
+  return `/api/vault-file?path=${encodeURIComponent(value)}`;
+}
+
+function extractMindmapMarkdownImage(value) {
+  const source = String(value || "").trim();
+  const wiki = source.match(/^!\[\[([^\]|]+)(?:\|([^\]]+))?\]\]\s*(.*)$/);
+  if (wiki) {
+    const path = wiki[1].trim();
+    return {
+      path,
+      label: normalizeMindmapMarkdownTopic(wiki[2] || wiki[3], ""),
+      fallbackLabel: normalizeMindmapMarkdownTopic(path, ""),
+    };
+  }
+  const markdown = source.match(/^!\[([^\]]*)\]\(([^)]+)\)\s*(.*)$/);
+  if (!markdown) return null;
+  const path = markdown[2].trim();
+  return {
+    path,
+    label: normalizeMindmapMarkdownTopic(markdown[1] || markdown[3], ""),
+    fallbackLabel: normalizeMindmapMarkdownTopic(markdown[1] || path, ""),
+  };
+}
+
 function makeMindmapMarkdownNode(topic) {
-  return { topic: normalizeMindmapMarkdownTopic(topic), children: [] };
+  const image = extractMindmapMarkdownImage(topic);
+  if (!image) return { topic: normalizeMindmapMarkdownTopic(topic), children: [] };
+  const url = mindmapMarkdownImageUrl(image.path);
+  return {
+    topic: image.label || image.fallbackLabel || "Image",
+    image: url,
+    fullImage: url,
+    _imageTopicFallback: !image.label,
+    children: [],
+  };
+}
+
+function cleanupMindmapMarkdownNode(node) {
+  if (!node || typeof node !== "object") return node;
+  delete node._imageTopicFallback;
+  if (Array.isArray(node.children)) node.children.forEach(cleanupMindmapMarkdownNode);
+  return node;
 }
 
 function mindmapDataToMarkdown(data) {
@@ -190,6 +234,22 @@ function markdownToMindmapData(markdown) {
       continue;
     }
 
+    const continuation = raw.match(/^(\s+)(\S.*?)\s*$/);
+    if (continuation && listStack.length) {
+      const depth = Math.max(0, Math.floor(continuation[1].replace(/\t/g, "  ").length / 2) - 1);
+      const target = listStack[depth] || listStack[listStack.length - 1];
+      const text = normalizeMindmapMarkdownTopic(continuation[2], "");
+      if (target && text) {
+        if (target._imageTopicFallback) {
+          target.topic = text;
+          delete target._imageTopicFallback;
+        } else {
+          target.topic = [target.topic, text].filter(Boolean).join(" ");
+        }
+      }
+      continue;
+    }
+
     const paragraph = normalizeMindmapMarkdownTopic(raw, "");
     if (!paragraph || /^[-:|]+$/.test(paragraph)) continue;
     listStack.length = 0;
@@ -198,13 +258,13 @@ function markdownToMindmapData(markdown) {
   }
   if (!rootTopic && root.children.length === 1) {
     const only = root.children[0];
-    root.topic = only.topic;
+    Object.assign(root, only);
     root.children = only.children || [];
   }
   return {
     meta: { name: root.topic, author: "obsidian-web-viewer", version: "1.0" },
     format: "node_tree",
-    data: root,
+    data: cleanupMindmapMarkdownNode(root),
   };
 }
 
@@ -5213,6 +5273,11 @@ function renderMindmapDocument() {
     state.mindmapKeyCaptureActive = true;
     canvas.focus({ preventScroll: true });
   });
+  canvas?.addEventListener("contextmenu", showMindmapContextMenu);
+  canvas?.addEventListener("touchstart", handleMindmapPinchStart, { passive: false });
+  canvas?.addEventListener("touchmove", handleMindmapPinchMove, { passive: false });
+  canvas?.addEventListener("touchend", handleMindmapPinchEnd, { passive: false });
+  canvas?.addEventListener("touchcancel", handleMindmapPinchEnd, { passive: false });
   if (!window.SimpleMindMap || !canvas) {
     els.mindmapShell.innerHTML = "<p>마인드맵 라이브러리를 불러오지 못했습니다.</p>";
     return;
@@ -5771,6 +5836,80 @@ function handleMindmapCopy(event) {
   event.stopImmediatePropagation?.();
   event.clipboardData.clearData?.();
   event.clipboardData.setData("text/plain", markdown);
+}
+
+function showMindmapContextMenu(event) {
+  if (!state.mindmapInstance || els.mindmapShell?.hidden) return;
+  event.preventDefault();
+  event.stopPropagation();
+  document.querySelector(".mindmap-context-menu")?.remove();
+  const canPaste = Boolean(state.editMode && canEditNode(state.currentNode));
+  const menu = document.createElement("div");
+  menu.className = "tab-context-menu mindmap-context-menu";
+  menu.style.left = `${event.clientX}px`;
+  menu.style.top = `${event.clientY}px`;
+  menu.innerHTML = `
+    <button type="button" data-action="copy"${hasMindmapNodesForCopy() ? "" : " disabled"}>복사하기</button>
+    <button type="button" data-action="paste"${canPaste ? "" : " disabled"}>붙여넣기</button>
+  `;
+  menu.addEventListener("click", async (clickEvent) => {
+    const action = clickEvent.target?.closest?.("button")?.dataset.action;
+    if (!action) return;
+    clickEvent.preventDefault();
+    clickEvent.stopPropagation();
+    if (action === "copy") {
+      const markdown = selectedMindmapNodesToMarkdownBullets();
+      if (markdown) await navigator.clipboard?.writeText?.(markdown);
+    } else if (action === "paste") {
+      const text = await navigator.clipboard?.readText?.();
+      if (text) pasteMarkdownBulletsToActiveMindmapNode(text);
+    }
+    menu.remove();
+  });
+  const dismiss = (dismissEvent) => {
+    if (menu.contains(dismissEvent.target)) return;
+    menu.remove();
+    document.removeEventListener("mousedown", dismiss, true);
+    document.removeEventListener("touchstart", dismiss, true);
+  };
+  document.body.appendChild(menu);
+  document.addEventListener("mousedown", dismiss, true);
+  document.addEventListener("touchstart", dismiss, true);
+}
+
+function mindmapTouchDistance(touches) {
+  if (!touches || touches.length < 2) return 0;
+  return Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
+}
+
+function mindmapTouchCenter(touches, canvas) {
+  const rect = canvas?.getBoundingClientRect?.();
+  return {
+    x: ((touches[0].clientX + touches[1].clientX) / 2) - (rect?.left || 0),
+    y: ((touches[0].clientY + touches[1].clientY) / 2) - (rect?.top || 0),
+  };
+}
+
+function handleMindmapPinchStart(event) {
+  if (!state.mindmapInstance || event.touches?.length !== 2) return;
+  state.mindmapPinch = {
+    distance: mindmapTouchDistance(event.touches),
+    scale: state.mindmapInstance?.view?.scale || 1,
+  };
+}
+
+function handleMindmapPinchMove(event) {
+  if (!state.mindmapInstance || event.touches?.length !== 2 || !state.mindmapPinch?.distance) return;
+  event.preventDefault();
+  const distance = mindmapTouchDistance(event.touches);
+  if (!distance) return;
+  const center = mindmapTouchCenter(event.touches, event.currentTarget);
+  const nextScale = Math.max(0.1, Math.min(5, state.mindmapPinch.scale * (distance / state.mindmapPinch.distance)));
+  state.mindmapInstance?.view?.setScale?.(nextScale, center.x, center.y);
+}
+
+function handleMindmapPinchEnd(event) {
+  if ((event.touches?.length || 0) < 2) state.mindmapPinch = null;
 }
 
 function hasMindmapNodesForCopy() {
@@ -10707,8 +10846,12 @@ function bindTaskEditDialog() {
   els.taskEditDeleteBtn?.addEventListener("click", async () => {
     const task = state.taskEditTask;
     if (!task) return;
-    if (!(await appConfirm("태스크를 삭제할까요?", "태스크 삭제"))) return;
-    els.taskEditDialog.close("cancel");
+    const reopenOnCancel = els.taskEditDialog?.open;
+    if (reopenOnCancel) els.taskEditDialog.close("delete-confirm");
+    if (!(await appConfirm("태스크를 삭제할까요?", "태스크 삭제"))) {
+      if (reopenOnCancel) await showTaskEditDialog(task);
+      return;
+    }
     await deleteCalendarTaskLine(task.path, task.line);
   });
 
@@ -11233,6 +11376,17 @@ function appendTaskTemplate(date, startDate = "") {
   markEditorDirty();
 }
 
+function isLowPriorityTask(task) {
+  return String(task?.priority || "") === "하";
+}
+
+function compareCalendarTaskOrder(a, b) {
+  return Number(a.checked) - Number(b.checked)
+    || Number(isLowPriorityTask(a)) - Number(isLowPriorityTask(b))
+    || taskTypeRank(a.type) - taskTypeRank(b.type)
+    || a.text.localeCompare(b.text, "ko");
+}
+
 function groupTasksByDate(tasks) {
   const map = new Map();
   tasks.forEach((task) => {
@@ -11242,7 +11396,7 @@ function groupTasksByDate(tasks) {
     });
   });
   map.forEach((items) => {
-    items.sort((a, b) => Number(a.checked) - Number(b.checked) || taskTypeRank(a.type) - taskTypeRank(b.type) || a.text.localeCompare(b.text, "ko"));
+    items.sort(compareCalendarTaskOrder);
   });
   return map;
 }
@@ -12740,7 +12894,8 @@ async function restoreActiveTab() {
   if (!tab) {
     showInitialCalendarView();
   } else if (tab.view === "calendar") {
-    state.calendarKind = tab.calendarKind || "tasks";
+    state.calendarKind = tab.pinned ? "tasks" : (tab.calendarKind || "tasks");
+    if (tab.pinned) tab.calendarKind = "tasks";
     showInitialCalendarView();
   } else if (tab.view === "merged" && tab.mergedRange) {
     await renderMergedDocuments(tab.mergedRange);
@@ -13009,7 +13164,7 @@ function serializePinnedTab(tab) {
     path: tab.path || "",
     title: tab.title || "",
     view: tab.view || null,
-    calendarKind: tab.view === "calendar" ? (tab.calendarKind || state.calendarKind || "tasks") : null,
+    calendarKind: tab.view === "calendar" ? "tasks" : null,
   };
 }
 
@@ -13108,7 +13263,7 @@ function normalizePinnedTabs(pinned) {
       path: normalizeVaultPath(tab.path || ""),
       title: tab.title || "",
       view: tab.view === "calendar" ? "calendar" : null,
-      calendarKind: ["tasks", "created", "updated", "matrix"].includes(tab.calendarKind) ? tab.calendarKind : null,
+      calendarKind: tab.view === "calendar" ? "tasks" : null,
     }))
     .filter((tab) => {
       const key = pinnedTabKey(tab);

@@ -41,6 +41,22 @@ test("calendar tabs clear document mindmap state when shown", () => {
   assert.match(body, /tab\.renderCache = null/);
 });
 
+test("pinned calendar tabs persist and restore as task calendar", () => {
+  const app = require("node:fs").readFileSync("app.js", "utf8");
+  const restoreBody = app.match(/async function restoreActiveTab\(\)[\s\S]*?\n}\r?\n\r?\nfunction renderTabStrip/)?.[0] || "";
+  const serializeBody = app.match(/function serializePinnedTab\(tab\)[\s\S]*?\n}\r?\n\r?\nasync function updatePinnedTabInVault/)?.[0] || "";
+  const normalizeBody = app.match(/function normalizePinnedTabs\(pinned\)[\s\S]*?\n}\r?\n\r?\nfunction pinnedTabKey/)?.[0] || "";
+  assert.match(restoreBody, /tab\.pinned \? "tasks" : \(tab\.calendarKind \|\| "tasks"\)/);
+  assert.match(serializeBody, /tab\.view === "calendar" \? "tasks" : null/);
+  assert.match(normalizeBody, /tab\.view === "calendar" \? "tasks" : null/);
+});
+
+test("mindmap save button is black in light mode", () => {
+  const styles = require("node:fs").readFileSync("styles.css", "utf8");
+  assert.match(styles, /:root:not\(\[data-theme="dark"\]\) #saveEditButton/);
+  assert.match(styles, /color: #111827/);
+});
+
 test("calendar inline wiki links are bound after calendar render", () => {
   const app = require("node:fs").readFileSync("app.js", "utf8");
   assert.match(app, /bindWikiLinks\(els\.calendarView, \{ calendarLinks: true \}\)/);

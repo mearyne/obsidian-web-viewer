@@ -2347,6 +2347,10 @@ button:disabled {
   white-space: nowrap;
 }
 
+:root:not([data-theme="dark"]) #saveEditButton {
+  color: #111827;
+}
+
 .editor-toolbar button {
   background: var(--surface);
   border-color: var(--line);
@@ -5000,7 +5004,12 @@ button:disabled {
 /* Priority — background tint on task button (via parent wrap) */
 .calendar-task-wrap.pri-상 .calendar-task { background: color-mix(in srgb, #e74c3c 13%, var(--surface-2)); }
 .calendar-task-wrap.pri-중 .calendar-task { background: color-mix(in srgb, #e6a20f 11%, var(--surface-2)); }
-.calendar-task-wrap.pri-하 .calendar-task { background: var(--surface-2); }
+.calendar-task-wrap.pri-하 .calendar-task {
+  background: var(--surface-2);
+  color: color-mix(in srgb, var(--text) 58%, var(--muted));
+  filter: saturate(0.55) brightness(0.96);
+  opacity: 0.58;
+}
 
 /* Kind icons — colored text characters for 일정/할일 */
 .kind-schedule { color: #7b68ee; }
