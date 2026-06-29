@@ -27,3 +27,31 @@ test("imports markdown bullets to mindmap data", () => {
   assert.deepEqual(data.data.children.map((node) => node.topic), ["Child A", "Child B"]);
   assert.equal(data.data.children[0].children[0].topic, "Grandchild");
 });
+
+test("imports document headings, lists, and paragraphs to mindmap data", () => {
+  const data = MindmapMarkdownRules.markdownToMindmapData(`---
+title: Ignored
+---
+
+# Project Plan
+
+Intro paragraph with [[Wiki Link]].
+
+## Goals
+
+- Ship viewer
+  - Keep original document
+- [ ] Test task
+
+## Notes
+
+![[diagram.png]]
+Plain note line.
+`);
+
+  assert.equal(data.data.topic, "Project Plan");
+  assert.deepEqual(data.data.children.map((node) => node.topic), ["Intro paragraph with Wiki Link.", "Goals", "Notes"]);
+  assert.deepEqual(data.data.children[1].children.map((node) => node.topic), ["Ship viewer", "Test task"]);
+  assert.equal(data.data.children[1].children[0].children[0].topic, "Keep original document");
+  assert.deepEqual(data.data.children[2].children.map((node) => node.topic), ["diagram.png", "Plain note line."]);
+});

@@ -65,10 +65,27 @@ const MINDMAP_MARKDOWN_RULES = globalThis.MindmapMarkdownRules || {
 
 function normalizeMindmapMarkdownTopic(value, fallback = "Untitled") {
   const text = String(value || "")
+    .replace(/!\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, target, alias) => alias || target)
+    .replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, target, alias) => alias || target)
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, src) => alt || src)
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/^\s*>\s?/, "")
+    .replace(/^\s*(?:[-*+]|\d+[.)])\s+/, "")
+    .replace(/^\s*\[[ xX]\]\s+/, "")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/[*_~]/g, "")
     .replace(/<[^>]*>/g, "")
     .replace(/\s+/g, " ")
     .trim();
   return text || fallback;
+}
+
+function stripMindmapMarkdownFrontmatter(markdown) {
+  return String(markdown || "").replace(/^\s*---\n[\s\S]*?\n---\s*(?:\n|$)/, "");
+}
+
+function makeMindmapMarkdownNode(topic) {
+  return { topic: normalizeMindmapMarkdownTopic(topic), children: [] };
 }
 
 function mindmapDataToMarkdown(data) {
@@ -85,28 +102,57 @@ function mindmapDataToMarkdown(data) {
 }
 
 function markdownToMindmapData(markdown) {
-  const lines = String(markdown || "").replace(/\r\n/g, "\n").split("\n");
+  const lines = stripMindmapMarkdownFrontmatter(markdown).replace(/\r\n/g, "\n").split("\n");
   let rootTopic = "";
-  const stack = [];
+  const headingStack = [];
+  const listStack = [];
   const root = { topic: "Mindmap", children: [] };
+  let inFence = false;
   for (const raw of lines) {
-    const heading = raw.match(/^\s*#\s+(.+?)\s*$/);
-    if (heading && !rootTopic) {
-      rootTopic = heading[1].trim();
-      root.topic = normalizeMindmapMarkdownTopic(rootTopic, "Mindmap");
+    const fence = raw.match(/^\s*```/);
+    if (fence) {
+      inFence = !inFence;
       continue;
     }
-    const bullet = raw.match(/^(\s*)[-*+]\s+(.+?)\s*$/);
-    if (!bullet) continue;
-    const depth = Math.floor(bullet[1].replace(/\t/g, "  ").length / 2);
-    const node = { topic: normalizeMindmapMarkdownTopic(bullet[2]), children: [] };
-    if (depth === 0 || !stack[depth - 1]) {
-      root.children.push(node);
-    } else {
-      stack[depth - 1].children.push(node);
+    if (inFence) continue;
+
+    const heading = raw.match(/^\s*(#{1,6})\s+(.+?)\s*#*\s*$/);
+    if (heading) {
+      const level = heading[1].length;
+      const topic = heading[2].trim();
+      listStack.length = 0;
+      if (!rootTopic) {
+        rootTopic = topic;
+        root.topic = normalizeMindmapMarkdownTopic(rootTopic, "Mindmap");
+        headingStack.length = 0;
+        headingStack.push({ level, node: root });
+        continue;
+      }
+      const node = makeMindmapMarkdownNode(topic);
+      while (headingStack.length && headingStack[headingStack.length - 1].level >= level) headingStack.pop();
+      const parent = headingStack[headingStack.length - 1]?.node || root;
+      parent.children.push(node);
+      headingStack.push({ level, node });
+      continue;
     }
-    stack[depth] = node;
-    stack.length = depth + 1;
+
+    const bullet = raw.match(/^(\s*)(?:[-*+]|\d+[.)])\s+(.+?)\s*$/);
+    if (bullet) {
+      const depth = Math.floor(bullet[1].replace(/\t/g, "  ").length / 2);
+      const node = makeMindmapMarkdownNode(bullet[2]);
+      const section = headingStack[headingStack.length - 1]?.node || root;
+      const parent = depth === 0 ? section : (listStack[depth - 1] || section);
+      parent.children.push(node);
+      listStack[depth] = node;
+      listStack.length = depth + 1;
+      continue;
+    }
+
+    const paragraph = normalizeMindmapMarkdownTopic(raw, "");
+    if (!paragraph || /^[-:|]+$/.test(paragraph)) continue;
+    listStack.length = 0;
+    const parent = headingStack[headingStack.length - 1]?.node || root;
+    parent.children.push(makeMindmapMarkdownNode(paragraph));
   }
   if (!rootTopic && root.children.length === 1) {
     const only = root.children[0];
@@ -132,6 +178,7 @@ const state = {
   currentNode: null,
   editMode: false,
   markdownEnabled: true,
+  documentMindmapEnabled: false,
   objectUrls: new Map(),
   readFileRequests: new Map(),
   savedVaults: [],
@@ -483,6 +530,7 @@ const els = {
   loadingOverlay: document.querySelector("#loadingOverlay"),
   loadingText: document.querySelector("#loadingText"),
   markdownToggleButton: document.querySelector("#markdownToggleButton"),
+  documentMindmapToggleButton: document.querySelector("#documentMindmapToggleButton"),
   fullscreenButton: document.querySelector("#fullscreenButton"),
   collapseHeadingsButton: document.querySelector("#collapseHeadingsButton"),
   collapseHeadingLevelButton: document.querySelector("#collapseHeadingLevelButton"),
@@ -628,6 +676,7 @@ els.collapseHeadingsButton?.addEventListener("click", collapseAllHeadings);
 els.collapseHeadingLevelButton?.addEventListener("click", collapseCurrentHeadingLevel);
 els.expandHeadingLevelButton?.addEventListener("click", expandNextHeadingLevel);
 els.markdownToggleButton.addEventListener("click", toggleMarkdownMode);
+els.documentMindmapToggleButton?.addEventListener("click", toggleDocumentMindmapMode);
 els.webEditButton.addEventListener("click", handleEditSaveButton);
 els.saveEditButton.addEventListener("click", saveCurrentEdit);
 els.markdownEditor.addEventListener("keydown", handleEditorKeydown);
@@ -4283,6 +4332,7 @@ async function saveServerSettings() {
 function toggleMarkdownMode() {
   state.markdownEnabled = !state.markdownEnabled;
   updateMarkdownToggleButton();
+  updateDocumentMindmapToggleButton();
   if (state.activeView === "note" && state.currentPath) renderCurrentDocument();
 }
 
@@ -4293,6 +4343,34 @@ function updateMarkdownToggleButton() {
   els.markdownToggleButton.setAttribute("aria-pressed", String(originalOn));
   els.markdownToggleButton.setAttribute("aria-label", label);
   els.markdownToggleButton.title = label;
+}
+
+function toggleDocumentMindmapMode() {
+  state.documentMindmapEnabled = !state.documentMindmapEnabled;
+  updateDocumentMindmapToggleButton();
+  if (state.activeView === "note" && state.currentPath) renderCurrentDocument();
+}
+
+function canShowDocumentMindmapView() {
+  return state.activeView === "note"
+    && state.markdownEnabled
+    && isMarkdownDocument(state.currentPath || "")
+    && !isMindmapDocument(state.currentContent)
+    && !state.editMode;
+}
+
+function updateDocumentMindmapToggleButton() {
+  const button = els.documentMindmapToggleButton;
+  if (!button) return;
+  const available = canShowDocumentMindmapView();
+  const active = Boolean(state.documentMindmapEnabled && available);
+  const label = active ? "Mindmap view ON" : "Mindmap view OFF";
+  button.classList.toggle("active", active);
+  button.disabled = !available;
+  button.hidden = state.activeView !== "note";
+  button.setAttribute("aria-pressed", String(active));
+  button.setAttribute("aria-label", label);
+  button.title = label;
 }
 
 function renderCurrentDocument(showOpenStep = null, diagnostics = null) {
@@ -4339,6 +4417,11 @@ function renderCurrentDocument(showOpenStep = null, diagnostics = null) {
       renderCodeDocument(state.currentContent, state.currentPath || "");
       return;
     }
+    if (state.documentMindmapEnabled) {
+      markRenderStep("Markdown mindmap view");
+      renderDocumentMindmapPreview();
+      return;
+    }
     markRenderStep("Markdown 변환 중");
     state.mindmapEmbedData = new Map();
     els.markdownView.innerHTML = renderMarkdown(state.currentContent, { path: state.currentPath || "" });
@@ -4363,6 +4446,24 @@ function renderCurrentDocument(showOpenStep = null, diagnostics = null) {
 
   markRenderStep("원문 표시 중");
   renderPlainTextDocument(state.currentContent);
+}
+
+function renderDocumentMindmapPreview() {
+  if (!els.mindmapShell) return;
+  const data = MINDMAP_MARKDOWN_RULES.markdownToMindmapData(state.currentContent);
+  els.markdownView.hidden = true;
+  els.mindmapShell.hidden = false;
+  els.mindmapShell.innerHTML = `
+    <section class="mindmap-view mindmap-document-preview">
+      <div id="mindmapCanvas" class="mindmap-canvas" tabindex="0"></div>
+    </section>
+  `;
+  const canvas = els.mindmapShell.querySelector("#mindmapCanvas");
+  if (!window.SimpleMindMap || !canvas) {
+    els.mindmapShell.innerHTML = "<p>Mindmap library is unavailable.</p>";
+    return;
+  }
+  renderSimpleMindMapDocument(data, canvas);
 }
 
 function clearMindmapShell() {
@@ -6356,6 +6457,7 @@ function updateEditButtons() {
   if (els.matrixButton) els.matrixButton.hidden = false;
   els.markdownToggleButton.disabled = state.editMode;
   els.markdownToggleButton.hidden = state.activeView !== "note";
+  updateDocumentMindmapToggleButton();
   if (els.saveEditButton) {
     els.saveEditButton.hidden = true;
     els.saveEditButton.disabled = true;
@@ -6416,8 +6518,10 @@ function arrangeChromeControls() {
     saveStatusEl.className = "bottom-save-status";
     saveStatusEl.hidden = true;
     if (els.markdownToggleButton) els.markdownToggleButton.classList.add("status-markdown-toggle");
+    if (els.documentMindmapToggleButton) els.documentMindmapToggleButton.classList.add("status-markdown-toggle");
     statusBar.append(historyWrap);
     if (els.markdownToggleButton) statusBar.append(els.markdownToggleButton);
+    if (els.documentMindmapToggleButton) statusBar.append(els.documentMindmapToggleButton);
     const isMobile = window.matchMedia("(max-width: 780px)").matches;
     if (isMobile) {
       const mobileRight = document.createElement("div");
@@ -6450,6 +6554,11 @@ function arrangeChromeControls() {
     els.markdownToggleButton.classList.add("status-markdown-toggle");
     const markdownRef = els.notePath?.parentElement === statusBar ? els.notePath : (els.syncStatus?.parentElement === statusBar ? els.syncStatus : null);
     if (els.markdownToggleButton.parentElement !== statusBar) statusBar.insertBefore(els.markdownToggleButton, markdownRef);
+  }
+  if (els.documentMindmapToggleButton) {
+    els.documentMindmapToggleButton.classList.add("status-markdown-toggle");
+    const mindmapRef = els.notePath?.parentElement === statusBar ? els.notePath : (els.syncStatus?.parentElement === statusBar ? els.syncStatus : null);
+    if (els.documentMindmapToggleButton.parentElement !== statusBar) statusBar.insertBefore(els.documentMindmapToggleButton, mindmapRef);
   }
   if (els.notePath && els.notePath.parentElement !== statusBar) statusBar.insertBefore(els.notePath, els.syncStatus);
   if (!document.getElementById("bottomSaveStatus")) {
