@@ -299,6 +299,7 @@ const state = {
   mindmapContext: null,
   mindmapEmbedData: new Map(),
   mindmapOptions: { layout: "mindMap", lightTheme: "light", darkTheme: "dark", baseStyle: "boxed", autoFit: true, advancedTools: true },
+  mindmapDocumentThemes: new Map(),
   hideFrontmatter: false,
   mindmapKeyCaptureActive: false,
   mindmapToolbarDrag: null,
@@ -781,6 +782,7 @@ els.optionsBackdrop.addEventListener("click", closeOptionsMenu);
 els.imageLightbox.addEventListener("click", closeImageLightbox);
 els.imageLightboxClose.addEventListener("click", closeImageLightbox);
 document.addEventListener("paste", handleMindmapPaste, true);
+document.addEventListener("copy", handleMindmapCopy);
 document.addEventListener("keydown", handleMindmapKeydown, true);
 document.addEventListener("keydown", guardMindmapTextEditingKeydown);
 document.addEventListener("pointerdown", (event) => {
@@ -2914,6 +2916,7 @@ async function openFile(path, { preserveTabView = false } = {}) {
     markOpenStep("탭과 기록 갱신 중");
     state.documentMindmapEnabled = Boolean(preserveTabView && curTab?.path === path && curTab.documentMindmapEnabled);
     state.mindmapMarkdownPreviewEnabled = Boolean(preserveTabView && curTab?.path === path && curTab.mindmapMarkdownPreviewEnabled);
+    if (isMindmapDocument(content) && !state.mindmapMarkdownPreviewEnabled) clearConversionPreviewFlags(curTab);
     state.currentPath = path;
     state.currentContent = content;
     state.currentNode = node;
@@ -3527,6 +3530,21 @@ function getMindmapRuntimeLayoutForDocument(path, { fallbackLayout = state.mindm
   return getMindmapLayoutForDocument(path, { fallbackLayout, frontmatter: null });
 }
 
+function getMindmapThemeForDocument(path, { fallbackTheme = selectedMindmapGlobalThemeName(), frontmatter = null } = {}) {
+  if (!path) return normalizeMindmapThemeValue(fallbackTheme, selectedMindmapGlobalThemeName());
+  if (state.mindmapDocumentThemes.has(path)) {
+    const cached = state.mindmapDocumentThemes.get(path);
+    return normalizeMindmapThemeValue(cached, fallbackTheme);
+  }
+
+  const rawTheme = extractFrontmatterField(frontmatter, "mindmapTheme");
+  return normalizeMindmapThemeValue(rawTheme, fallbackTheme);
+}
+
+function getMindmapRuntimeThemeForDocument(path, { fallbackTheme = selectedMindmapGlobalThemeName() } = {}) {
+  return getMindmapThemeForDocument(path, { fallbackTheme, frontmatter: null });
+}
+
 function syncMindmapDocumentLayout(path, { frontmatter = null } = {}) {
   if (!path) return;
   const layout = normalizeMindmapLayoutValue(
@@ -3538,6 +3556,24 @@ function syncMindmapDocumentLayout(path, { frontmatter = null } = {}) {
     return;
   }
   state.mindmapDocumentLayouts.set(path, layout);
+}
+
+function syncMindmapDocumentTheme(path, { frontmatter = null } = {}) {
+  if (!path) return;
+  const theme = normalizeMindmapThemeValue(
+    extractFrontmatterField(frontmatter, "mindmapTheme"),
+    "",
+  );
+  if (!theme) {
+    state.mindmapDocumentThemes.delete(path);
+    return;
+  }
+  state.mindmapDocumentThemes.set(path, theme);
+}
+
+function setMindmapDocumentTheme(path, theme) {
+  if (!path) return;
+  state.mindmapDocumentThemes.set(path, normalizeMindmapThemeValue(theme, selectedMindmapThemeName()));
 }
 
 function applyMindmapOptions(options = {}, { applyVisible = true } = {}) {
@@ -4450,17 +4486,14 @@ function canShowMindmapMarkdownPreview() {
     && !state.editMode;
 }
 
-function convertCurrentMindmapToMarkdown() {
+async function convertCurrentMindmapToMarkdown() {
   if (!canShowMindmapMarkdownPreview()) return;
-  const tab = activeTab();
-  if (tab?.path === state.currentPath) {
-    tab.documentMindmapEnabled = false;
-    tab.mindmapMarkdownPreviewEnabled = true;
-  }
+  const path = state.currentPath;
+  await createTab(path, { mindmapMarkdownPreviewEnabled: true });
   state.mindmapMarkdownPreviewEnabled = true;
   state.documentMindmapEnabled = false;
   updateDocumentMindmapToggleButton();
-  renderCurrentDocument();
+  await renderActiveTabFile();
   saveOpenTabs();
 }
 
@@ -4492,7 +4525,9 @@ function renderCurrentDocument(showOpenStep = null, diagnostics = null) {
   els.markdownView.hidden = false;
 
   if (isMindmapDocument(state.currentContent)) {
-    syncMindmapDocumentLayout(state.currentPath, { frontmatter: extractFrontmatter(state.currentContent).frontmatter });
+    const parsed = extractFrontmatter(state.currentContent);
+    syncMindmapDocumentLayout(state.currentPath, { frontmatter: parsed.frontmatter });
+    syncMindmapDocumentTheme(state.currentPath, { frontmatter: parsed.frontmatter });
     if (state.mindmapMarkdownPreviewEnabled) {
       markRenderStep("Mindmap markdown view");
       renderMindmapMarkdownPreview();
@@ -4655,22 +4690,24 @@ function buildMindmapDocumentContent(data, previousContent = "", path = state.cu
   const parsed = extractFrontmatter(source);
   const title = data?.data?.topic || data?.meta?.name || "마인드맵";
   const layout = getMindmapLayoutForDocument(path, { fallbackLayout: state.mindmapOptions.layout, frontmatter: parsed.frontmatter });
-  if (!source) return `${buildMindmapFrontmatter("", layout)}# ${title}\n\n${block}\n`;
+  const theme = getMindmapThemeForDocument(path, { fallbackTheme: selectedMindmapGlobalThemeName(), frontmatter: parsed.frontmatter });
+  if (!source) return `${buildMindmapFrontmatter("", layout, theme)}# ${title}\n\n${block}\n`;
 
   const body = parsed.body || "";
   const nextBody = MINDMAP_DATA_BLOCK_PATTERN.test(body)
     ? body.replace(MINDMAP_DATA_BLOCK_PATTERN, block)
     : `${body.replace(/\s*$/u, "") || `# ${title}`}\n\n${block}\n`;
-  return `${buildMindmapFrontmatter(parsed.frontmatter, layout)}${nextBody.endsWith("\n") ? nextBody : `${nextBody}\n`}`;
+  return `${buildMindmapFrontmatter(parsed.frontmatter, layout, theme)}${nextBody.endsWith("\n") ? nextBody : `${nextBody}\n`}`;
 }
 
-function buildMindmapFrontmatter(frontmatter, layout = state.mindmapOptions.layout) {
+function buildMindmapFrontmatter(frontmatter, layout = state.mindmapOptions.layout, theme = selectedMindmapGlobalThemeName()) {
   const lines = String(frontmatter || "")
     .split("\n")
     .map((line) => line.trimEnd())
-    .filter((line) => !/^\s*(?:type|documentType|document-type|mindmapLayout)\s*:/i.test(line));
+    .filter((line) => !/^\s*(?:type|documentType|document-type|mindmapLayout|mindmapTheme)\s*:/i.test(line));
   lines.push(`type: ${MINDMAP_DOCUMENT_TYPE}`);
   lines.push(`mindmapLayout: ${normalizeMindmapLayoutValue(layout, state.mindmapOptions.layout)}`);
+  lines.push(`mindmapTheme: ${normalizeMindmapThemeValue(theme, selectedMindmapGlobalThemeName())}`);
   return `---\n${lines.filter(Boolean).join("\n")}\n---\n\n`;
 }
 
@@ -4684,6 +4721,10 @@ function getMindmapLineColor() {
 }
 
 function selectedMindmapThemeName() {
+  return getMindmapRuntimeThemeForDocument(state.currentPath, { fallbackTheme: selectedMindmapGlobalThemeName() });
+}
+
+function selectedMindmapGlobalThemeName() {
   return document.documentElement.dataset.theme === "dark"
     ? (state.mindmapOptions?.darkTheme || "dark")
     : (state.mindmapOptions?.lightTheme || "light");
@@ -5144,12 +5185,15 @@ function bindMindmapToolbarControls() {
   if (themeSelect) {
     themeSelect.value = selectedMindmapThemeName();
     themeSelect.addEventListener("change", () => {
-      const field = document.documentElement.dataset.theme === "dark" ? "darkTheme" : "lightTheme";
-      applyMindmapOptions({
-        ...state.mindmapOptions,
-        [field]: normalizeMindmapThemeValue(themeSelect.value, selectedMindmapThemeName()),
-      });
-      scheduleSettingsSave();
+      setMindmapDocumentTheme(state.currentPath, themeSelect.value);
+      if (state.mindmapInstance) {
+        state.mindmapInstance.setThemeConfig?.(getMindmapThemeConfig());
+        refreshVisibleMindmapThemeData();
+      }
+      if (canEdit) {
+        state.editorDirty = true;
+        renderEditSaveButton();
+      }
     });
   }
   els.mindmapShell?.querySelector("[data-mindmap-options]")?.addEventListener("change", handleMindmapOptionInput);
@@ -5406,7 +5450,8 @@ function isMindmapTextEditingEvent(event) {
 
 function shouldEnableMindmapShortcut(event) {
   if (!isMindmapTextEditingEvent(event)) return true;
-  return event?.key === "Enter" || event?.key === "NumpadEnter" || event?.key === "Escape";
+  if (event?.key === "Escape") return true;
+  return false;
 }
 
 function isMindmapTextEditingTarget(target) {
@@ -5431,6 +5476,33 @@ async function handleMindmapPaste(event) {
   event.stopImmediatePropagation?.();
   state.mindmapDirectImagePasteAt = Date.now();
   await pasteImageToActiveMindmapNodes(blob);
+}
+
+function handleMindmapCopy(event) {
+  if (!state.mindmapInstance || els.mindmapShell?.hidden) return;
+  if (isMindmapTextEditingEvent(event)) return;
+  const targetInMindmap = event.target?.closest?.(".mindmap-shell");
+  const activeInMindmap = els.mindmapShell.contains(document.activeElement);
+  if (!targetInMindmap && !activeInMindmap && !state.mindmapKeyCaptureActive) return;
+  const markdown = selectedMindmapNodesToMarkdownBullets();
+  if (!markdown) return;
+  event.preventDefault();
+  event.clipboardData.setData("text/plain", markdown);
+}
+
+function selectedMindmapNodesToMarkdownBullets() {
+  const nodes = state.mindmapInstance?.renderer?.activeNodeList || [];
+  if (!nodes.length) return "";
+  const lines = [];
+  const visit = (node, depth) => {
+    const raw = node?.nodeData?.data || node?.data || node;
+    const topic = normalizeMindmapMarkdownTopic(raw?.topic || raw?.text || node?.text || node?.topic, "");
+    if (topic) lines.push(`${"  ".repeat(depth)}- ${topic}`);
+    const children = raw?.children || node?.children || [];
+    children.forEach((child) => visit(child, depth + 1));
+  };
+  nodes.forEach((node) => visit(node, 0));
+  return lines.length ? `${lines.join("\n")}\n` : "";
 }
 
 async function pasteImageToActiveMindmapNodes(blob) {
@@ -12009,6 +12081,17 @@ function activeTab() {
   return state.tabs.find((t) => t.id === state.activeTabId) ?? state.tabs[0];
 }
 
+function clearConversionPreviewFlags(tab) {
+  if (!tab) return;
+  tab.documentMindmapEnabled = false;
+  tab.mindmapMarkdownPreviewEnabled = false;
+}
+
+async function renderActiveTabFile() {
+  const tab = activeTab();
+  if (tab?.path && state.files.has(tab.path)) await openFile(tab.path, { preserveTabView: true });
+}
+
 function initTabs() {
   const hasOpenTabs = loadOpenTabs();
   _tabsRestoredFromStorage = hasOpenTabs;
@@ -12026,12 +12109,20 @@ function initTabs() {
   void loadRecentlyOpenedFromVault();
 }
 
-async function createTab(path = null) {
+async function createTab(path = null, options = {}) {
   const id = generateTabId();
+  const tabOptions = options || {};
   state.tabs.push({ id, path: null, title: "새 탭", pinned: false, scrollTop: 0 });
   keepEmptyTabsAtEnd();
+  const newTab = state.tabs.find((tab) => tab.id === id);
+  if (newTab && path) {
+    newTab.path = path;
+    newTab.title = displayDocumentTitle(path.split("/").pop());
+    newTab.documentMindmapEnabled = Boolean(tabOptions.documentMindmapEnabled);
+    newTab.mindmapMarkdownPreviewEnabled = Boolean(tabOptions.mindmapMarkdownPreviewEnabled);
+  }
   await switchTab(id);
-  if (path) await openFile(path);
+  if (path) await openFile(path, { preserveTabView: true });
   else showEmptyTab();
 }
 

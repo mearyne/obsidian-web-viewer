@@ -6,8 +6,8 @@ const app = fs.readFileSync("app.js", "utf8");
 const html = fs.readFileSync("index.html", "utf8");
 
 function functionSlice(name, nextName) {
-  const start = app.indexOf(`function ${name}()`);
-  const end = nextName ? app.indexOf(`function ${nextName}()`, start) : -1;
+  const start = Math.max(app.indexOf(`function ${name}()`), app.indexOf(`async function ${name}()`));
+  const end = nextName ? Math.max(app.indexOf(`function ${nextName}()`, start), app.indexOf(`async function ${nextName}()`, start)) : -1;
   assert.notEqual(start, -1, `${name} function exists`);
   return app.slice(start, end === -1 ? undefined : end);
 }
@@ -38,12 +38,24 @@ test("command palette can convert the current mindmap to markdown without replac
   const body = functionSlice("convertCurrentMindmapToMarkdown", "updateDocumentMindmapToggleButton");
   const renderBody = functionSlice("renderMindmapMarkdownPreview", "clearMindmapShell");
   assert.match(app, /data-command="convert-current-mindmap-to-md"/);
-  assert.match(app, /function convertCurrentMindmapToMarkdown\(\)/);
+  assert.match(app, /async function convertCurrentMindmapToMarkdown\(\)/);
   assert.match(app, /MINDMAP_MARKDOWN_RULES\.mindmapDataToMarkdown/);
   assert.match(app, /renderMarkdown\(markdown/);
   assert.match(renderBody, /displayDocumentTitle\(state\.currentNode\?\.name \|\| state\.currentPath \|\| "Mindmap"\)/);
-  assert.doesNotMatch(body, /createTab/);
+  assert.match(body, /createTab\(path, \{ mindmapMarkdownPreviewEnabled: true \}\)/);
   assert.doesNotMatch(app, /writeNodeContent\(state\.currentNode,\s*markdown/);
+});
+
+test("mindmap markdown conversion is tab scoped and re-renders immediately", () => {
+  const body = functionSlice("convertCurrentMindmapToMarkdown", "updateDocumentMindmapToggleButton");
+  assert.match(body, /createTab\(path, \{ mindmapMarkdownPreviewEnabled: true \}\)/);
+  assert.match(body, /await renderActiveTabFile\(\)/);
+});
+
+test("refresh restores mindmap files in mindmap view unless tab requested markdown preview", () => {
+  assert.match(app, /function clearConversionPreviewFlags\(tab\)/);
+  assert.match(app, /if \(isMindmapDocument\(content\) && !state\.mindmapMarkdownPreviewEnabled\)/);
+  assert.match(app, /clearConversionPreviewFlags\(curTab\)/);
 });
 
 test("opening a document restores conversion preview flags from the active tab", () => {

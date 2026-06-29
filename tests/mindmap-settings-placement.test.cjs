@@ -26,6 +26,14 @@ test("mindmap base style is configurable and persisted", () => {
   assert.match(app, /applyMindmapBaseStyleToThemeConfig/);
 });
 
+test("inline mindmap theme changes are stored on the current mindmap document", () => {
+  assert.match(app, /mindmapDocumentThemes: new Map\(\)/);
+  assert.match(app, /syncMindmapDocumentTheme/);
+  assert.match(app, /setMindmapDocumentTheme/);
+  assert.match(app, /function buildMindmapFrontmatter\(frontmatter, layout = [^,]+, theme = /);
+  assert.doesNotMatch(app, /\[field\]: normalizeMindmapThemeValue\(themeSelect\.value, selectedMindmapThemeName\(\)\)/);
+});
+
 test("mindmap toolbar remains visible in light mode", () => {
   assert.match(app, /const toolbarModeClass = canEdit \? "mindmap-toolbar-panel--edit" : "mindmap-toolbar-panel--readonly"/);
   assert.match(app, /<details class="mindmap-toolbar-panel \$\{toolbarModeClass\}"/);

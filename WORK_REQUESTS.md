@@ -97,3 +97,4 @@
 - 2026-06-29: Restore mindmap-to-Markdown and Markdown-to-mindmap view conversion commands after hard reset.
 - 2026-06-29: Fix mindmap documents not reopening as mindmaps after Markdown conversion preview state remains on the active tab.
 - 2026-06-29: Fix mindmap slash and Ctrl+A text editing, e-key edit entry, light toolbar visibility, read/edit node styling, and add base style settings.
+- 2026-06-29: Fix mindmap refresh/read-mode rendering, node-edit Enter handling, Markdown conversion preview, selected-node Markdown bullet copy, and per-document theme persistence.
