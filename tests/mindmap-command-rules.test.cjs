@@ -85,9 +85,19 @@ test("mindmap text editor keeps ctrl a inside node editing", () => {
 test("mindmap text editor keeps enter inside node editing", () => {
   const app = require("node:fs").readFileSync("app.js", "utf8");
   const shortcutBody = app.match(/function shouldEnableMindmapShortcut\(event\)[\s\S]*?\n}/)?.[0] || "";
+  const guardBody = app.match(/function guardMindmapTextEditingKeydown\(event\)[\s\S]*?\n}/)?.[0] || "";
   assert.match(shortcutBody, /return false;/);
+  assert.match(guardBody, /isMindmapTextEditingCommitKey\(event\)/);
   assert.doesNotMatch(shortcutBody, /event\?\.key === "Enter"/);
   assert.doesNotMatch(shortcutBody, /event\?\.key === "NumpadEnter"/);
+});
+
+test("mindmap text editor lets escape reach the node edit handler", () => {
+  const app = require("node:fs").readFileSync("app.js", "utf8");
+  const shortcutBody = app.match(/function shouldEnableMindmapShortcut\(event\)[\s\S]*?\n}/)?.[0] || "";
+  assert.match(app, /function isMindmapTextEditingCommitKey\(event\)/);
+  assert.match(app, /event\?\.key === "Escape"/);
+  assert.doesNotMatch(shortcutBody, /event\?\.key === "Escape"/);
 });
 
 test("selected mindmap nodes can be copied as markdown bullets", () => {

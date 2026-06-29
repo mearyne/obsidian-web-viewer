@@ -5440,6 +5440,7 @@ function startActiveMindmapNodeTextEdit() {
 function guardMindmapTextEditingKeydown(event) {
   if (!isMindmapTextEditingEvent(event)) return;
   if (isMindmapSaveShortcut(event)) return;
+  if (isMindmapTextEditingCommitKey(event)) return;
   event.stopPropagation();
   event.stopImmediatePropagation?.();
 }
@@ -5448,9 +5449,12 @@ function isMindmapTextEditingEvent(event) {
   return isMindmapTextEditingTarget(event?.target) || isMindmapTextEditingTarget(document.activeElement);
 }
 
+function isMindmapTextEditingCommitKey(event) {
+  return event?.key === "Enter" || event?.key === "NumpadEnter" || event?.key === "Escape";
+}
+
 function shouldEnableMindmapShortcut(event) {
   if (!isMindmapTextEditingEvent(event)) return true;
-  if (event?.key === "Escape") return true;
   return false;
 }
 
