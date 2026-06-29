@@ -784,7 +784,7 @@ els.optionsBackdrop.addEventListener("click", closeOptionsMenu);
 els.imageLightbox.addEventListener("click", closeImageLightbox);
 els.imageLightboxClose.addEventListener("click", closeImageLightbox);
 document.addEventListener("paste", handleMindmapPaste, true);
-document.addEventListener("copy", handleMindmapCopy);
+document.addEventListener("copy", handleMindmapCopy, true);
 document.addEventListener("keydown", handleMindmapKeydown, true);
 document.addEventListener("keydown", handleMindmapRichTextCommitKeydown, true);
 document.addEventListener("keydown", guardMindmapTextEditingKeydown);
@@ -5545,11 +5545,18 @@ function handleMindmapCopy(event) {
   const markdown = selectedMindmapNodesToMarkdownBullets();
   if (!markdown) return;
   event.preventDefault();
+  event.stopPropagation();
+  event.stopImmediatePropagation?.();
+  event.clipboardData.clearData?.();
   event.clipboardData.setData("text/plain", markdown);
 }
 
 function selectedMindmapNodesToMarkdownBullets() {
-  const nodes = state.mindmapInstance?.renderer?.activeNodeList || [];
+  let nodes = state.mindmapInstance?.renderer?.activeNodeList || [];
+  if (!nodes.length && state.mindmapLastClickedNodeUid) {
+    const node = state.mindmapInstance?.renderer?.findNodeByUid?.(state.mindmapLastClickedNodeUid);
+    if (node) nodes = [node];
+  }
   if (!nodes.length) return "";
   const lines = [];
   const visit = (node, depth) => {
@@ -7438,9 +7445,13 @@ function showCalendarView() {
   updateCalendarTitle();
   const tab = activeTab();
   if (tab) {
+    tab.path = null;
     tab.view = "calendar";
     tab.calendarKind = state.calendarKind;
+    tab.mergedRange = null;
     tab.title = "캘린더";
+    clearConversionPreviewFlags(tab);
+    tab.renderCache = null;
     removeDuplicateCalendarTabs(tab.id);
     if (tab.pinned) {
       savePinnedTabsLocal();
@@ -8652,6 +8663,11 @@ function renderCalendarFile(file, field, showDelete = false) {
 async function openCalendarPath(path) {
   const normalizedPath = normalizeVaultPath(path || "");
   if (!normalizedPath) return;
+  const tab = activeTab();
+  if (tab?.pinned && tab.view === "calendar") {
+    await openFileInNewTab(normalizedPath);
+    return;
+  }
   const mode = LINK_OPEN_RULES.resolveWikiLinkOpenMode({
     forceNewTab: true,
     calendarLink: true,
@@ -8661,7 +8677,6 @@ async function openCalendarPath(path) {
     await openFileInNewTab(normalizedPath);
     return;
   }
-  const tab = activeTab();
   if (tab) {
     tab.view = null;
     tab.calendarKind = null;

@@ -25,6 +25,22 @@ test("calendar links to mindmap documents open in the current tab", () => {
   assert.match(app, /await openCalendarPath\(path\)/);
 });
 
+test("calendar links do not replace pinned calendar tabs", () => {
+  const app = require("node:fs").readFileSync("app.js", "utf8");
+  const body = app.match(/async function openCalendarPath\(path\)[\s\S]*?\n}\r?\n\r?\n/)?.[0] || "";
+  assert.match(body, /const tab = activeTab\(\)/);
+  assert.match(body, /tab\?\.pinned && tab\.view === "calendar"/);
+  assert.match(body, /await openFileInNewTab\(normalizedPath\)/);
+});
+
+test("calendar tabs clear document mindmap state when shown", () => {
+  const app = require("node:fs").readFileSync("app.js", "utf8");
+  const body = app.match(/function showCalendarView\(\)[\s\S]*?\n}\r?\n\r?\nfunction removeDuplicateCalendarTabs/)?.[0] || "";
+  assert.match(body, /tab\.path = null/);
+  assert.match(body, /clearConversionPreviewFlags\(tab\)/);
+  assert.match(body, /tab\.renderCache = null/);
+});
+
 test("calendar inline wiki links are bound after calendar render", () => {
   const app = require("node:fs").readFileSync("app.js", "utf8");
   assert.match(app, /bindWikiLinks\(els\.calendarView, \{ calendarLinks: true \}\)/);

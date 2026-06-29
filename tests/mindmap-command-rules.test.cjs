@@ -143,8 +143,14 @@ test("rich text mindmap editor commits enter and escape before Quill consumes th
 
 test("selected mindmap nodes can be copied as markdown bullets", () => {
   const app = require("node:fs").readFileSync("app.js", "utf8");
-  assert.match(app, /document\.addEventListener\("copy", handleMindmapCopy\)/);
+  const body = app.match(/function handleMindmapCopy\(event\)[\s\S]*?\n}\r?\n\r?\nfunction selectedMindmapNodesToMarkdownBullets/)?.[0] || "";
+  const serializeBody = app.match(/function selectedMindmapNodesToMarkdownBullets\(\)[\s\S]*?\n}\r?\n\r?\nasync function pasteImageToActiveMindmapNodes/)?.[0] || "";
+  assert.match(app, /document\.addEventListener\("copy", handleMindmapCopy, true\)/);
   assert.match(app, /function handleMindmapCopy\(event\)/);
   assert.match(app, /function selectedMindmapNodesToMarkdownBullets\(\)/);
-  assert.match(app, /event\.clipboardData\.setData\("text\/plain", markdown\)/);
+  assert.match(body, /event\.stopPropagation\(\)/);
+  assert.match(body, /event\.stopImmediatePropagation\?\.\(\)/);
+  assert.match(body, /event\.clipboardData\.setData\("text\/plain", markdown\)/);
+  assert.match(serializeBody, /state\.mindmapLastClickedNodeUid/);
+  assert.match(serializeBody, /findNodeByUid\?\.\(state\.mindmapLastClickedNodeUid\)/);
 });
