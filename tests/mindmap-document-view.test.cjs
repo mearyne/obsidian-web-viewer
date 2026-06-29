@@ -69,6 +69,15 @@ test("opening a document restores conversion preview flags from the active tab",
   assert.match(app, /mindmapMarkdownPreviewEnabled: Boolean\(t\?\.mindmapMarkdownPreviewEnabled\)/);
 });
 
+test("opening a document keeps one active tab binding to avoid temporal dead zone crashes", () => {
+  const start = app.indexOf("async function openFile(");
+  const end = app.indexOf("function showDocumentOpenStep(", start);
+  assert.notEqual(start, -1, "openFile function exists");
+  assert.notEqual(end, -1, "showDocumentOpenStep follows openFile");
+  const body = app.slice(start, end);
+  assert.equal((body.match(/const curTab = activeTab\(\);/g) || []).length, 1);
+});
+
 test("opening an existing document from a link clears conversion preview flags", () => {
   assert.match(app, /async function switchTab\(id, \{ preserveTabView = true \} = \{\}\)/);
   assert.match(app, /await openFile\(tab\.path, \{ preserveTabView \}\)/);

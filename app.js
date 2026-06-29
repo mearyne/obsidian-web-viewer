@@ -2927,7 +2927,6 @@ async function openFile(path, { preserveTabView = false } = {}) {
     els.notePath.title = path;
     if (els.mobileDocTitle) els.mobileDocTitle.textContent = displayDocumentTitle(node.name);
     if (els.noteTitle) els.noteTitle.textContent = displayDocumentTitle(node.name);
-    const curTab = activeTab();
     const pinnedTabChanged = curTab?.pinned && (curTab.path !== path || curTab.title !== displayDocumentTitle(node.name));
     if (curTab && curTab.path === null && !curTab.view) {
       const tabIdx = state.tabs.indexOf(curTab);

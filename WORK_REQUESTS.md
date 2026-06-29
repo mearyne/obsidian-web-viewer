@@ -102,3 +102,4 @@
 - 2026-06-29: Fix all links targeting mindmap documents so they open in the current tab even from embedded notes.
 - 2026-06-29: Fix calendar 7d mindmap file clicks so mindmap targets replace the calendar tab instead of opening a new tab.
 - 2026-06-29: Bind inline wiki links inside calendar views so mindmap links open from 7d calendar content instead of doing nothing.
+- 2026-06-29: Fix openFile active tab redeclaration crash when opening a mindmap link from the calendar.
