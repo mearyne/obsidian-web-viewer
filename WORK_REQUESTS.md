@@ -94,3 +94,4 @@
 - 2026-06-29: Move mindmap settings from the options menu to the mindmap edit bar Tools drawer and save them as shared device settings instead of localStorage.
 - 2026-06-29: Add a document mindmap view for existing Markdown notes using the app-specific Markdown-to-mindmap conversion path.
 - 2026-06-29: Fix Ctrl+S while editing a mindmap so active-tab mindmap saves do not fall through to the Markdown editor save path after header focus.
+- 2026-06-29: Restore mindmap-to-Markdown and Markdown-to-mindmap view conversion commands after hard reset.

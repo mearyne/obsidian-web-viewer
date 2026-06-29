@@ -198,6 +198,7 @@ const state = {
   editMode: false,
   markdownEnabled: true,
   documentMindmapEnabled: false,
+  mindmapMarkdownPreviewEnabled: false,
   objectUrls: new Map(),
   readFileRequests: new Map(),
   savedVaults: [],
@@ -1138,6 +1139,14 @@ function openCommandPalette() {
           <span>현재 문서에 마인드맵 추가</span>
           <small>현재 Markdown 문서에 새 마인드맵을 만들고 임베드합니다</small>
         </button>
+        <button class="command-palette-item" type="button" data-command="view-current-as-mindmap">
+          <span>현재 문서를 마인드맵으로 보기</span>
+          <small>원본 Markdown은 유지하고 현재 문서를 마인드맵 뷰로 표시합니다</small>
+        </button>
+        <button class="command-palette-item" type="button" data-command="convert-current-mindmap-to-md">
+          <span>현재 마인드맵을 MD로 보기</span>
+          <small>마인드맵 원본은 유지하고 Markdown 표현으로 표시합니다</small>
+        </button>
       </div>
     </section>
   `;
@@ -1165,6 +1174,8 @@ function openCommandPalette() {
     closeCommandPalette();
     if (selected.dataset.command === "merged-documents") openMergedDocumentsDialog();
     if (selected.dataset.command === "add-mindmap-to-current") void createLinkedMindmapFromCurrentNote();
+    if (selected.dataset.command === "view-current-as-mindmap") viewCurrentMarkdownAsMindmap();
+    if (selected.dataset.command === "convert-current-mindmap-to-md") convertCurrentMindmapToMarkdown();
   };
   commandItems.forEach((button) => {
     button.addEventListener("click", () => {
@@ -2896,6 +2907,8 @@ async function openFile(path) {
     const content = await readFileNode(node);
     readDoneAt = performance.now();
     markOpenStep("탭과 기록 갱신 중");
+    state.documentMindmapEnabled = Boolean(curTab?.path === path && curTab.documentMindmapEnabled);
+    state.mindmapMarkdownPreviewEnabled = Boolean(curTab?.path === path && curTab.mindmapMarkdownPreviewEnabled);
     state.currentPath = path;
     state.currentContent = content;
     state.currentNode = node;
@@ -2918,6 +2931,8 @@ async function openFile(path) {
       curTab.path = path;
       curTab.title = displayDocumentTitle(node.name);
       curTab.view = null;
+      curTab.documentMindmapEnabled = state.documentMindmapEnabled;
+      curTab.mindmapMarkdownPreviewEnabled = state.mindmapMarkdownPreviewEnabled;
       curTab.renderCache = null;
     }
     if (pinnedTabChanged) {
@@ -4375,6 +4390,12 @@ function updateMarkdownToggleButton() {
 
 function toggleDocumentMindmapMode() {
   state.documentMindmapEnabled = !state.documentMindmapEnabled;
+  state.mindmapMarkdownPreviewEnabled = false;
+  const tab = activeTab();
+  if (tab?.path === state.currentPath) {
+    tab.documentMindmapEnabled = state.documentMindmapEnabled;
+    tab.mindmapMarkdownPreviewEnabled = false;
+  }
   updateDocumentMindmapToggleButton();
   if (state.activeView === "note" && state.currentPath) renderCurrentDocument();
 }
@@ -4385,6 +4406,40 @@ function canShowDocumentMindmapView() {
     && isMarkdownDocument(state.currentPath || "")
     && !isMindmapDocument(state.currentContent)
     && !state.editMode;
+}
+
+function viewCurrentMarkdownAsMindmap() {
+  if (!canShowDocumentMindmapView()) return;
+  const tab = activeTab();
+  if (tab?.path === state.currentPath) {
+    tab.documentMindmapEnabled = true;
+    tab.mindmapMarkdownPreviewEnabled = false;
+  }
+  state.documentMindmapEnabled = true;
+  state.mindmapMarkdownPreviewEnabled = false;
+  updateDocumentMindmapToggleButton();
+  renderCurrentDocument();
+  saveOpenTabs();
+}
+
+function canShowMindmapMarkdownPreview() {
+  return state.activeView === "note"
+    && isMindmapDocument(state.currentContent)
+    && !state.editMode;
+}
+
+function convertCurrentMindmapToMarkdown() {
+  if (!canShowMindmapMarkdownPreview()) return;
+  const tab = activeTab();
+  if (tab?.path === state.currentPath) {
+    tab.documentMindmapEnabled = false;
+    tab.mindmapMarkdownPreviewEnabled = true;
+  }
+  state.mindmapMarkdownPreviewEnabled = true;
+  state.documentMindmapEnabled = false;
+  updateDocumentMindmapToggleButton();
+  renderCurrentDocument();
+  saveOpenTabs();
 }
 
 function updateDocumentMindmapToggleButton() {
@@ -4416,10 +4471,17 @@ function renderCurrentDocument(showOpenStep = null, diagnostics = null) {
 
   if (isMindmapDocument(state.currentContent)) {
     syncMindmapDocumentLayout(state.currentPath, { frontmatter: extractFrontmatter(state.currentContent).frontmatter });
+    if (state.mindmapMarkdownPreviewEnabled) {
+      markRenderStep("Mindmap markdown view");
+      renderMindmapMarkdownPreview();
+      return;
+    }
     markRenderStep("마인드맵 렌더링 중");
     renderMindmapDocument();
     return;
   }
+
+  state.mindmapMarkdownPreviewEnabled = false;
 
   if (isExcalidrawDocument(state.currentPath || "")) {
     if (!EXCALIDRAW_PREVIEW_ENABLED) {
@@ -4492,6 +4554,14 @@ function renderDocumentMindmapPreview() {
     return;
   }
   renderSimpleMindMapDocument(data, canvas);
+}
+
+function renderMindmapMarkdownPreview() {
+  const data = extractMindmapData(state.currentContent);
+  const title = displayDocumentTitle(state.currentNode || { name: state.currentPath || "Mindmap" });
+  const markdown = MINDMAP_MARKDOWN_RULES.mindmapDataToMarkdown(data?.data || createDefaultMindmapData(title));
+  els.markdownView.innerHTML = renderMarkdown(markdown, { path: state.currentPath || "" });
+  bindWikiLinks(els.markdownView);
 }
 
 function clearMindmapShell() {
@@ -12076,7 +12146,18 @@ const OPEN_TABS_KEY = "obsidian-web-viewer-open-tabs";
 function saveOpenTabs() {
   keepEmptyTabsAtEnd();
   const data = {
-    tabs: state.tabs.map((t) => ({ id: t.id, path: t.path, title: t.title, pinned: t.pinned, scrollTop: t.scrollTop, view: t.view || null, calendarKind: t.calendarKind || null, mergedRange: t.mergedRange || null })),
+    tabs: state.tabs.map((t) => ({
+      id: t.id,
+      path: t.path,
+      title: t.title,
+      pinned: t.pinned,
+      scrollTop: t.scrollTop,
+      view: t.view || null,
+      calendarKind: t.calendarKind || null,
+      mergedRange: t.mergedRange || null,
+      documentMindmapEnabled: Boolean(t.documentMindmapEnabled),
+      mindmapMarkdownPreviewEnabled: Boolean(t.mindmapMarkdownPreviewEnabled),
+    })),
     activeTabId: state.activeTabId,
   };
   try { localStorage.setItem(OPEN_TABS_KEY, JSON.stringify(data)); } catch {}
@@ -12108,6 +12189,8 @@ function loadOpenTabs() {
         view: view === "merged" && !mergedRange ? null : view,
         calendarKind: t?.calendarKind || null,
         mergedRange,
+        documentMindmapEnabled: Boolean(t?.documentMindmapEnabled),
+        mindmapMarkdownPreviewEnabled: Boolean(t?.mindmapMarkdownPreviewEnabled),
       });
     });
     if (!state.tabs.length) return false;
@@ -12643,7 +12726,18 @@ async function saveOpenTabsToVault() {
   const deviceName = getDeviceName();
   const tabs = state.tabs.filter((t) => t.path).map((t) => ({ path: t.path, title: t.title }));
   const openTabs = {
-    tabs: state.tabs.map((t) => ({ id: t.id, path: t.path, title: t.title, pinned: t.pinned, scrollTop: t.scrollTop, view: t.view || null, calendarKind: t.calendarKind || null, mergedRange: t.mergedRange || null })),
+    tabs: state.tabs.map((t) => ({
+      id: t.id,
+      path: t.path,
+      title: t.title,
+      pinned: t.pinned,
+      scrollTop: t.scrollTop,
+      view: t.view || null,
+      calendarKind: t.calendarKind || null,
+      mergedRange: t.mergedRange || null,
+      documentMindmapEnabled: Boolean(t.documentMindmapEnabled),
+      mindmapMarkdownPreviewEnabled: Boolean(t.mindmapMarkdownPreviewEnabled),
+    })),
     activeTabId: state.activeTabId,
   };
   try {
