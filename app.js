@@ -5481,6 +5481,7 @@ function handleMindmapRichTextCommitKeydown(event) {
   event.stopPropagation();
   event.stopImmediatePropagation?.();
   state.mindmapInstance?.renderer?.textEdit?.hideEditTextBox?.();
+  finishMindmapTextEditing();
 }
 
 function guardMindmapTextEditingKeydown(event) {

@@ -131,6 +131,7 @@ test("rich text mindmap editor commits enter and escape before Quill consumes th
   assert.match(body, /isMindmapTextEditingCommitKey\(event\)/);
   assert.match(body, /event\.preventDefault\(\)/);
   assert.match(body, /state\.mindmapInstance\?\.renderer\?\.textEdit\?\.hideEditTextBox\?\.\(\)/);
+  assert.match(body, /finishMindmapTextEditing\(\)/);
 });
 
 test("selected mindmap nodes can be copied as markdown bullets", () => {
