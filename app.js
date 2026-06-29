@@ -5,6 +5,7 @@ const DOCUMENT_OPEN_SLOW_TOTAL_MS = 500;
 const CONTENT_HISTORY_LIMIT = 50;
 const MERGED_DOCUMENT_CONFIRM_THRESHOLD = 20;
 const DEFAULT_CALENDAR_EXTENSION_EXCLUDES = ["png", "jpg", "gif"];
+const DEFAULT_MINDMAP_IMAGE_SIZE = { width: 120, height: 80, custom: false };
 function setTasksDirty() { try { localStorage.setItem(TASKS_DIRTY_KEY, "1"); } catch {} }
 function clearTasksDirty() { try { localStorage.removeItem(TASKS_DIRTY_KEY); } catch {} }
 function isTasksDirty() { try { return localStorage.getItem(TASKS_DIRTY_KEY) === "1"; } catch { return false; } }
@@ -4982,6 +4983,7 @@ function copyMindmapImageData(source, target) {
   if (typeof image === "string" && image) target.image = image;
   if (typeof source?.fullImage === "string" && source.fullImage) target.fullImage = source.fullImage;
   if (typeof source?.imageTitle === "string") target.imageTitle = source.imageTitle;
+  let hasImageSize = false;
   if (source?.imageSize && typeof source.imageSize === "object") {
     const width = Number(source.imageSize.width);
     const height = Number(source.imageSize.height);
@@ -4991,8 +4993,10 @@ function copyMindmapImageData(source, target) {
         height,
         custom: Boolean(source.imageSize.custom),
       };
+      hasImageSize = true;
     }
   }
+  if (target.image && !hasImageSize) target.imageSize = { ...DEFAULT_MINDMAP_IMAGE_SIZE };
 }
 
 function legacyMindmapDataToSimpleMindMapData(data) {

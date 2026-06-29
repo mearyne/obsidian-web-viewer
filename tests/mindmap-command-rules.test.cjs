@@ -317,6 +317,25 @@ test("mindmap paste turns copied markdown bullets back into child nodes", async 
   assert.equal(context.state.editorDirty, true);
 });
 
+test("mindmap image nodes get a default imageSize before rendering", () => {
+  const app = fs.readFileSync("app.js", "utf8");
+  const context = {
+    DEFAULT_MINDMAP_IMAGE_SIZE: { width: 120, height: 80, custom: false },
+  };
+  vm.createContext(context);
+  vm.runInContext([
+    extractFunction(app, "copyMindmapImageData"),
+  ].join("\n"), context);
+
+  const target = {};
+  context.copyMindmapImageData({ image: "/api/vault-file?path=Assets/image.png" }, target);
+
+  assert.equal(target.image, "/api/vault-file?path=Assets/image.png");
+  assert.equal(target.imageSize.width, 120);
+  assert.equal(target.imageSize.height, 80);
+  assert.equal(target.imageSize.custom, false);
+});
+
 test("mindmap ctrl c keydown writes selected nodes as markdown bullets", () => {
   const app = fs.readFileSync("app.js", "utf8");
   let copied = "";

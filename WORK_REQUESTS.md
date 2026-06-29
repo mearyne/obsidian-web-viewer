@@ -116,3 +116,4 @@
 - 2026-06-29: Render image files such as PNG, JPG, GIF, WebP, SVG, and BMP when opened from the vault.
 - 2026-06-30: Add option fields to exclude extensions from calendar created-file lists, calendar updated-file lists, and merged document view.
 - 2026-06-30: Set png, jpg, and gif as default calendar and merged-document exclude extensions while preserving saved overrides.
+- 2026-06-30: Prevent simple-mind-map crashes by adding default imageSize data to mindmap image nodes before rendering.
