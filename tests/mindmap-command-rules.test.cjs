@@ -94,6 +94,13 @@ test("mindmap node text edit shortcut enables editing without rerendering away s
   assert.doesNotMatch(body, /renderCurrentDocument\(/);
 });
 
+test("mindmap remembers the last pressed node before e opens text editing", () => {
+  const app = require("node:fs").readFileSync("app.js", "utf8");
+  assert.match(app, /function rememberMindmapNodeForEditing\(node\)/);
+  assert.match(app, /mindMap\.on\("node_mousedown", rememberMindmapNodeForEditing\)/);
+  assert.match(app, /mindMap\.on\("node_click", rememberMindmapNodeForEditing\)/);
+});
+
 test("mindmap text editor keeps ctrl a inside node editing", () => {
   const app = require("node:fs").readFileSync("app.js", "utf8");
   const guardBody = app.match(/function guardMindmapTextEditingKeydown\(event\)[\s\S]*?\n}/)?.[0] || "";

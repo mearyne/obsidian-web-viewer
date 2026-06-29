@@ -5113,14 +5113,9 @@ function renderSimpleMindMapDocument(data, canvas) {
       renderEditSaveButton();
     }
   });
-  mindMap.on("node_active", (node, activeNodeList = []) => {
-    state.mindmapKeyCaptureActive = true;
-    state.mindmapLastClickedNodeUid = node?.getData?.("uid") || activeNodeList[0]?.getData?.("uid") || state.mindmapLastClickedNodeUid;
-  });
-  mindMap.on("node_click", (node) => {
-    state.mindmapKeyCaptureActive = true;
-    state.mindmapLastClickedNodeUid = node?.getData?.("uid") || null;
-  });
+  mindMap.on("node_active", (node, activeNodeList = []) => rememberMindmapNodeForEditing(node || activeNodeList[0]));
+  mindMap.on("node_mousedown", rememberMindmapNodeForEditing);
+  mindMap.on("node_click", rememberMindmapNodeForEditing);
   mindMap.on("search_info_change", updateMindmapSearchStatus);
   bindMindmapToolbarControls();
   requestAnimationFrame(() => {
@@ -5416,6 +5411,13 @@ function isPlainMindmapEditKey(event) {
     && !event.metaKey
     && !event.shiftKey
     && (event.code === "KeyE" || event.key.toLowerCase() === "e" || event.key === "F2");
+}
+
+function rememberMindmapNodeForEditing(node) {
+  const uid = node?.getData?.("uid");
+  if (!uid) return;
+  state.mindmapKeyCaptureActive = true;
+  state.mindmapLastClickedNodeUid = uid;
 }
 
 async function beginActiveMindmapNodeTextEdit() {

@@ -107,3 +107,4 @@
 - 2026-06-29: Fix selected mindmap node text editing shortcuts for E and Enter after node click.
 - 2026-06-29: Fix Enter and Escape commit handling in rich text mindmap node editor.
 - 2026-06-29: Fix mindmap E shortcut after closing the rich text node editor with Enter or Escape.
+- 2026-06-29: Fix real keyboard E shortcut by remembering the mindmap node on mousedown before text editing.
