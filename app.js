@@ -33,8 +33,8 @@ const TAB_ORDER_RULES = globalThis.TabOrderRules || {
   },
 };
 const LINK_OPEN_RULES = globalThis.LinkOpenRules || {
-  resolveWikiLinkOpenMode({ forceNewTab = false, embeddedNote = false, mindmapEmbed = false } = {}) {
-    if (mindmapEmbed) return "current-tab";
+  resolveWikiLinkOpenMode({ forceNewTab = false, embeddedNote = false, mindmapEmbed = false, targetMindmap = false } = {}) {
+    if (mindmapEmbed || targetMindmap) return "current-tab";
     return forceNewTab || embeddedNote ? "new-tab" : "current-tab";
   },
 };
@@ -11898,6 +11898,7 @@ function bindWikiLinks(root, options = {}) {
         forceNewTab: Boolean(options.openLinksInNewTab),
         embeddedNote: Boolean(link.closest(".embedded-note")),
         mindmapEmbed: Boolean(link.closest(".mindmap-embed-preview")),
+        targetMindmap: isMindmapDocument(state.files.get(path)?.content || ""),
       });
       if (mode === "new-tab") await openFileInNewTab(path);
       else await openFile(path);

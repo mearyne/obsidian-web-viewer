@@ -14,6 +14,10 @@ test("mindmap embed links open in the current tab", () => {
   assert.equal(resolveWikiLinkOpenMode({ forceNewTab: false, embeddedNote: true, mindmapEmbed: true }), "current-tab");
 });
 
+test("mindmap document links open in the current tab even inside embeds", () => {
+  assert.equal(resolveWikiLinkOpenMode({ forceNewTab: false, embeddedNote: true, targetMindmap: true }), "current-tab");
+});
+
 test("normal document wiki links open in the current tab", () => {
   assert.equal(resolveWikiLinkOpenMode({ forceNewTab: false, embeddedNote: false }), "current-tab");
 });
