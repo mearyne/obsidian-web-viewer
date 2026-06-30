@@ -6529,6 +6529,8 @@ button.calendar-more {
   min-width: 120px;
   overflow: hidden;
   padding: 4px 0;
+  position: fixed;
+  z-index: 10000;
 }
 
 .tab-context-menu button {

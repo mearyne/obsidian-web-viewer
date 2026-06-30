@@ -70,6 +70,12 @@ test("30d task sorting places deferred last then priority before due date", () =
   assert.match(compareBody, /calendarTaskDueSortKey\(a\) - calendarTaskDueSortKey\(b\)/);
 });
 
+test("1d task view opens on today by default", () => {
+  const buildBody = app.match(/async function buildMatrixView\(\)[\s\S]*?\n}\r?\n\r?\nfunction scheduleCalendarRefresh/)?.[0] || "";
+  assert.match(buildBody, /state\.calendarDate = new Date\(\)/);
+  assert.match(app, /if \(nextMode === "day" && state\.calendarKind === "tasks"\) \{[\s\S]{0,120}state\.calendarDate = new Date\(\)/);
+});
+
 test("task edit delete closes the native dialog before showing app confirm", () => {
   const body = app.match(/els\.taskEditDeleteBtn\?\.addEventListener\("click", async \(\) => \{[\s\S]*?\n  \}\);/)?.[0] || "";
   assert.match(body, /const reopenOnCancel = els\.taskEditDialog\?\.open/);

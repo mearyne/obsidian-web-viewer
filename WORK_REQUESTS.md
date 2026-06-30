@@ -136,3 +136,4 @@
 - 2026-06-30: Restyle task 1d quadrant sort controls, add per-quadrant ascending/descending toggles, and move task counts beside titles.
 - 2026-06-30: Prevent task 1d multi-day date range titles from overlapping previous and next navigation buttons.
 - 2026-06-30: Fix mindmap creation suffix, node context menu, tools drawer, subtree text color, selected-node bold, arrow toggle, associative line, outer frame, and 30d calendar next-week/deferred/priority sorting behavior.
+- 2026-06-30: Fix mindmap node context menu, move subtree color/associate line/outer frame controls to the toolbar, make Tools layout/theme changes apply immediately, tighten outer frame padding, and make task 1d open on Today.

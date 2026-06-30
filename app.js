@@ -3746,6 +3746,7 @@ function applyVisibleMindmapOptions() {
   const jm = state.mindmapInstance;
   if (!jm || els.mindmapShell?.hidden) return;
   jm.setLayout?.(getMindmapRuntimeLayoutForDocument(state.currentPath, { fallbackLayout: state.mindmapOptions.layout }));
+  jm.reRender?.();
   jm.setThemeConfig?.(getMindmapThemeConfig());
   refreshVisibleMindmapThemeData();
   updateMindmapAdvancedToolVisibility();
@@ -3768,7 +3769,12 @@ function handleMindmapOptionInput() {
     autoFit: root?.querySelector("[data-mindmap-auto-fit]")?.checked,
     advancedTools: root?.querySelector("[data-mindmap-advanced-tools]")?.checked,
     showLineMarker: root?.querySelector("[data-mindmap-show-line-marker]")?.checked,
-  });
+  }, { applyVisible: false });
+  if (state.currentPath && state.mindmapInstance && !els.mindmapShell?.hidden) {
+    state.mindmapDocumentLayouts.set(state.currentPath, state.mindmapOptions.layout);
+    setMindmapDocumentTheme(state.currentPath, selectedMindmapGlobalThemeName());
+  }
+  applyVisibleMindmapOptions();
   scheduleSettingsSave();
 }
 
@@ -5271,6 +5277,11 @@ function renderMindmapDocument() {
             <button type="button" data-mindmap-action="import-md" data-edit-only aria-label="Markdown import" title="Markdown import">MD↑</button>
             <button type="button" data-mindmap-action="tools" aria-label="Tools" title="Tools">Tools</button>
           </div>
+          <div class="mindmap-toolbar-row">
+            <input type="color" data-mindmap-subtree-color value="#1e293b" data-edit-only aria-label="선택 노드와 하위 노드 글자색" title="선택 노드와 하위 노드 글자색" />
+            <button type="button" data-mindmap-action="associate-line" data-edit-only aria-label="선택 노드 연결선" title="선택 노드 연결선">Link</button>
+            <button type="button" data-mindmap-action="outer-frame" data-edit-only aria-label="선택 노드 외곽 프레임" title="선택 노드 외곽 프레임">Frame</button>
+          </div>
           <div class="mindmap-toolbar-row mindmap-toolbar-search-row">
             <input class="mindmap-search-input" type="search" data-mindmap-search placeholder="검색" aria-label="마인드맵 내부 검색" />
             <button type="button" data-mindmap-action="search-prev" aria-label="이전 검색 결과" title="이전 검색 결과">‹</button>
@@ -5292,14 +5303,8 @@ function renderMindmapDocument() {
           <button type="button" data-mindmap-action="reset-layout">Reset layout</button>
           <button type="button" data-mindmap-action="export-md">Export MD</button>
           <button type="button" data-mindmap-action="import-md" data-edit-only>Import MD</button>
-          <button type="button" data-mindmap-action="associate-line" data-edit-only>Associate</button>
-          <button type="button" data-mindmap-action="outer-frame" data-edit-only>Outer frame</button>
         </div>
         <div class="mindmap-tools-options" data-mindmap-options>
-          <label>
-            <span>Subtree text</span>
-            <input type="color" data-mindmap-subtree-color value="#1e293b" />
-          </label>
           <label>
             <span>Default layout</span>
             <select data-mindmap-default-layout-select>
@@ -5349,7 +5354,7 @@ function renderMindmapDocument() {
     state.mindmapKeyCaptureActive = true;
     canvas.focus({ preventScroll: true });
   });
-  canvas?.addEventListener("contextmenu", showMindmapContextMenu);
+  canvas?.addEventListener("contextmenu", showMindmapContextMenu, true);
   canvas?.addEventListener("touchstart", handleMindmapPinchStart, { passive: false });
   canvas?.addEventListener("touchmove", handleMindmapPinchMove, { passive: false });
   canvas?.addEventListener("touchend", handleMindmapPinchEnd, { passive: false });
@@ -5370,6 +5375,8 @@ function renderSimpleMindMapDocument(data, canvas) {
     layout: getMindmapRuntimeLayoutForDocument(state.currentPath, { fallbackLayout: state.mindmapOptions.layout }),
     theme: "default",
     themeConfig: getMindmapThemeConfig(),
+    outerFramePaddingX: 4,
+    outerFramePaddingY: 4,
     fit: state.mindmapOptions.autoFit,
     handleNodePasteImg: handleMindmapNodePasteImage,
     defaultInsertSecondLevelNodeText: "새 노드",
@@ -5451,6 +5458,7 @@ function bindMindmapToolbarControls() {
       }
       if (state.mindmapInstance) {
         state.mindmapInstance.setLayout?.(getMindmapRuntimeLayoutForDocument(path, { fallbackLayout: layout }));
+        state.mindmapInstance.reRender?.();
         if (state.mindmapOptions.autoFit) requestAnimationFrame(() => fitMindmapToView());
       }
       if (canEdit) {
@@ -6036,14 +6044,20 @@ function handleMindmapCopy(event) {
 
 function showMindmapContextMenu(event) {
   if (!state.mindmapInstance || els.mindmapShell?.hidden) return;
-  event.preventDefault();
-  event.stopPropagation();
+  const sourceEvent = event?.event || event?.originalEvent || event?.nativeEvent || event;
+  sourceEvent?.preventDefault?.();
+  sourceEvent?.stopPropagation?.();
   document.querySelector(".mindmap-context-menu")?.remove();
   const canPaste = Boolean(state.editMode && canEditNode(state.currentNode));
+  const canvasRect = els.mindmapShell?.querySelector("#mindmapCanvas")?.getBoundingClientRect?.();
+  const fallbackX = canvasRect ? canvasRect.left + 16 : 16;
+  const fallbackY = canvasRect ? canvasRect.top + 16 : 16;
+  const x = Number.isFinite(sourceEvent?.clientX) ? sourceEvent.clientX : fallbackX;
+  const y = Number.isFinite(sourceEvent?.clientY) ? sourceEvent.clientY : fallbackY;
   const menu = document.createElement("div");
   menu.className = "tab-context-menu mindmap-context-menu";
-  menu.style.left = `${event.clientX}px`;
-  menu.style.top = `${event.clientY}px`;
+  menu.style.left = `${x}px`;
+  menu.style.top = `${y}px`;
   menu.innerHTML = `
     <button type="button" data-action="copy"${hasMindmapNodesForCopy() ? "" : " disabled"}>복사하기</button>
     <button type="button" data-action="paste"${canPaste ? "" : " disabled"}>붙여넣기</button>
@@ -6109,16 +6123,11 @@ function handleMindmapPinchEnd(event) {
 }
 
 function hasMindmapNodesForCopy() {
-  const nodes = state.mindmapInstance?.renderer?.activeNodeList || [];
-  return nodes.length > 0 || Boolean(state.mindmapLastClickedNodeUid);
+  return selectedMindmapNodes().length > 0;
 }
 
 function selectedMindmapNodesToMarkdownBullets() {
-  let nodes = state.mindmapInstance?.renderer?.activeNodeList || [];
-  if (!nodes.length && state.mindmapLastClickedNodeUid) {
-    const node = state.mindmapInstance?.renderer?.findNodeByUid?.(state.mindmapLastClickedNodeUid);
-    if (node) nodes = [node];
-  }
+  const nodes = selectedMindmapNodes();
   if (!nodes.length) return "";
   const lines = [];
   const visit = (node, depth) => {
@@ -7772,6 +7781,7 @@ async function buildMatrixView() {
   closeSidebar();
   state.calendarKind = "matrix";
   state.calendarMode = "day";
+  state.calendarDate = new Date();
   state.matrixPeriodDays = state.matrixPeriodDays || 1;
   showCalendarView();
   renderCalendar();
@@ -9640,6 +9650,7 @@ function bindCalendarEvents() {
       state.calendarMode = nextMode;
       if (nextMode === "day" && state.calendarKind === "tasks") {
         state.calendarKind = "matrix";
+        state.calendarDate = new Date();
         state.matrixPeriodDays = 1;
       } else if (nextMode !== "day" && state.calendarKind === "matrix") {
         state.calendarKind = "tasks";

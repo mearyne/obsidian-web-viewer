@@ -219,6 +219,8 @@ test("mindmap copy writes markdown bullets even when focus is outside the shell"
     extractFunction(app, "mindmapImageToMarkdownEmbed"),
     extractFunction(app, "handleMindmapCopy"),
     extractFunction(app, "hasMindmapNodesForCopy"),
+    extractFunction(app, "selectedMindmapNodes"),
+    extractFunction(app, "collectMindmapActiveNodes"),
     extractFunction(app, "selectedMindmapNodesToMarkdownBullets"),
   ].join("\n"), context);
 
@@ -268,6 +270,8 @@ test("mindmap copy includes pasted images as markdown image embeds", () => {
     extractFunction(app, "normalizeMindmapMarkdownTopic"),
     extractFunction(app, "vaultPathFromMindmapImageUrl"),
     extractFunction(app, "mindmapImageToMarkdownEmbed"),
+    extractFunction(app, "selectedMindmapNodes"),
+    extractFunction(app, "collectMindmapActiveNodes"),
     extractFunction(app, "selectedMindmapNodesToMarkdownBullets"),
   ].join("\n"), context);
 
@@ -445,14 +449,18 @@ test("mindmap pasted image bullets become visible image nodes", async () => {
 
 test("mindmap canvas exposes context menu copy paste and mobile pinch zoom", () => {
   const app = fs.readFileSync("app.js", "utf8");
+  const styles = fs.readFileSync("styles.css", "utf8");
   assert.match(app, /function showMindmapContextMenu\(event\)/);
   assert.match(app, /data-action="copy"/);
   assert.match(app, /data-action="paste"/);
-  assert.match(app, /canvas\?\.addEventListener\("contextmenu", showMindmapContextMenu\)/);
+  assert.match(app, /canvas\?\.addEventListener\("contextmenu", showMindmapContextMenu, true\)/);
   assert.match(app, /mindMap\.on\("contextmenu", showMindmapContextMenu\)/);
   assert.match(app, /function handleMindmapPinchMove\(event\)/);
   assert.match(app, /canvas\?\.addEventListener\("touchmove", handleMindmapPinchMove, \{ passive: false \}\)/);
   assert.match(app, /state\.mindmapInstance\?\.view\?\.setScale/);
+  const menuStyles = styles.match(/\.tab-context-menu\s*\{[\s\S]*?\n\}/)?.[0] || "";
+  assert.match(menuStyles, /position:\s*fixed/);
+  assert.match(menuStyles, /z-index:\s*\d+/);
 });
 
 test("new standalone mindmaps append mindmap to generated filenames once", () => {
@@ -483,10 +491,29 @@ test("mindmap selected nodes expose bulk style and library feature actions", () 
   assert.match(app, /data-mindmap-show-line-marker/);
   assert.match(app, /data-mindmap-action="associate-line"/);
   assert.match(app, /data-mindmap-action="outer-frame"/);
+  const toolbarBody = app.match(/<div class="mindmap-toolbar"[\s\S]*?<\/div>\n      <\/details>/)?.[0] || "";
+  const drawerBody = app.match(/<aside class="mindmap-tools-drawer"[\s\S]*?<div class="mindmap-tools-options"/)?.[0] || "";
+  assert.match(toolbarBody, /data-mindmap-subtree-color/);
+  assert.match(toolbarBody, /data-mindmap-action="associate-line"/);
+  assert.match(toolbarBody, /data-mindmap-action="outer-frame"/);
+  assert.doesNotMatch(drawerBody, /data-mindmap-subtree-color/);
+  assert.doesNotMatch(drawerBody, /data-mindmap-action="associate-line"/);
+  assert.doesNotMatch(drawerBody, /data-mindmap-action="outer-frame"/);
   assert.match(app, /function applyMindmapTextColorToSelectedSubtree/);
   assert.match(app, /execCommand\?\.\("SET_NODE_STYLE"/);
   assert.match(app, /execCommand\?\.\("ADD_ASSOCIATIVE_LINE"/);
   assert.match(app, /execCommand\?\.\("ADD_OUTER_FRAME"/);
+  assert.match(app, /outerFramePaddingX:\s*4/);
+  assert.match(app, /outerFramePaddingY:\s*4/);
+});
+
+test("mindmap tools layout and theme changes apply to the current document view", () => {
+  const app = fs.readFileSync("app.js", "utf8");
+  const body = app.match(/function handleMindmapOptionInput\(\)[\s\S]*?\n}\r?\n\r?\nfunction ensureDisplayOptionsSection/)?.[0] || "";
+  assert.match(body, /state\.mindmapDocumentLayouts\.set\(state\.currentPath, state\.mindmapOptions\.layout\)/);
+  assert.match(body, /setMindmapDocumentTheme\(state\.currentPath, selectedMindmapGlobalThemeName\(\)\)/);
+  assert.match(body, /applyMindmapOptions\(/);
+  assert.match(app, /jm\.setLayout\?\.\(getMindmapRuntimeLayoutForDocument\(state\.currentPath, \{ fallbackLayout: state\.mindmapOptions\.layout \}\)\);\s*jm\.reRender\?\.\(\)/);
 });
 
 test("mindmap ctrl b toggles bold on selected nodes outside text editing", () => {
@@ -664,6 +691,8 @@ test("mindmap ctrl c keydown writes selected nodes as markdown bullets", () => {
     extractFunction(app, "isMindmapCopyShortcut"),
     extractFunction(app, "copyMindmapSelectionToClipboard"),
     extractFunction(app, "hasMindmapNodesForCopy"),
+    extractFunction(app, "selectedMindmapNodes"),
+    extractFunction(app, "collectMindmapActiveNodes"),
     extractFunction(app, "selectedMindmapNodesToMarkdownBullets"),
   ].join("\n"), context);
 
