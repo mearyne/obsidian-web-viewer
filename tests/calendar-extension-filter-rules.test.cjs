@@ -74,6 +74,14 @@ test("1d task view opens on today by default", () => {
   const buildBody = app.match(/async function buildMatrixView\(\)[\s\S]*?\n}\r?\n\r?\nfunction scheduleCalendarRefresh/)?.[0] || "";
   assert.match(buildBody, /state\.calendarDate = new Date\(\)/);
   assert.match(app, /if \(nextMode === "day" && state\.calendarKind === "tasks"\) \{[\s\S]{0,120}state\.calendarDate = new Date\(\)/);
+  assert.match(app, /if \(mode === "day"\) \{[\s\S]{0,160}state\.calendarDate = new Date\(\)/);
+});
+
+test("duplicating a task pre-fills the body with a link to the source document", () => {
+  assert.match(app, /function taskSourceDocumentLink/);
+  const createBody = app.match(/async function showTaskCreateDialog\(dueDate, startDate = "", prefill = null\)[\s\S]*?\n}\r?\n\r?\nfunction positionTaskCreateDialog/)?.[0] || "";
+  assert.match(createBody, /taskSourceDocumentLink\(prefill\)/);
+  assert.match(createBody, /taskSubItemsToEditableText\(prefill\.subItems\)/);
 });
 
 test("task edit delete closes the native dialog before showing app confirm", () => {

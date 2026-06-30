@@ -4,6 +4,16 @@ const { resolveWikiLinkOpenMode } = require("../link-open-rules.js");
 
 test("merged document wiki links open in a new tab", () => {
   assert.equal(resolveWikiLinkOpenMode({ forceNewTab: true, embeddedNote: false }), "new-tab");
+  assert.equal(resolveWikiLinkOpenMode({ mergedDocument: true }), "new-tab");
+});
+
+test("merged document links keep the merged tab and reuse existing document tabs", () => {
+  const app = require("node:fs").readFileSync("app.js", "utf8");
+  const bindBody = app.match(/function bindWikiLinks\(root, options = \{\}\)[\s\S]*?\n}\r?\n\r?\nasync function createAndOpenWikiFile/)?.[0] || "";
+  assert.match(bindBody, /mergedDocument:\s*Boolean\(link\.closest\("\.merged-documents-view"\)\)/);
+  assert.match(bindBody, /if \(mode === "new-tab"\) await openFileInNewTab\(path\)/);
+  assert.match(app, /function findOpenDocumentTab/);
+  assert.match(app, /const existing = findOpenDocumentTab\(path\)/);
 });
 
 test("embedded note wiki links open in a new tab", () => {

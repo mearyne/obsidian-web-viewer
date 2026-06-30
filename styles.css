@@ -2594,7 +2594,7 @@ button:disabled {
   color: var(--text);
   display: inline-flex;
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 500;
   height: 32px;
   justify-content: center;
   line-height: 1;
@@ -2614,6 +2614,20 @@ button:disabled {
 .mindmap-toolbar button:disabled {
   cursor: not-allowed;
   opacity: 0.45;
+}
+
+.mindmap-toolbar-text-row {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.mindmap-toolbar-feature-row {
+  grid-template-columns: 34px 1fr 1fr;
+}
+
+.mindmap-toolbar-feature-row button,
+.mindmap-toolbar-text-row button {
+  min-width: 0;
+  padding: 0 6px;
 }
 
 .mindmap-tools-drawer {
@@ -6551,6 +6565,21 @@ button.calendar-more {
 
 .tab-context-menu button.danger {
   color: var(--color-danger, #e05a5a);
+}
+
+.mindmap-context-color {
+  align-items: center;
+  color: var(--color-text, #222);
+  display: flex;
+  font-size: 14px;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 8px 16px;
+}
+
+.mindmap-context-color input {
+  height: 24px;
+  width: 40px;
 }
 
 /* ── Move Dialog ─────────────────────────────────────────────────────────── */

@@ -487,6 +487,7 @@ test("mindmap tools drawer can open from the toolbar in edit mode", () => {
 
 test("mindmap selected nodes expose bulk style and library feature actions", () => {
   const app = fs.readFileSync("app.js", "utf8");
+  const styles = fs.readFileSync("styles.css", "utf8");
   assert.match(app, /data-mindmap-subtree-color/);
   assert.match(app, /data-mindmap-show-line-marker/);
   assert.match(app, /data-mindmap-action="associate-line"/);
@@ -505,6 +506,20 @@ test("mindmap selected nodes expose bulk style and library feature actions", () 
   assert.match(app, /execCommand\?\.\("ADD_OUTER_FRAME"/);
   assert.match(app, /outerFramePaddingX:\s*4/);
   assert.match(app, /outerFramePaddingY:\s*4/);
+  assert.match(toolbarBody, /mindmap-toolbar-text-row/);
+  assert.match(toolbarBody, /mindmap-toolbar-feature-row/);
+  assert.match(app, /data-action="frame"/);
+  assert.match(app, /data-action="subtree-color"/);
+  const textRowBody = styles.match(/\.mindmap-toolbar-text-row\s*\{[\s\S]*?\n\}/)?.[0] || "";
+  const featureRowBody = styles.match(/\.mindmap-toolbar-feature-row\s*\{[\s\S]*?\n\}/)?.[0] || "";
+  const buttonBody = styles.match(/\.mindmap-toolbar button\s*\{[\s\S]*?\n\}/)?.[0] || "";
+  assert.match(textRowBody, /grid-template-columns:\s*repeat\(3,\s*1fr\)/);
+  assert.match(featureRowBody, /grid-template-columns:\s*34px\s+1fr\s+1fr/);
+  assert.match(buttonBody, /font-weight:\s*500/);
+  assert.match(app, /function canUseMindmapEditAction/);
+  assert.match(app, /if \(action === "frame"\)[\s\S]*addMindmapOuterFrame\(\)/);
+  assert.match(app, /data-action="subtree-color"/);
+  assert.match(app, /applyMindmapTextColorToSelectedSubtree\(inputEvent\.target\.value\)/);
 });
 
 test("mindmap tools layout and theme changes apply to the current document view", () => {
@@ -514,6 +529,13 @@ test("mindmap tools layout and theme changes apply to the current document view"
   assert.match(body, /setMindmapDocumentTheme\(state\.currentPath, selectedMindmapGlobalThemeName\(\)\)/);
   assert.match(body, /applyMindmapOptions\(/);
   assert.match(app, /jm\.setLayout\?\.\(getMindmapRuntimeLayoutForDocument\(state\.currentPath, \{ fallbackLayout: state\.mindmapOptions\.layout \}\)\);\s*jm\.reRender\?\.\(\)/);
+});
+
+test("mindmap rename syncs the root topic and metadata title", () => {
+  const app = fs.readFileSync("app.js", "utf8");
+  assert.match(app, /function retitleMindmapDocumentContent/);
+  const renameBody = app.match(/async function renameCurrentFile\(newTitle\)[\s\S]*?\n}\r?\n\r?\n\/\/ ─── Split view/)?.[0] || "";
+  assert.match(renameBody, /retitleMindmapDocumentContent\(state\.currentContent, displayDocumentTitle\(newName\), node\.path\)/);
 });
 
 test("mindmap ctrl b toggles bold on selected nodes outside text editing", () => {

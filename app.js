@@ -4946,6 +4946,16 @@ function buildMindmapDocumentContent(data, previousContent = "", path = state.cu
   return `${buildMindmapFrontmatter(parsed.frontmatter, layout, theme)}${nextBody.endsWith("\n") ? nextBody : `${nextBody}\n`}`;
 }
 
+function retitleMindmapDocumentContent(content, title, path = state.currentPath) {
+  const data = extractMindmapData(content);
+  if (!data?.data) return content;
+  const nextData = JSON.parse(JSON.stringify(data));
+  nextData.meta ||= {};
+  nextData.meta.name = title;
+  nextData.data.topic = title;
+  return buildMindmapDocumentContent(nextData, content, path);
+}
+
 function buildMindmapFrontmatter(frontmatter, layout = state.mindmapOptions.layout, theme = selectedMindmapGlobalThemeName()) {
   const lines = String(frontmatter || "")
     .split("\n")
@@ -5272,12 +5282,12 @@ function renderMindmapDocument() {
             <button type="button" data-mindmap-action="fit" aria-label="화면에 맞춤" title="화면에 맞춤">⛶</button>
             <button type="button" data-mindmap-action="reset-layout" data-mindmap-advanced aria-label="레이아웃 정리" title="레이아웃 정리">↺</button>
           </div>
-          <div class="mindmap-toolbar-row">
+          <div class="mindmap-toolbar-row mindmap-toolbar-text-row">
             <button type="button" data-mindmap-action="export-md" aria-label="Markdown export" title="Markdown export">MD↓</button>
             <button type="button" data-mindmap-action="import-md" data-edit-only aria-label="Markdown import" title="Markdown import">MD↑</button>
             <button type="button" data-mindmap-action="tools" aria-label="Tools" title="Tools">Tools</button>
           </div>
-          <div class="mindmap-toolbar-row">
+          <div class="mindmap-toolbar-row mindmap-toolbar-feature-row">
             <input type="color" data-mindmap-subtree-color value="#1e293b" data-edit-only aria-label="선택 노드와 하위 노드 글자색" title="선택 노드와 하위 노드 글자색" />
             <button type="button" data-mindmap-action="associate-line" data-edit-only aria-label="선택 노드 연결선" title="선택 노드 연결선">Link</button>
             <button type="button" data-mindmap-action="outer-frame" data-edit-only aria-label="선택 노드 외곽 프레임" title="선택 노드 외곽 프레임">Frame</button>
@@ -5574,7 +5584,7 @@ function stopMindmapToolbar() {
 function runMindmapToolbarAction(action) {
   const jm = state.mindmapInstance;
   if (!jm) return;
-  const canEdit = state.editMode && canEditNode(state.currentNode);
+  const canEdit = canUseMindmapEditAction();
   if (action === "back") jm.execCommand?.("BACK");
   if (action === "forward") jm.execCommand?.("FORWARD");
   if (canEdit && action === "insert-child") jm.execCommand?.("INSERT_CHILD_NODE");
@@ -5616,10 +5626,14 @@ async function openMindmapToolsDrawer() {
 }
 
 function updateMindmapEditOnlyControls() {
-  const canEdit = state.editMode && canEditNode(state.currentNode);
+  const canEdit = canUseMindmapEditAction();
   els.mindmapShell?.querySelectorAll("[data-edit-only]").forEach((button) => {
     button.disabled = !canEdit;
   });
+}
+
+function canUseMindmapEditAction() {
+  return Boolean(state.mindmapInstance && state.editMode && canEditNode(state.currentNode));
 }
 
 function toggleMindmapToolsDrawer(open) {
@@ -6048,7 +6062,8 @@ function showMindmapContextMenu(event) {
   sourceEvent?.preventDefault?.();
   sourceEvent?.stopPropagation?.();
   document.querySelector(".mindmap-context-menu")?.remove();
-  const canPaste = Boolean(state.editMode && canEditNode(state.currentNode));
+  const canEdit = canUseMindmapEditAction();
+  const canPaste = Boolean(canEdit);
   const canvasRect = els.mindmapShell?.querySelector("#mindmapCanvas")?.getBoundingClientRect?.();
   const fallbackX = canvasRect ? canvasRect.left + 16 : 16;
   const fallbackY = canvasRect ? canvasRect.top + 16 : 16;
@@ -6061,6 +6076,8 @@ function showMindmapContextMenu(event) {
   menu.innerHTML = `
     <button type="button" data-action="copy"${hasMindmapNodesForCopy() ? "" : " disabled"}>복사하기</button>
     <button type="button" data-action="paste"${canPaste ? "" : " disabled"}>붙여넣기</button>
+    <button type="button" data-action="frame"${canEdit ? "" : " disabled"}>Frame</button>
+    <label class="mindmap-context-color">글자색<input type="color" data-action="subtree-color"${canEdit ? "" : " disabled"} value="#1e293b"></label>
   `;
   menu.addEventListener("click", async (clickEvent) => {
     const action = clickEvent.target?.closest?.("button")?.dataset.action;
@@ -6073,8 +6090,17 @@ function showMindmapContextMenu(event) {
     } else if (action === "paste") {
       const text = await navigator.clipboard?.readText?.();
       if (text) pasteMarkdownBulletsToActiveMindmapNode(text);
+    } else if (action === "frame") {
+      addMindmapOuterFrame();
+    } else if (action === "subtree-color") {
+      return;
     }
     menu.remove();
+  });
+  menu.querySelector('[data-action="subtree-color"]')?.addEventListener("input", (inputEvent) => {
+    inputEvent.preventDefault();
+    inputEvent.stopPropagation();
+    applyMindmapTextColorToSelectedSubtree(inputEvent.target.value);
   });
   const dismiss = (dismissEvent) => {
     if (menu.contains(dismissEvent.target)) return;
@@ -9019,6 +9045,9 @@ function bindMatrixEvents() {
       }
       const current = Number(state.matrixPeriodDays) || 1;
       const next = Math.min(30, current < 1 ? 1 : current + 1);
+      if (mode === "day") {
+        state.calendarDate = new Date();
+      }
       state.matrixPeriodDays = next;
       renderCalendar();
     });
@@ -10956,7 +10985,11 @@ async function showTaskCreateDialog(dueDate, startDate = "", prefill = null) {
     : { kind: TASK_KIND_TODO, category: null, priority: null, tags: [], repeatWeekdays: [] };
   state.taskCreateSourceDate = startDate || dueDate;
   if (els.taskTitleInput) els.taskTitleInput.value = prefill?.text || "";
-  if (els.taskCreateSubItemsInput) els.taskCreateSubItemsInput.value = prefill ? taskSubItemsToEditableText(prefill.subItems) : "";
+  if (els.taskCreateSubItemsInput) {
+    const sourceLink = prefill ? taskSourceDocumentLink(prefill) : "";
+    const existingBody = prefill ? taskSubItemsToEditableText(prefill.subItems) : "";
+    els.taskCreateSubItemsInput.value = [sourceLink, existingBody].filter(Boolean).join("\n");
+  }
   if (els.taskStartTimeInput) {
     els.taskStartTimeInput.value = prefill?.startTime || "";
     if (els.taskStartTimeClearBtn) els.taskStartTimeClearBtn.hidden = !els.taskStartTimeInput.value;
@@ -11795,6 +11828,11 @@ function taskSubItemsToEditableText(subItems) {
       return /^[-*+]\s+/.test(body) ? `${indent}${body}` : `${indent}- ${body}`;
     })
     .join("\n");
+}
+
+function taskSourceDocumentLink(task) {
+  const path = normalizeVaultPath(task?.path || "");
+  return path ? `- [[${path}]]` : "";
 }
 
 function normalizeTaskSubItemsInput(value) {
@@ -13028,6 +13066,7 @@ function bindWikiLinks(root, options = {}) {
       const mode = LINK_OPEN_RULES.resolveWikiLinkOpenMode({
         forceNewTab: Boolean(options.openLinksInNewTab),
         embeddedNote: Boolean(link.closest(".embedded-note")),
+        mergedDocument: Boolean(link.closest(".merged-documents-view")),
         mindmapEmbed: Boolean(link.closest(".mindmap-embed-preview")),
         targetMindmap: isMindmapDocument(state.files.get(path)?.content || ""),
       });
@@ -13908,8 +13947,12 @@ function tabStateSignature() {
   return state.tabs.map((tab) => `${tab.id}:${tab.path || ""}:${tab.view || ""}:${tab.calendarKind || ""}:${tab.title || ""}:${tab.pinned ? 1 : 0}`).join("|");
 }
 
-function findTabForPath(path) {
+function findOpenDocumentTab(path) {
   return state.tabs.find((tab) => tab.path === path);
+}
+
+function findTabForPath(path) {
+  return findOpenDocumentTab(path);
 }
 
 function findReusableNewTab() {
@@ -13920,7 +13963,8 @@ async function openFileInNewTab(path) {
   const normalizedPath = normalizeVaultPath(path || "");
   if (!normalizedPath) return;
 
-  const existingTab = findTabForPath(normalizedPath);
+  const existing = findOpenDocumentTab(path);
+  const existingTab = existing || findOpenDocumentTab(normalizedPath);
   if (existingTab) {
     if (existingTab.id !== state.activeTabId) await switchTab(existingTab.id, { preserveTabView: false });
     else await openFile(normalizedPath);
@@ -14251,6 +14295,14 @@ async function renameCurrentFile(newTitle) {
     state.files.set(node.path, node);
     state.currentPath = node.path;
     if (typeof node.content === "string") node.content = state.currentContent;
+    if (isMindmapDocument(state.currentContent)) {
+      const nextContent = retitleMindmapDocumentContent(state.currentContent, displayDocumentTitle(newName), node.path);
+      if (nextContent !== state.currentContent) {
+        await writeNodeContent(node, nextContent, { backup: true, previousContent: state.currentContent });
+        state.currentContent = nextContent;
+        node.content = nextContent;
+      }
+    }
     const tab = activeTab();
     if (tab) { tab.path = node.path; tab.title = displayDocumentTitle(newName); }
     if (tab?.pinned) {
