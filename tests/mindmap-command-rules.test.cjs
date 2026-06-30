@@ -278,6 +278,7 @@ test("mindmap paste turns copied markdown bullets back into child nodes", async 
   const app = fs.readFileSync("app.js", "utf8");
   const commands = [];
   const context = {
+    MINDMAP_NODE_DATA_STYLE_KEYS: [],
     state: {
       mindmapInstance: {
         renderer: {
@@ -326,6 +327,7 @@ test("mindmap paste turns copied markdown bullets back into child nodes", async 
     extractFunction(app, "makeMindmapMarkdownNode"),
     extractFunction(app, "markdownToMindmapData"),
     extractFunction(app, "normalizeMindmapText"),
+    extractFunction(app, "copyMindmapNodeStyleData"),
     extractFunction(app, "legacyMindmapNodeToSimpleMindMapNode"),
     extractFunction(app, "simpleMindMapNodeToLegacyMindmapNode"),
     extractFunction(app, "simpleMindMapDataToLegacyMindmapData"),
@@ -361,6 +363,7 @@ test("mindmap pasted image bullets become visible image nodes", async () => {
   const commands = [];
   const context = {
     DEFAULT_MINDMAP_IMAGE_SIZE: { width: 120, height: 80, custom: false },
+    MINDMAP_NODE_DATA_STYLE_KEYS: [],
     encodeURIComponent,
     state: {
       mindmapInstance: {
@@ -410,6 +413,7 @@ test("mindmap pasted image bullets become visible image nodes", async () => {
     extractFunction(app, "makeMindmapMarkdownNode"),
     extractFunction(app, "markdownToMindmapData"),
     extractFunction(app, "normalizeMindmapText"),
+    extractFunction(app, "copyMindmapNodeStyleData"),
     extractFunction(app, "legacyMindmapNodeToSimpleMindMapNode"),
     extractFunction(app, "simpleMindMapNodeToLegacyMindmapNode"),
     extractFunction(app, "simpleMindMapDataToLegacyMindmapData"),
@@ -445,9 +449,146 @@ test("mindmap canvas exposes context menu copy paste and mobile pinch zoom", () 
   assert.match(app, /data-action="copy"/);
   assert.match(app, /data-action="paste"/);
   assert.match(app, /canvas\?\.addEventListener\("contextmenu", showMindmapContextMenu\)/);
+  assert.match(app, /mindMap\.on\("contextmenu", showMindmapContextMenu\)/);
   assert.match(app, /function handleMindmapPinchMove\(event\)/);
   assert.match(app, /canvas\?\.addEventListener\("touchmove", handleMindmapPinchMove, \{ passive: false \}\)/);
   assert.match(app, /state\.mindmapInstance\?\.view\?\.setScale/);
+});
+
+test("new standalone mindmaps append mindmap to generated filenames once", () => {
+  const app = fs.readFileSync("app.js", "utf8");
+  const context = {};
+  vm.createContext(context);
+  vm.runInContext([
+    extractFunction(app, "mindmapTitleWithSuffix"),
+  ].join("\n"), context);
+
+  assert.equal(context.mindmapTitleWithSuffix("Project"), "Project mindmap");
+  assert.equal(context.mindmapTitleWithSuffix("Project mindmap"), "Project mindmap");
+  assert.equal(context.mindmapTitleWithSuffix("Project mindmap.md"), "Project mindmap.md");
+});
+
+test("mindmap tools drawer can open from the toolbar in edit mode", () => {
+  const app = fs.readFileSync("app.js", "utf8");
+  assert.match(app, /data-mindmap-tools-drawer/);
+  assert.match(app, /data-mindmap-action="tools"/);
+  assert.match(app, /async function openMindmapToolsDrawer\(\)/);
+  assert.match(app, /if \(action === "tools"\) void openMindmapToolsDrawer\(\)/);
+  assert.match(app, /toggleMindmapToolsDrawer\(true\)/);
+});
+
+test("mindmap selected nodes expose bulk style and library feature actions", () => {
+  const app = fs.readFileSync("app.js", "utf8");
+  assert.match(app, /data-mindmap-subtree-color/);
+  assert.match(app, /data-mindmap-show-line-marker/);
+  assert.match(app, /data-mindmap-action="associate-line"/);
+  assert.match(app, /data-mindmap-action="outer-frame"/);
+  assert.match(app, /function applyMindmapTextColorToSelectedSubtree/);
+  assert.match(app, /execCommand\?\.\("SET_NODE_STYLE"/);
+  assert.match(app, /execCommand\?\.\("ADD_ASSOCIATIVE_LINE"/);
+  assert.match(app, /execCommand\?\.\("ADD_OUTER_FRAME"/);
+});
+
+test("mindmap ctrl b toggles bold on selected nodes outside text editing", () => {
+  const app = fs.readFileSync("app.js", "utf8");
+  const commands = [];
+  const calls = [];
+  const selected = {
+    getStyle: () => "normal",
+    getData: () => "node-a",
+    nodeData: { data: { text: "Node A" } },
+    children: [],
+  };
+  const context = {
+    state: {
+      mindmapInstance: {
+        renderer: { activeNodeList: [selected] },
+        execCommand: (...args) => commands.push(args),
+      },
+      mindmapKeyCaptureActive: true,
+      editMode: true,
+      currentNode: {},
+    },
+    els: {
+      mindmapShell: {
+        hidden: false,
+        contains: () => true,
+      },
+    },
+    document: {
+      activeElement: { className: "mindmap-canvas smm-mind-map-container" },
+    },
+    navigator: { clipboard: { writeText: async () => {} } },
+    isMindmapTextEditingEvent: () => false,
+    isMindmapNodeTextEditShortcut: () => false,
+    isMindmapSiblingInsertShortcut: () => false,
+    isMindmapCopyShortcut: () => false,
+    canEditNode: () => true,
+    renderEditSaveButton: () => {},
+  };
+  vm.createContext(context);
+  vm.runInContext([
+    extractFunction(app, "handleMindmapKeydown"),
+    extractFunction(app, "isMindmapBoldShortcut"),
+    extractFunction(app, "toggleSelectedMindmapBold"),
+    extractFunction(app, "selectedMindmapNodes"),
+    extractFunction(app, "collectMindmapActiveNodes"),
+    extractFunction(app, "applyMindmapStyleToNodeTree"),
+    extractFunction(app, "markMindmapDirty"),
+  ].join("\n"), context);
+
+  context.handleMindmapKeydown({
+    key: "b",
+    code: "KeyB",
+    ctrlKey: true,
+    metaKey: false,
+    altKey: false,
+    shiftKey: false,
+    isComposing: false,
+    target: { closest: () => null, matches: () => false, isContentEditable: false },
+    preventDefault: () => calls.push("preventDefault"),
+    stopPropagation: () => calls.push("stopPropagation"),
+    stopImmediatePropagation: () => calls.push("stopImmediatePropagation"),
+  });
+
+  assert.deepEqual(calls, ["preventDefault", "stopPropagation", "stopImmediatePropagation"]);
+  assert.equal(commands[0][0], "SET_NODE_STYLE");
+  assert.equal(commands[0][1], selected);
+  assert.equal(JSON.stringify(commands[0][2]), JSON.stringify({ fontWeight: "bold" }));
+  assert.equal(commands[0][3], false);
+  assert.equal(selected.nodeData.data.fontWeight, "bold");
+});
+
+test("mindmap subtree color uses active node data when activeNodeList is empty", () => {
+  const app = fs.readFileSync("app.js", "utf8");
+  const commands = [];
+  const child = { nodeData: { data: { text: "Child" } }, children: [] };
+  const root = { nodeData: { data: { text: "Root", isActive: true } }, children: [child] };
+  const context = {
+    state: {
+      mindmapInstance: {
+        renderer: { activeNodeList: [], root },
+        execCommand: (...args) => commands.push(args),
+      },
+      editMode: true,
+      currentNode: {},
+    },
+    canEditNode: () => true,
+    renderEditSaveButton: () => {},
+  };
+  vm.createContext(context);
+  vm.runInContext([
+    extractFunction(app, "applyMindmapTextColorToSelectedSubtree"),
+    extractFunction(app, "selectedMindmapNodes"),
+    extractFunction(app, "collectMindmapActiveNodes"),
+    extractFunction(app, "applyMindmapStyleToNodeTree"),
+    extractFunction(app, "markMindmapDirty"),
+  ].join("\n"), context);
+
+  assert.equal(context.applyMindmapTextColorToSelectedSubtree("#ff0000"), true);
+  assert.equal(root.nodeData.data.color, "#ff0000");
+  assert.equal(child.nodeData.data.color, "#ff0000");
+  assert.equal(commands.length, 2);
 });
 
 test("mindmap image nodes get a default imageSize before rendering", () => {
@@ -511,6 +652,7 @@ test("mindmap ctrl c keydown writes selected nodes as markdown bullets", () => {
     },
     isMindmapTextEditingEvent: () => false,
     isMindmapNodeTextEditShortcut: () => false,
+    isMindmapBoldShortcut: () => false,
     canEditNode: () => false,
   };
   vm.createContext(context);
@@ -584,6 +726,7 @@ test("mindmap enter keydown inserts a sibling instead of starting text edit", ()
     extractFunction(app, "selectedMindmapNodesToMarkdownBullets"),
     extractFunction(app, "isMindmapSiblingInsertShortcut"),
     extractFunction(app, "insertMindmapSiblingNodeFromKeyboard"),
+    extractFunction(app, "isMindmapBoldShortcut"),
     extractFunction(app, "isMindmapNodeTextEditShortcut"),
     extractFunction(app, "isPlainMindmapEditKey"),
   ].join("\n"), context);

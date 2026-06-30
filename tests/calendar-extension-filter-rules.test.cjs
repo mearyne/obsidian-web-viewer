@@ -53,6 +53,23 @@ test("low priority calendar tasks are visually subdued and sorted after other ta
   assert.match(styles, /filter: saturate\(/);
 });
 
+test("30d task calendar advances when next week is outside the visible month", () => {
+  assert.match(app, /function ensureMonthCalendarShowsNextWeekFromToday\(\)/);
+  const renderBody = app.match(/function renderCalendar\(\)[\s\S]*?\n}\r?\n\r?\nfunction renderEisenhowerMatrix/)?.[0] || "";
+  assert.match(renderBody, /ensureMonthCalendarShowsNextWeekFromToday\(\)/);
+  assert.match(app, /const nextWeek = addDays\(today, 7\)/);
+  assert.match(app, /state\.calendarDate = startOfMonth\(nextWeek\)/);
+});
+
+test("30d task sorting places deferred last then priority before due date", () => {
+  assert.match(app, /function calendarTaskPriorityRank\(task\)/);
+  assert.match(app, /function calendarTaskDueSortKey\(task\)/);
+  const compareBody = app.match(/function compareCalendarTaskOrder\(a, b\)[\s\S]*?\n}/)?.[0] || "";
+  assert.match(compareBody, /Number\(a\.deferred\) - Number\(b\.deferred\)/);
+  assert.match(compareBody, /calendarTaskPriorityRank\(a\) - calendarTaskPriorityRank\(b\)/);
+  assert.match(compareBody, /calendarTaskDueSortKey\(a\) - calendarTaskDueSortKey\(b\)/);
+});
+
 test("task edit delete closes the native dialog before showing app confirm", () => {
   const body = app.match(/els\.taskEditDeleteBtn\?\.addEventListener\("click", async \(\) => \{[\s\S]*?\n  \}\);/)?.[0] || "";
   assert.match(body, /const reopenOnCancel = els\.taskEditDialog\?\.open/);

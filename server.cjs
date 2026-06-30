@@ -1169,6 +1169,7 @@ function normalizeSettings(settings) {
     mindmapBaseStyle: normalizeMindmapBaseStyle(settings?.mindmapBaseStyle),
     mindmapAutoFit: typeof settings?.mindmapAutoFit === "boolean" ? settings.mindmapAutoFit : true,
     mindmapAdvancedTools: typeof settings?.mindmapAdvancedTools === "boolean" ? settings.mindmapAdvancedTools : true,
+    mindmapShowLineMarker: typeof settings?.mindmapShowLineMarker === "boolean" ? settings.mindmapShowLineMarker : false,
     hideFrontmatter: typeof settings?.hideFrontmatter === "boolean" ? settings.hideFrontmatter : false,
     clipperRules: Array.isArray(settings?.clipperRules)
       ? settings.clipperRules

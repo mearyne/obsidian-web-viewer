@@ -401,7 +401,7 @@ const state = {
   mindmapInstance: null,
   mindmapContext: null,
   mindmapEmbedData: new Map(),
-  mindmapOptions: { layout: "mindMap", lightTheme: "light", darkTheme: "dark", baseStyle: "boxed", autoFit: true, advancedTools: true },
+  mindmapOptions: { layout: "mindMap", lightTheme: "light", darkTheme: "dark", baseStyle: "boxed", autoFit: true, advancedTools: true, showLineMarker: false },
   mindmapDocumentThemes: new Map(),
   hideFrontmatter: false,
   mindmapKeyCaptureActive: false,
@@ -435,6 +435,25 @@ const MINDMAP_BASE_STYLE_OPTIONS = [
   { value: "line", label: "Line" },
 ];
 const MINDMAP_BASE_STYLE_VALUES = new Set(MINDMAP_BASE_STYLE_OPTIONS.map((option) => option.value));
+const MINDMAP_NODE_DATA_STYLE_KEYS = [
+  "color",
+  "fontWeight",
+  "fontStyle",
+  "textDecoration",
+  "fillColor",
+  "borderColor",
+  "borderWidth",
+  "borderDasharray",
+  "borderRadius",
+  "lineColor",
+  "lineMarkerDir",
+  "outerFrame",
+  "associativeLineTargets",
+  "associativeLineTargetControlOffsets",
+  "associativeLinePoint",
+  "associativeLineText",
+  "associativeLineStyle",
+];
 
 const MINDMAP_THEME_OPTIONS = [
   { value: "light", label: "라이트 기본" },
@@ -3566,7 +3585,7 @@ function initOptions() {
 function normalizeMindmapOptions(options = {}) {
   const layouts = MINDMAP_LAYOUT_VALUES;
   const themes = new Set(MINDMAP_ALL_THEME_OPTIONS.map((theme) => theme.value));
-  const previous = state.mindmapOptions || { layout: "mindMap", lightTheme: "light", darkTheme: "dark", baseStyle: "boxed", autoFit: true, advancedTools: true };
+  const previous = state.mindmapOptions || { layout: "mindMap", lightTheme: "light", darkTheme: "dark", baseStyle: "boxed", autoFit: true, advancedTools: true, showLineMarker: false };
   const layout = layouts.has(options.mindmapLayout) ? options.mindmapLayout : (layouts.has(options.layout) ? options.layout : previous.layout);
   const lightTheme = themes.has(options.mindmapLightTheme) ? options.mindmapLightTheme : (themes.has(options.lightTheme) ? options.lightTheme : previous.lightTheme);
   const darkTheme = themes.has(options.mindmapDarkTheme) ? options.mindmapDarkTheme : (themes.has(options.darkTheme) ? options.darkTheme : previous.darkTheme);
@@ -3578,6 +3597,7 @@ function normalizeMindmapOptions(options = {}) {
     baseStyle,
     autoFit: normalizeStoredBoolean(options.mindmapAutoFit ?? options.autoFit, previous.autoFit),
     advancedTools: normalizeStoredBoolean(options.mindmapAdvancedTools ?? options.advancedTools, previous.advancedTools),
+    showLineMarker: normalizeStoredBoolean(options.mindmapShowLineMarker ?? options.showLineMarker, previous.showLineMarker),
   };
 }
 
@@ -3711,6 +3731,7 @@ function syncMindmapOptionInputs() {
   const toolbarTheme = els.mindmapShell?.querySelector("[data-mindmap-theme-select]");
   const autoFit = els.mindmapShell?.querySelector("[data-mindmap-auto-fit]");
   const advancedTools = els.mindmapShell?.querySelector("[data-mindmap-advanced-tools]");
+  const showLineMarker = els.mindmapShell?.querySelector("[data-mindmap-show-line-marker]");
   if (layout) layout.value = state.mindmapOptions.layout;
   if (lightTheme) lightTheme.value = state.mindmapOptions.lightTheme;
   if (darkTheme) darkTheme.value = state.mindmapOptions.darkTheme;
@@ -3718,6 +3739,7 @@ function syncMindmapOptionInputs() {
   if (toolbarTheme) toolbarTheme.value = selectedMindmapThemeName();
   if (autoFit) autoFit.checked = state.mindmapOptions.autoFit;
   if (advancedTools) advancedTools.checked = state.mindmapOptions.advancedTools;
+  if (showLineMarker) showLineMarker.checked = state.mindmapOptions.showLineMarker;
 }
 
 function applyVisibleMindmapOptions() {
@@ -3745,6 +3767,7 @@ function handleMindmapOptionInput() {
     baseStyle: root?.querySelector("[data-mindmap-base-style-select]")?.value,
     autoFit: root?.querySelector("[data-mindmap-auto-fit]")?.checked,
     advancedTools: root?.querySelector("[data-mindmap-advanced-tools]")?.checked,
+    showLineMarker: root?.querySelector("[data-mindmap-show-line-marker]")?.checked,
   });
   scheduleSettingsSave();
 }
@@ -3981,10 +4004,19 @@ async function openNewMindmap() {
   const now = new Date();
   const date = formatDate(now);
   const time = now.toTimeString().slice(0, 5).replace(":", "");
-  const defaultTitle = `${date} ${time} 마인드맵`;
+  const defaultTitle = mindmapTitleWithSuffix(`${date} ${time}`);
   const title = await showNewNoteDialog(defaultTitle);
   if (title === null) return;
   await createAndOpenMindmap(title.trim() || defaultTitle);
+}
+
+function mindmapTitleWithSuffix(title) {
+  const value = String(title || "").trim();
+  if (!value) return "mindmap";
+  const hasMd = /\.md$/i.test(value);
+  const body = hasMd ? value.replace(/\.md$/i, "") : value;
+  if (/\bmindmap$/i.test(body.trim())) return value;
+  return hasMd ? `${body} mindmap.md` : `${body} mindmap`;
 }
 
 function positionNewNoteDialog() {
@@ -4089,6 +4121,7 @@ async function createAndOpenNote(title, dirPathOverride) {
 }
 
 async function createAndOpenMindmap(title, dirPathOverride) {
+  title = mindmapTitleWithSuffix(title);
   const dirPath = dirPathOverride !== undefined
     ? dirPathOverride
     : normalizeVaultPath(state.newNotePath || els.newNotePathInput?.value || "");
@@ -4161,7 +4194,7 @@ async function createLinkedMindmapFromCurrentNote() {
   const pad = (value) => String(value).padStart(2, "0");
   const currentDir = state.currentPath?.includes("/") ? state.currentPath.split("/").slice(0, -1).join("/") : "";
   const currentTitle = displayDocumentTitle(state.currentNode?.name || state.currentPath || "노트");
-  const safeBase = `${currentTitle} 마인드맵 ${formatDate(now)} ${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
+  const safeBase = mindmapTitleWithSuffix(`${currentTitle} ${formatDate(now)} ${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`)
     .replace(/[/\\:*?"<>|]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -4599,6 +4632,7 @@ async function saveServerSettings() {
         mindmapBaseStyle: state.mindmapOptions.baseStyle,
         mindmapAutoFit: state.mindmapOptions.autoFit,
         mindmapAdvancedTools: state.mindmapOptions.advancedTools,
+        mindmapShowLineMarker: state.mindmapOptions.showLineMarker,
         hideFrontmatter: state.hideFrontmatter,
       }),
     });
@@ -4995,6 +5029,7 @@ function applyMindmapBaseStyleToThemeConfig(config, style = state.mindmapOptions
       borderWidth: 0,
     };
   }
+  next.showLineMarker = Boolean(state.mindmapOptions.showLineMarker);
   return next;
 }
 
@@ -5039,6 +5074,7 @@ function legacyMindmapNodeToSimpleMindMapNode(node) {
     expand: node?.expanded !== false,
   };
   if (node?.direction === "left" || node?.direction === "right") data.dir = node.direction;
+  copyMindmapNodeStyleData(node, data);
   copyMindmapImageData(node, data);
   return {
     data,
@@ -5054,10 +5090,18 @@ function simpleMindMapNodeToLegacyMindmapNode(node, isRoot = false) {
     expanded: rawData.expand !== false,
   };
   if (!isRoot && (rawData.dir === "left" || rawData.dir === "right")) result.direction = rawData.dir;
+  copyMindmapNodeStyleData(rawData, result);
   copyMindmapImageData(rawData, result);
   const children = Array.isArray(node?.children) ? node.children.map((child) => simpleMindMapNodeToLegacyMindmapNode(child, false)) : [];
   if (children.length) result.children = children;
   return result;
+}
+
+function copyMindmapNodeStyleData(source, target) {
+  if (!source || !target) return;
+  MINDMAP_NODE_DATA_STYLE_KEYS.forEach((key) => {
+    if (source[key] !== undefined) target[key] = source[key];
+  });
 }
 
 function copyMindmapImageData(source, target) {
@@ -5236,7 +5280,7 @@ function renderMindmapDocument() {
           </div>
         </div>
       </details>
-      ${canEdit ? `<aside class="mindmap-tools-drawer" data-mindmap-tools-drawer hidden>
+      <aside class="mindmap-tools-drawer" data-mindmap-tools-drawer hidden>
         <header>
           <strong>Tools</strong>
           <button type="button" data-mindmap-action="tools-close" aria-label="Close" title="Close">×</button>
@@ -5248,8 +5292,14 @@ function renderMindmapDocument() {
           <button type="button" data-mindmap-action="reset-layout">Reset layout</button>
           <button type="button" data-mindmap-action="export-md">Export MD</button>
           <button type="button" data-mindmap-action="import-md" data-edit-only>Import MD</button>
+          <button type="button" data-mindmap-action="associate-line" data-edit-only>Associate</button>
+          <button type="button" data-mindmap-action="outer-frame" data-edit-only>Outer frame</button>
         </div>
         <div class="mindmap-tools-options" data-mindmap-options>
+          <label>
+            <span>Subtree text</span>
+            <input type="color" data-mindmap-subtree-color value="#1e293b" />
+          </label>
           <label>
             <span>Default layout</span>
             <select data-mindmap-default-layout-select>
@@ -5282,8 +5332,12 @@ function renderMindmapDocument() {
             <span>Show advanced tools</span>
             <input type="checkbox" data-mindmap-advanced-tools />
           </label>
+          <label class="mindmap-tools-check">
+            <span>Show arrows</span>
+            <input type="checkbox" data-mindmap-show-line-marker />
+          </label>
         </div>
-      </aside>` : ""}
+      </aside>
       <div id="mindmapCanvas" class="mindmap-canvas" tabindex="0"></div>
     </section>
   `;
@@ -5336,6 +5390,7 @@ function renderSimpleMindMapDocument(data, canvas) {
   mindMap.on("node_active", (node, activeNodeList = []) => rememberMindmapNodeForEditing(node || activeNodeList[0]));
   mindMap.on("node_mousedown", rememberMindmapNodeForEditing);
   mindMap.on("node_click", rememberMindmapNodeForEditing);
+  mindMap.on("contextmenu", showMindmapContextMenu);
   mindMap.on("search_info_change", updateMindmapSearchStatus);
   bindMindmapToolbarControls();
   requestAnimationFrame(() => {
@@ -5420,10 +5475,11 @@ function bindMindmapToolbarControls() {
     });
   }
   els.mindmapShell?.querySelector("[data-mindmap-options]")?.addEventListener("change", handleMindmapOptionInput);
-  syncMindmapOptionInputs();
-  els.mindmapShell?.querySelectorAll("[data-edit-only]").forEach((button) => {
-    button.disabled = !canEdit;
+  els.mindmapShell?.querySelector("[data-mindmap-subtree-color]")?.addEventListener("input", (event) => {
+    applyMindmapTextColorToSelectedSubtree(event.target.value);
   });
+  syncMindmapOptionInputs();
+  updateMindmapEditOnlyControls();
   els.mindmapShell?.querySelectorAll("[data-mindmap-action]").forEach((button) => {
     button.addEventListener("click", () => {
       runMindmapToolbarAction(button.getAttribute("data-mindmap-action"));
@@ -5526,11 +5582,36 @@ function runMindmapToolbarAction(action) {
   if (action === "reset-layout") jm.execCommand?.("RESET_LAYOUT");
   if (action === "export-md") exportCurrentMindmapMarkdown();
   if (action === "import-md") importMarkdownIntoCurrentMindmap();
-  if (action === "tools") toggleMindmapToolsDrawer(true);
+  if (action === "tools") void openMindmapToolsDrawer();
   if (action === "tools-close") toggleMindmapToolsDrawer(false);
+  if (canEdit && action === "associate-line") addMindmapAssociativeLine();
+  if (canEdit && action === "outer-frame") addMindmapOuterFrame();
   if (action === "search-next") runMindmapSearchNext();
   if (action === "search-prev") runMindmapSearchPrevious();
   if (action === "search-clear") clearMindmapSearch();
+}
+
+async function openMindmapToolsDrawer() {
+  if (!els.mindmapShell?.querySelector("[data-mindmap-tools-drawer]")) return;
+  if (!state.editMode && canEditNode(state.currentNode)) {
+    const granted = await ensureNodeWritePermission(state.currentNode);
+    if (granted) {
+      state.editMode = true;
+      state.editorDirty = false;
+      stopAutoSave();
+      state.mindmapInstance?.updateConfig?.({ readonly: false });
+      updateEditButtons();
+      updateMindmapEditOnlyControls();
+    }
+  }
+  toggleMindmapToolsDrawer(true);
+}
+
+function updateMindmapEditOnlyControls() {
+  const canEdit = state.editMode && canEditNode(state.currentNode);
+  els.mindmapShell?.querySelectorAll("[data-edit-only]").forEach((button) => {
+    button.disabled = !canEdit;
+  });
 }
 
 function toggleMindmapToolsDrawer(open) {
@@ -5590,6 +5671,12 @@ function handleMindmapKeydown(event) {
   if (isMindmapTextEditingEvent(event)) return;
   if (isMindmapCopyShortcut(event) && hasMindmapNodesForCopy()) {
     void copyMindmapSelectionToClipboard(event);
+    return;
+  }
+  if (isMindmapBoldShortcut(event) && toggleSelectedMindmapBold()) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation?.();
     return;
   }
   if (isMindmapSiblingInsertShortcut(event)) {
@@ -5669,6 +5756,93 @@ function isMindmapCopyShortcut(event) {
     && !event.isComposing
     && (event.ctrlKey || event.metaKey)
     && (event.code === "KeyC" || event.key?.toLowerCase?.() === "c");
+}
+
+function isMindmapBoldShortcut(event) {
+  return !event.altKey
+    && !event.shiftKey
+    && !event.isComposing
+    && (event.ctrlKey || event.metaKey)
+    && (event.code === "KeyB" || event.key?.toLowerCase?.() === "b");
+}
+
+function collectMindmapActiveNodes(node, result = []) {
+  if (!node) return result;
+  if (node.nodeData?.data?.isActive) result.push(node);
+  if (Array.isArray(node.children)) {
+    node.children.forEach((child) => collectMindmapActiveNodes(child, result));
+  }
+  return result;
+}
+
+function selectedMindmapNodes() {
+  let nodes = state.mindmapInstance?.renderer?.activeNodeList || [];
+  if (!nodes.length) nodes = collectMindmapActiveNodes(state.mindmapInstance?.renderer?.root);
+  if (!nodes.length && state.mindmapLastClickedNodeUid) {
+    const node = state.mindmapInstance?.renderer?.findNodeByUid?.(state.mindmapLastClickedNodeUid);
+    if (node) nodes = [node];
+  }
+  return nodes;
+}
+
+function applyMindmapStyleToNodeTree(node, style, subtree = false) {
+  if (!node || !style || !state.mindmapInstance) return;
+  if (node.nodeData?.data && typeof node.nodeData.data === "object") Object.assign(node.nodeData.data, style);
+  state.mindmapInstance.execCommand?.("SET_NODE_STYLE", node, style, false);
+  if (subtree && Array.isArray(node.children)) {
+    node.children.forEach((child) => applyMindmapStyleToNodeTree(child, style, true));
+  }
+}
+
+function markMindmapDirty() {
+  if (!(state.editMode && canEditNode(state.currentNode))) return;
+  state.editorDirty = true;
+  renderEditSaveButton();
+}
+
+function toggleSelectedMindmapBold() {
+  if (!(state.editMode && canEditNode(state.currentNode))) return false;
+  const nodes = selectedMindmapNodes();
+  if (!nodes.length) return false;
+  const first = nodes[0];
+  const currentWeight = first.getStyle?.("fontWeight") || first.getData?.("fontWeight") || first.nodeData?.data?.fontWeight || "";
+  const nextWeight = String(currentWeight).toLowerCase() === "bold" ? "normal" : "bold";
+  nodes.forEach((node) => applyMindmapStyleToNodeTree(node, { fontWeight: nextWeight }, false));
+  markMindmapDirty();
+  return true;
+}
+
+function applyMindmapTextColorToSelectedSubtree(color) {
+  if (!(state.editMode && canEditNode(state.currentNode))) return false;
+  const value = String(color || "").trim();
+  if (!/^#[0-9a-f]{6}$/i.test(value)) return false;
+  const nodes = selectedMindmapNodes();
+  if (!nodes.length) return false;
+  nodes.forEach((node) => applyMindmapStyleToNodeTree(node, { color: value }, true));
+  markMindmapDirty();
+  return true;
+}
+
+function addMindmapAssociativeLine() {
+  const nodes = selectedMindmapNodes();
+  if (nodes.length < 2) {
+    showAppToast("연결할 노드 2개를 선택하세요.", "error");
+    return false;
+  }
+  state.mindmapInstance?.execCommand?.("ADD_ASSOCIATIVE_LINE", nodes[0], nodes[1]);
+  markMindmapDirty();
+  return true;
+}
+
+function addMindmapOuterFrame() {
+  const nodes = selectedMindmapNodes();
+  if (!nodes.length) {
+    showAppToast("외곽 프레임을 적용할 노드를 선택하세요.", "error");
+    return false;
+  }
+  state.mindmapInstance?.execCommand?.("ADD_OUTER_FRAME", nodes);
+  markMindmapDirty();
+  return true;
 }
 
 async function copyMindmapSelectionToClipboard(event) {
@@ -8359,7 +8533,6 @@ function bindTaskRepeatControls(scope) {
 }
 
 function renderCalendar() {
-  if (state.activeView === "calendar") updateCalendarTitle();
   if (state.calendarKind === "tasks" && state.calendarMode === "day") {
     state.calendarKind = "matrix";
     state.matrixPeriodDays = 1;
@@ -8368,6 +8541,8 @@ function renderCalendar() {
     renderEisenhowerMatrix();
     return;
   }
+  ensureMonthCalendarShowsNextWeekFromToday();
+  if (state.activeView === "calendar") updateCalendarTitle();
   const showingTasks = state.calendarKind === "tasks";
   const month = startOfMonth(state.calendarDate);
   const monthKey = formatMonth(month);
@@ -8458,6 +8633,16 @@ function renderCalendar() {
   if (state.calendarMode === "week" || state.calendarMode === "day") {
     requestAnimationFrame(scrollAgendaToToday);
   }
+}
+
+function ensureMonthCalendarShowsNextWeekFromToday() {
+  if (state.calendarMode !== "month" || !isTaskCalendarKind()) return;
+  const today = new Date();
+  const currentMonth = startOfMonth(state.calendarDate);
+  if (formatMonth(currentMonth) !== formatMonth(today)) return;
+  const nextWeek = addDays(today, 7);
+  if (formatMonth(nextWeek) === formatMonth(currentMonth)) return;
+  state.calendarDate = startOfMonth(nextWeek);
 }
 
 function renderEisenhowerMatrix() {
@@ -11735,8 +11920,23 @@ function isLowPriorityTask(task) {
   return String(task?.priority || "") === "하";
 }
 
+function calendarTaskPriorityRank(task) {
+  if (task.priority === TASK_PRIORITY_HIGH) return 0;
+  if (task.priority === TASK_PRIORITY_MEDIUM) return 1;
+  if (task.priority === TASK_PRIORITY_LOW) return 2;
+  return 3;
+}
+
+function calendarTaskDueSortKey(task) {
+  const date = parseDateKey(task.dates?.due || task.dates?.end || task.date || "");
+  return date ? date.getTime() : Number.MAX_SAFE_INTEGER;
+}
+
 function compareCalendarTaskOrder(a, b) {
   return Number(a.checked) - Number(b.checked)
+    || Number(a.deferred) - Number(b.deferred)
+    || calendarTaskPriorityRank(a) - calendarTaskPriorityRank(b)
+    || calendarTaskDueSortKey(a) - calendarTaskDueSortKey(b)
     || Number(isLowPriorityTask(a)) - Number(isLowPriorityTask(b))
     || taskTypeRank(a.type) - taskTypeRank(b.type)
     || a.text.localeCompare(b.text, "ko");
