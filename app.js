@@ -14,6 +14,9 @@ const TASK_PRIORITY_MEDIUM = "\uC911";
 const TASK_PRIORITY_LOW = "\uD558";
 const TASK_REPEAT_WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"];
 const TASK_REPEAT_WEEKDAYS_BY_DATE = ["일", "월", "화", "수", "목", "금", "토"];
+function defaultMatrixSortModes() {
+  return { active: "priority", completed: "priority", recurring: "priority", deferred: "priority" };
+}
 function setTasksDirty() { try { localStorage.setItem(TASKS_DIRTY_KEY, "1"); } catch {} }
 function clearTasksDirty() { try { localStorage.removeItem(TASKS_DIRTY_KEY); } catch {} }
 function isTasksDirty() { try { return localStorage.getItem(TASKS_DIRTY_KEY) === "1"; } catch { return false; } }
@@ -380,6 +383,7 @@ const state = {
   fullscreenAttempted: false,
   fullscreenFallback: false,
   matrixExpandedTasks: new Set(),
+  matrixSortModes: defaultMatrixSortModes(),
   fontDeviceKey: "",
   sseSource: null,
   documentRenderToken: 0,
@@ -2403,6 +2407,7 @@ function resetVault() {
   state.calendarDateOpenSuppressedUntil = 0;
   state.matrixTaskDrag = null;
   state.matrixExpandedTasks = new Set();
+  state.matrixSortModes = defaultMatrixSortModes();
   state.vaultLoaded = false;
   state.contentSearchMatches = null;
   if (state.calendarRefreshTimer) {
@@ -8459,29 +8464,27 @@ function renderEisenhowerMatrix() {
       key: "active",
       icon: "▶",
       title: "오늘 진행",
-      sorter: compareMatrixTodoTasks,
     },
     {
       key: "completed",
       icon: "✓",
       title: "완료",
-      sorter: compareMatrixDateTasks,
     },
     {
       key: "recurring",
       icon: "🔁",
       title: "루틴 / 반복",
-      sorter: compareMatrixDateTasks,
     },
     {
       key: "deferred",
       icon: "…",
       title: "보류",
-      sorter: compareMatrixDateTasks,
     },
   ].map((quadrant) => ({
     ...quadrant,
-    tasks: tasks.filter((task) => matrixTaskPlacement(task) === quadrant.key).sort(quadrant.sorter),
+    tasks: tasks
+      .filter((task) => matrixTaskPlacement(task) === quadrant.key)
+      .sort((a, b) => compareMatrixTasksByMode(a, b, matrixSortModeForKey(quadrant.key))),
   }));
 
   els.calendarView.innerHTML = `
@@ -8523,6 +8526,7 @@ function renderCalendarFilterToggleButton(extraClass = "") {
 }
 
 function renderMatrixQuadrant(quadrant) {
+  const sortMode = matrixSortModeForKey(quadrant.key);
   return `
     <section class="matrix-quadrant ${quadrant.key}" data-matrix-key="${quadrant.key}">
       <header>
@@ -8530,7 +8534,15 @@ function renderMatrixQuadrant(quadrant) {
           <span aria-hidden="true">${quadrant.icon}</span>
           ${escapeHtml(quadrant.title)}
         </strong>
-        <span>${quadrant.tasks.length}</span>
+        <span class="matrix-quadrant-controls">
+          <select class="matrix-sort-select" data-matrix-sort="${escapeAttribute(quadrant.key)}" aria-label="${escapeAttribute(quadrant.title)} 정렬">
+            <option value="priority" ${sortMode === "priority" ? "selected" : ""}>중요도</option>
+            <option value="deadline" ${sortMode === "deadline" ? "selected" : ""}>마감일</option>
+            <option value="time" ${sortMode === "time" ? "selected" : ""}>시간</option>
+            <option value="title" ${sortMode === "title" ? "selected" : ""}>이름</option>
+          </select>
+          <span>${quadrant.tasks.length}</span>
+        </span>
       </header>
       <div class="matrix-task-list">
         ${quadrant.tasks.length ? quadrant.tasks.map((task) => renderMatrixTask(task, quadrant)).join("") : '<div class="matrix-empty">No tasks</div>'}
@@ -8585,11 +8597,18 @@ function renderMatrixQuickAdd() {
 
 function matrixTaskMetaHtml(task, due) {
   const time = matrixTaskTime(task, due);
+  const dateTime = [due, time].filter(Boolean).join(" ");
   return [
-    due ? `<span class="matrix-task-meta-item matrix-task-meta-date ${matrixMetaDateClass(due)}">${escapeHtml(due)}</span>` : "",
-    time ? `<span class="matrix-task-meta-item matrix-task-meta-time">${escapeHtml(time)}</span>` : "",
-    task.priority ? `<span class="matrix-task-meta-item matrix-task-meta-priority priority-rank-${matrixPriorityRank(task)}">${escapeHtml(task.priority)}</span>` : "",
-  ].filter(Boolean).join('<span class="matrix-task-meta-separator">·</span>');
+    dateTime ? `<span class="matrix-task-meta-item matrix-task-meta-datetime ${matrixMetaDateClass(due)}">${escapeHtml(dateTime)}</span>` : "",
+    task.priority ? `<span class="matrix-task-meta-item matrix-task-meta-priority priority-rank-${matrixPriorityRank(task)}" aria-label="중요도 ${escapeAttribute(task.priority)}" title="중요도 ${escapeAttribute(task.priority)}">${matrixPriorityFlag(task)}</span>` : "",
+  ].filter(Boolean).join("");
+}
+
+function matrixPriorityFlag(task) {
+  if (task.priority === TASK_PRIORITY_HIGH) return "&#128681;";
+  if (task.priority === TASK_PRIORITY_MEDIUM) return "&#9873;";
+  if (task.priority === TASK_PRIORITY_LOW) return "&#9872;";
+  return "";
 }
 
 function matrixMetaDateClass(dateKey) {
@@ -8693,6 +8712,38 @@ function compareMatrixDateTasks(a, b) {
   return compareMatrixTaskOrder(a, b);
 }
 
+function matrixSortModeForKey(key) {
+  return state.matrixSortModes?.[key] || "priority";
+}
+
+function compareMatrixTasksByMode(a, b, mode) {
+  if (mode === "deadline") return compareMatrixDeadlineFirst(a, b);
+  if (mode === "time") return compareMatrixTimeFirst(a, b);
+  if (mode === "title") return a.text.localeCompare(b.text, "ko") || compareMatrixTaskOrder(a, b);
+  return compareMatrixTaskOrder(a, b);
+}
+
+function compareMatrixDeadlineFirst(a, b) {
+  const aDeadline = matrixTaskDeadlineKey(a);
+  const bDeadline = matrixTaskDeadlineKey(b);
+  if (!aDeadline && bDeadline) return 1;
+  if (aDeadline && !bDeadline) return -1;
+  return aDeadline.localeCompare(bDeadline) || compareMatrixTaskOrder(a, b);
+}
+
+function matrixTaskSortTime(task) {
+  const dateKey = matrixTaskDateKey(task);
+  return matrixTaskTime(task, dateKey);
+}
+
+function compareMatrixTimeFirst(a, b) {
+  const aTime = matrixTaskSortTime(a);
+  const bTime = matrixTaskSortTime(b);
+  if (!aTime && bTime) return 1;
+  if (aTime && !bTime) return -1;
+  return aTime.localeCompare(bTime) || compareMatrixTaskOrder(a, b);
+}
+
 function matrixTaskPlacement(task) {
   if (task.isRecurring) return "recurring";
   if (task.checked) return "completed";
@@ -8705,6 +8756,16 @@ function bindMatrixEvents() {
 
   els.calendarView.querySelector("[data-matrix-expand-all]")?.addEventListener("click", () => {
     toggleMatrixAllSubItems();
+  });
+
+  els.calendarView.querySelectorAll("[data-matrix-sort]").forEach((select) => {
+    select.addEventListener("change", () => {
+      const key = select.getAttribute("data-matrix-sort");
+      const mode = select.value;
+      if (!key || !["priority", "deadline", "time", "title"].includes(mode)) return;
+      state.matrixSortModes[key] = mode;
+      renderCalendar();
+    });
   });
 
   els.calendarView.querySelectorAll("[data-matrix-delete-path]").forEach((button) => {

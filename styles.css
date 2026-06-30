@@ -4877,6 +4877,25 @@ button:disabled {
   font-size: 12px;
 }
 
+.matrix-quadrant-controls {
+  align-items: center;
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 5px;
+}
+
+.matrix-sort-select {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+  height: 22px;
+  max-width: 72px;
+  padding: 1px 3px;
+}
+
 .matrix-task-list {
   display: flex;
   flex: 1 1 auto;
@@ -4957,7 +4976,7 @@ button:disabled {
   display: grid;
   flex: 0 0 auto;
   gap: 6px;
-  grid-template-columns: minmax(0, 1fr) 156px;
+  grid-template-columns: minmax(0, 1fr) 126px;
   line-height: 1.35;
   min-height: 28px;
   padding: 4px 7px;
@@ -5041,21 +5060,20 @@ button:disabled {
 }
 
 .matrix-task-meta-priority {
-  border: 1px solid currentColor;
-  border-radius: 999px;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 700;
-  line-height: 1.1;
-  padding: 1px 4px;
+  line-height: 1;
+  padding: 0;
   text-align: center;
+  width: 22px;
 }
 
-.matrix-task-meta-date.date-color-0 { color: #7057d6; }
-.matrix-task-meta-date.date-color-1 { color: #1f8a58; }
-.matrix-task-meta-date.date-color-2 { color: #b76615; }
-.matrix-task-meta-date.date-color-3 { color: #2b74bf; }
-.matrix-task-meta-date.date-color-4 { color: #be3f67; }
-.matrix-task-meta-date.date-color-5 { color: #777a16; }
+.matrix-task-meta-datetime.date-color-0 { color: #7057d6; }
+.matrix-task-meta-datetime.date-color-1 { color: #1f8a58; }
+.matrix-task-meta-datetime.date-color-2 { color: #b76615; }
+.matrix-task-meta-datetime.date-color-3 { color: #2b74bf; }
+.matrix-task-meta-datetime.date-color-4 { color: #be3f67; }
+.matrix-task-meta-datetime.date-color-5 { color: #777a16; }
 
 .matrix-task-meta-priority.priority-rank-0 { color: #e74c3c; }
 .matrix-task-meta-priority.priority-rank-1 { color: #c98c0a; }
@@ -5091,8 +5109,8 @@ button:disabled {
 .matrix-task-meta {
   display: grid;
   flex: 0 0 auto;
-  gap: 0;
-  grid-template-columns: 96px 34px 26px;
+  gap: 4px;
+  grid-template-columns: minmax(0, 1fr) 24px;
   color: var(--muted);
   font-size: 11px;
   overflow: hidden;
@@ -5100,6 +5118,13 @@ button:disabled {
   text-overflow: ellipsis;
   white-space: nowrap;
   word-break: break-word;
+}
+
+.matrix-task-meta-datetime {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .matrix-quadrant-attitude {

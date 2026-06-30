@@ -132,3 +132,4 @@
 - 2026-06-30: Prevent horizontal scrolling in task 1d rows and keep low-priority tasks in Today Progress while Deferred only shows postponed tasks.
 - 2026-06-30: Merge task 1d delete action visually into each task row, change delete icon, and color matching dates/priorities consistently in task metadata.
 - 2026-06-30: Remove matrix-shell gap, align task 1d metadata/delete columns, force recurring moves to daily recurring, reset moves out to medium todo, distinguish priority labels, and open recurring tasks in view mode.
+- 2026-06-30: Fix task 1d metadata overlap by combining date/time and flag priority, and add per-quadrant sort options.

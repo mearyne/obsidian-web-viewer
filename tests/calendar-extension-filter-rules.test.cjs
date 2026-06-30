@@ -147,7 +147,7 @@ test("matrix task rows are compact one-line title and metadata rows", () => {
   const metaBody = styles.match(/\.matrix-task-meta \{[\s\S]*?\n\}/)?.[0] || "";
   assert.match(taskBody, /flex: 0 0 auto/);
   assert.match(taskBody, /display: grid/);
-  assert.match(taskBody, /grid-template-columns: minmax\(0, 1fr\) 156px/);
+  assert.match(taskBody, /grid-template-columns: minmax\(0, 1fr\) 126px/);
   assert.match(taskBody, /line-height: 1\.35/);
   assert.match(taskBody, /min-height: 28px/);
   assert.match(titleBody, /flex: 1 1 auto/);
@@ -235,9 +235,9 @@ test("matrix task rows put delete action on the right and shrink quick add heigh
   assert.match(rowBody, /background: var\(--surface-2\)/);
   assert.match(rowBody, /border: 1px solid var\(--line\)/);
   assert.match(taskBody, /display: grid/);
-  assert.match(taskBody, /grid-template-columns: minmax\(0, 1fr\) 156px/);
+  assert.match(taskBody, /grid-template-columns: minmax\(0, 1fr\) 126px/);
   assert.match(metaBody, /display: grid/);
-  assert.match(metaBody, /grid-template-columns: 96px 34px 26px/);
+  assert.match(metaBody, /grid-template-columns: minmax\(0, 1fr\) 24px/);
   assert.match(deleteBody, /background: transparent/);
   assert.match(deleteBody, /border: 0/);
   assert.match(quickAddBody, /padding: 2px 8px/);
@@ -293,15 +293,18 @@ test("matrix task metadata colors matching dates and priorities consistently", (
   const styles = fs.readFileSync("styles.css", "utf8");
   const metaBody = app.match(/function matrixTaskMetaHtml\(task, due\)[\s\S]*?\n}\r?\n\r?\nfunction matrixTaskTime/)?.[0] || "";
   assert.match(app, /function matrixMetaDateClass\(dateKey\)/);
-  assert.match(metaBody, /matrix-task-meta-date \$\{matrixMetaDateClass\(due\)\}/);
+  assert.match(app, /function matrixPriorityFlag\(task\)/);
+  assert.match(metaBody, /matrix-task-meta-datetime \$\{matrixMetaDateClass\(due\)\}/);
   assert.match(metaBody, /matrix-task-meta-priority priority-rank-\$\{matrixPriorityRank\(task\)\}/);
-  assert.match(styles, /\.matrix-task-meta-date\.date-color-0/);
-  assert.match(styles, /\.matrix-task-meta-date\.date-color-5/);
+  assert.match(metaBody, /matrixPriorityFlag\(task\)/);
+  assert.match(styles, /\.matrix-task-meta-datetime\.date-color-0/);
+  assert.match(styles, /\.matrix-task-meta-datetime\.date-color-5/);
   assert.match(styles, /\.matrix-task-meta-priority\.priority-rank-0/);
   assert.match(styles, /\.matrix-task-meta-priority\.priority-rank-1/);
   assert.match(styles, /\.matrix-task-meta-priority\.priority-rank-2/);
   assert.match(styles, /\.matrix-task-meta-priority \{/);
-  assert.match(styles, /border: 1px solid currentColor/);
+  assert.match(styles, /width: 22px/);
+  assert.doesNotMatch(styles, /border: 1px solid currentColor/);
 });
 
 test("matrix sorting is priority first then nearest deadline with no deadline last", () => {
@@ -312,4 +315,19 @@ test("matrix sorting is priority first then nearest deadline with no deadline la
   assert.match(orderBody, /if \(!aDeadline && bDeadline\) return 1/);
   assert.match(orderBody, /if \(aDeadline && !bDeadline\) return -1/);
   assert.match(app, /return compareMatrixTaskOrder\(a, b\)/);
+});
+
+test("matrix quadrants expose independent sort options", () => {
+  const styles = fs.readFileSync("styles.css", "utf8");
+  const renderMatrixBody = app.match(/function renderEisenhowerMatrix\(\)[\s\S]*?\n}\r?\nfunction renderCalendarFilterToggleButton/)?.[0] || "";
+  const renderQuadrantBody = app.match(/function renderMatrixQuadrant\(quadrant\)[\s\S]*?\n}\r?\n\r?\nfunction renderMatrixTask/)?.[0] || "";
+  const bindBody = app.match(/function bindMatrixEvents\(\)[\s\S]*?\n}\r?\n\r?\nfunction toggleMatrixAllSubItems/)?.[0] || "";
+  assert.match(app, /function defaultMatrixSortModes\(\)/);
+  assert.match(app, /matrixSortModes: defaultMatrixSortModes\(\)/);
+  assert.match(renderMatrixBody, /compareMatrixTasksByMode\(a, b, matrixSortModeForKey\(quadrant\.key\)\)/);
+  assert.match(renderQuadrantBody, /data-matrix-sort="\$\{escapeAttribute\(quadrant\.key\)\}"/);
+  assert.match(renderQuadrantBody, /matrixSortModeForKey\(quadrant\.key\)/);
+  assert.match(bindBody, /querySelectorAll\("\[data-matrix-sort\]"\)/);
+  assert.match(bindBody, /state\.matrixSortModes\[key\] = mode/);
+  assert.match(styles, /\.matrix-sort-select \{/);
 });
