@@ -150,7 +150,7 @@ test("matrix uses today progress completed routine and deferred sections", () =>
   assert.doesNotMatch(app, /if \(task\.deferred \|\| isLowPriorityTask\(task\)\) return "deferred"/);
   assert.match(app, /function compareMatrixTodoTasks\(a, b\)/);
   assert.match(app, /function compareMatrixDateTasks\(a, b\)/);
-  assert.match(app, /completed: \{ key: "completed", kind: TASK_KIND_TODO, priority: TASK_PRIORITY_MEDIUM, recurring: false, checked: true/);
+  assert.match(app, /completed: \{ key: "completed", kind: TASK_KIND_TODO, recurring: false, checked: true/);
   assert.match(app, /deferred: \{ key: "deferred", kind: TASK_KIND_TODO, priority: TASK_PRIORITY_MEDIUM, recurring: false, deferred: true/);
   assert.match(app, /function replaceMatrixTaskStatus\(line, placement\)/);
   assert.doesNotMatch(app, /if \(button\.getAttribute\("data-matrix-key"\) === "recurring"\)[\s\S]*?await toggleCalendarTask\(path, line, button\)/);
@@ -310,7 +310,7 @@ test("matrix recurring moves set daily recurring and moving out resets to medium
   const moveBody = app.match(/async function moveTaskToMatrixQuadrant\(path, lineNumber, placement\)[\s\S]*?\n}\r?\n\r?\nfunction replaceMatrixTaskStatus/)?.[0] || "";
   assert.match(placementBody, /recurring: \{ key: "recurring", kind: TASK_KIND_RECURRING, recurring: true, checked: false, deferred: false \}/);
   assert.match(placementBody, /active: \{ key: "active", kind: TASK_KIND_TODO, priority: TASK_PRIORITY_MEDIUM, recurring: false, checked: false, deferred: false \}/);
-  assert.match(placementBody, /completed: \{ key: "completed", kind: TASK_KIND_TODO, priority: TASK_PRIORITY_MEDIUM, recurring: false, checked: true, deferred: false \}/);
+  assert.match(placementBody, /completed: \{ key: "completed", kind: TASK_KIND_TODO, recurring: false, checked: true, deferred: false \}/);
   assert.match(placementBody, /deferred: \{ key: "deferred", kind: TASK_KIND_TODO, priority: TASK_PRIORITY_MEDIUM, recurring: false, deferred: true, checked: false \}/);
   assert.match(moveBody, /replaceTaskRepeatWeekdays\(nextLine, TASK_REPEAT_WEEKDAYS\)/);
   assert.match(moveBody, /replaceTaskKindTag\(nextLine, placement\.kind\)/);

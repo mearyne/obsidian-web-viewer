@@ -9200,7 +9200,7 @@ function shiftMatrixDate(direction) {
 function matrixPlacementFromKey(key) {
   return {
     active: { key: "active", kind: TASK_KIND_TODO, priority: TASK_PRIORITY_MEDIUM, recurring: false, checked: false, deferred: false },
-    completed: { key: "completed", kind: TASK_KIND_TODO, priority: TASK_PRIORITY_MEDIUM, recurring: false, checked: true, deferred: false },
+    completed: { key: "completed", kind: TASK_KIND_TODO, recurring: false, checked: true, deferred: false },
     recurring: { key: "recurring", kind: TASK_KIND_RECURRING, recurring: true, checked: false, deferred: false },
     deferred: { key: "deferred", kind: TASK_KIND_TODO, priority: TASK_PRIORITY_MEDIUM, recurring: false, deferred: true, checked: false },
   }[key] || null;
