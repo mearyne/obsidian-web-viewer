@@ -8501,7 +8501,6 @@ function renderEisenhowerMatrix() {
         </div>
       </div>
       ${renderCalendarFilterBar()}
-      ${renderMatrixRules(range)}
       <div class="matrix-grid">
         ${quadrants.map((quadrant) => renderMatrixQuadrant(quadrant)).join("")}
       </div>
@@ -8558,16 +8557,6 @@ function renderMatrixTask(task, quadrant = {}) {
   `;
 }
 
-function renderMatrixRules(range) {
-  return `
-    <div class="matrix-rules">
-      <span>오늘 진행: 미완료 일정 + 할 일</span>
-      <span>완료: 드래그하거나 체크한 항목</span>
-      <span>루틴: #${TASK_KIND_RECURRING} + 선택 요일</span>
-      <span>보류: 미루기 + 중요도 하</span>
-    </div>
-  `;
-}
 function renderMatrixUnclassified(tasks) {
   if (!tasks.length) return "";
   const formatPreview = (task) => task.text ? task.text : "(제목 없음)";
