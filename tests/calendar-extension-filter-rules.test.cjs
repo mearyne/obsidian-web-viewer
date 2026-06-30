@@ -274,7 +274,7 @@ test("matrix tasks are one-line cards with time and no per-task attitude text", 
   assert.match(metaBody, /white-space: nowrap/);
 });
 
-test("matrix active quadrant has quick todo input that adds medium-priority todo for the matrix date", () => {
+test("matrix active quadrant has quick todo input that adds an unprioritized todo for the matrix date", () => {
   const renderQuadrantBody = app.match(/function renderMatrixQuadrant\(quadrant\)[\s\S]*?\n}\r?\n\r?\nfunction renderMatrixTask/)?.[0] || "";
   const quickAddBody = app.match(/function renderMatrixQuickAdd\(\)[\s\S]*?\n}\r?\n\r?\nfunction matrixTaskTime/)?.[0] || "";
   const bindBody = app.match(/function bindMatrixEvents\(\)[\s\S]*?\n}\r?\n\r?\nfunction bindMatrixQuickAdd/)?.[0] || "";
@@ -286,7 +286,9 @@ test("matrix active quadrant has quick todo input that adds medium-priority todo
   assert.match(bindBody, /bindMatrixQuickAdd/);
   assert.match(app, /async function addMatrixQuickTodo\(title\)/);
   assert.match(app, /const dateKey = formatDate\(matrixDateRange\(\)\.start\)/);
-  assert.match(app, /#\$\{TASK_KIND_TODO\} #\$\{TASK_PRIORITY_MEDIUM\}/);
+  const addQuickTodoBody = app.match(/async function addMatrixQuickTodo\(title\)[\s\S]*?\n}\r?\n\r?\nfunction shiftMatrixDate/)?.[0] || "";
+  assert.match(addQuickTodoBody, /#\$\{TASK_KIND_TODO\}/);
+  assert.doesNotMatch(addQuickTodoBody, /TASK_PRIORITY_MEDIUM/);
   assert.match(app, /📅 \$\{dateKey\}/);
 });
 

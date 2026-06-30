@@ -9222,7 +9222,7 @@ async function addMatrixQuickTodo(title) {
   const node = await getOrCreateDailyNote(dateKey);
   const content = await readFileNode(node);
   const prefix = content.endsWith("\n") ? "" : "\n";
-  const taskLine = `${prefix}- [ ] ${title} #${TASK_KIND_TODO} #${TASK_PRIORITY_MEDIUM} 📅 ${dateKey}\n`;
+  const taskLine = `${prefix}- [ ] ${title} #${TASK_KIND_TODO} 📅 ${dateKey}\n`;
   const nextContent = content + taskLine;
   await writeNodeContent(node, nextContent, { backup: false, previousContent: content });
   if (typeof node.content === "string") node.content = nextContent;
