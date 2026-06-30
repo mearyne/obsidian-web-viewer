@@ -145,3 +145,4 @@
 - 2026-07-01: Make calendar open as fast as possible by using a persisted vault file-list snapshot before background refresh.
 - 2026-07-01: Do not set priority when adding a task from the 1d quick-add input.
 - 2026-07-01: Fix mindmap title editing so app shortcuts do not block text input keys.
+- 2026-07-01: Add Ctrl+Shift+B shortcut to wrap the selected mindmap node in a frame.

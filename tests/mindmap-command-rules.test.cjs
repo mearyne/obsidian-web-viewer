@@ -592,6 +592,7 @@ test("mindmap ctrl b toggles bold on selected nodes outside text editing", () =>
   vm.createContext(context);
   vm.runInContext([
     extractFunction(app, "handleMindmapKeydown"),
+    extractFunction(app, "isMindmapFrameShortcut"),
     extractFunction(app, "isMindmapBoldShortcut"),
     extractFunction(app, "toggleSelectedMindmapBold"),
     extractFunction(app, "selectedMindmapNodes"),
@@ -620,6 +621,73 @@ test("mindmap ctrl b toggles bold on selected nodes outside text editing", () =>
   assert.equal(JSON.stringify(commands[0][2]), JSON.stringify({ fontWeight: "bold" }));
   assert.equal(commands[0][3], false);
   assert.equal(selected.nodeData.data.fontWeight, "bold");
+});
+
+test("mindmap ctrl shift b wraps selected nodes in a frame", () => {
+  const app = fs.readFileSync("app.js", "utf8");
+  const commands = [];
+  const calls = [];
+  const selected = {
+    getData: (key) => (key === "uid" ? "node-a" : ""),
+    nodeData: { data: { text: "Node A" } },
+    children: [],
+  };
+  const context = {
+    state: {
+      mindmapInstance: {
+        renderer: { activeNodeList: [selected] },
+        execCommand: (...args) => commands.push(args),
+      },
+      mindmapKeyCaptureActive: true,
+      editMode: true,
+      currentNode: {},
+    },
+    els: {
+      mindmapShell: {
+        hidden: false,
+        contains: () => true,
+      },
+    },
+    document: {
+      activeElement: { className: "mindmap-canvas smm-mind-map-container" },
+    },
+    navigator: { clipboard: { writeText: async () => {} } },
+    isMindmapTextEditingEvent: () => false,
+    isMindmapNodeTextEditShortcut: () => false,
+    isMindmapSiblingInsertShortcut: () => false,
+    isMindmapCopyShortcut: () => false,
+    isMindmapBoldShortcut: () => false,
+    canEditNode: () => true,
+    renderEditSaveButton: () => {},
+    showAppToast: () => {},
+  };
+  vm.createContext(context);
+  vm.runInContext([
+    extractFunction(app, "handleMindmapKeydown"),
+    extractFunction(app, "isMindmapFrameShortcut"),
+    extractFunction(app, "addMindmapOuterFrame"),
+    extractFunction(app, "selectedMindmapNodes"),
+    extractFunction(app, "collectMindmapActiveNodes"),
+    extractFunction(app, "markMindmapDirty"),
+  ].join("\n"), context);
+
+  context.handleMindmapKeydown({
+    key: "B",
+    code: "KeyB",
+    ctrlKey: true,
+    metaKey: false,
+    altKey: false,
+    shiftKey: true,
+    isComposing: false,
+    target: { closest: () => null, matches: () => false, isContentEditable: false },
+    preventDefault: () => calls.push("preventDefault"),
+    stopPropagation: () => calls.push("stopPropagation"),
+    stopImmediatePropagation: () => calls.push("stopImmediatePropagation"),
+  });
+
+  assert.deepEqual(calls, ["preventDefault", "stopPropagation", "stopImmediatePropagation"]);
+  assert.equal(commands[0][0], "ADD_OUTER_FRAME");
+  assert.deepEqual(commands[0][1], [selected]);
 });
 
 test("mindmap subtree color uses active node data when activeNodeList is empty", () => {
@@ -791,6 +859,7 @@ test("mindmap enter keydown inserts a sibling instead of starting text edit", ()
     extractFunction(app, "selectedMindmapNodesToMarkdownBullets"),
     extractFunction(app, "isMindmapSiblingInsertShortcut"),
     extractFunction(app, "insertMindmapSiblingNodeFromKeyboard"),
+    extractFunction(app, "isMindmapFrameShortcut"),
     extractFunction(app, "isMindmapBoldShortcut"),
     extractFunction(app, "isMindmapNodeTextEditShortcut"),
     extractFunction(app, "isPlainMindmapEditKey"),

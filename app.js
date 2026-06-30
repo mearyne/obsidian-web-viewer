@@ -5768,6 +5768,12 @@ function handleMindmapKeydown(event) {
     void copyMindmapSelectionToClipboard(event);
     return;
   }
+  if (isMindmapFrameShortcut(event) && addMindmapOuterFrame()) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation?.();
+    return;
+  }
   if (isMindmapBoldShortcut(event) && toggleSelectedMindmapBold()) {
     event.preventDefault();
     event.stopPropagation();
@@ -5856,6 +5862,14 @@ function isMindmapCopyShortcut(event) {
 function isMindmapBoldShortcut(event) {
   return !event.altKey
     && !event.shiftKey
+    && !event.isComposing
+    && (event.ctrlKey || event.metaKey)
+    && (event.code === "KeyB" || event.key?.toLowerCase?.() === "b");
+}
+
+function isMindmapFrameShortcut(event) {
+  return !event.altKey
+    && event.shiftKey
     && !event.isComposing
     && (event.ctrlKey || event.metaKey)
     && (event.code === "KeyB" || event.key?.toLowerCase?.() === "b");
