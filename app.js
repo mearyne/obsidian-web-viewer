@@ -8547,7 +8547,7 @@ function renderMatrixTask(task, quadrant = {}) {
   const hasSubItems = Boolean(task.subItems?.length);
   const expanded = hasSubItems && state.matrixExpandedTasks.has(key);
   return `
-    <div class="matrix-task-card ${hasSubItems ? "has-sub-items" : ""}">
+    <div class="matrix-task-card ${matrixTaskClasses(task, hasSubItems)}">
       <div class="matrix-task-row">
         <button class="matrix-task ${task.checked ? "done" : task.deferred ? "deferred" : ""}" type="button" draggable="true" data-matrix-key="${escapeAttribute(quadrant.key || "")}" data-path="${escapeAttribute(task.path)}" data-line="${task.line}" title="${escapeAttribute(`${task.path}: ${task.rawText || task.text}`)}">
           <span class="matrix-task-title">
@@ -8561,6 +8561,13 @@ function renderMatrixTask(task, quadrant = {}) {
       ${expanded ? renderMatrixTaskSubItems(task) : ""}
     </div>
   `;
+}
+
+function matrixTaskClasses(task, hasSubItems) {
+  return [
+    hasSubItems ? "has-sub-items" : "",
+    task.priority ? `pri-${task.priority}` : "",
+  ].filter(Boolean).join(" ");
 }
 
 function renderMatrixTaskSubItems(task) {

@@ -128,3 +128,4 @@
 - 2026-06-30: Update task 1d cards to hide per-task guidance text, show task times, use compact one-line rows, and add a quick medium-priority todo input under Today Progress.
 - 2026-06-30: 1d matrix에 task 하위 항목 접기/펼치기, 전체 토글, compact subitem styling, gap 3px, 중요도/마감일 정렬을 적용.
 - 2026-06-30: Move task 1d quick add below active tasks, remove per-task left expand icon, add right-side task delete button, and shrink quick-add height.
+- 2026-06-30: Apply 30d priority-based background colors to task 1d matrix cards.

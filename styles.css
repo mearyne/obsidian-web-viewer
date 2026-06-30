@@ -5005,6 +5005,21 @@ button:disabled {
   color: var(--danger, #d84a4a);
 }
 
+.matrix-task-card.pri-상 .matrix-task {
+  background: color-mix(in srgb, #e74c3c 13%, var(--surface-2));
+}
+
+.matrix-task-card.pri-중 .matrix-task {
+  background: color-mix(in srgb, #e6a20f 11%, var(--surface-2));
+}
+
+.matrix-task-card.pri-하 .matrix-task {
+  background: var(--surface-2);
+  color: color-mix(in srgb, var(--text) 58%, var(--muted));
+  filter: saturate(0.55) brightness(0.96);
+  opacity: 0.58;
+}
+
 .matrix-task-sub-items .task-sub-bullet {
   font-size: 70%;
   gap: 3px;

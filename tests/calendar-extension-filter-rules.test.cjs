@@ -226,6 +226,20 @@ test("matrix task rows put delete action on the right and shrink quick add heigh
   assert.match(quickButtonBody, /padding: 2px 6px/);
 });
 
+test("matrix task cards use 30d priority background colors", () => {
+  const styles = fs.readFileSync("styles.css", "utf8");
+  const renderTaskBody = app.match(/function renderMatrixTask\(task, quadrant = \{\}\)[\s\S]*?\n}\r?\n\r?\nfunction renderMatrixTaskSubItems/)?.[0] || "";
+  assert.match(renderTaskBody, /task\.priority \? `pri-\$\{task\.priority\}` : ""/);
+  assert.match(renderTaskBody, /matrix-task-card \$\{matrixTaskClasses\(task, hasSubItems\)\}/);
+  assert.match(app, /function matrixTaskClasses\(task, hasSubItems\)/);
+  assert.match(styles, /\.matrix-task-card\.pri-상 \.matrix-task/);
+  assert.match(styles, /\.matrix-task-card\.pri-중 \.matrix-task/);
+  assert.match(styles, /\.matrix-task-card\.pri-하 \.matrix-task/);
+  assert.match(styles, /color-mix\(in srgb, #e74c3c 13%, var\(--surface-2\)\)/);
+  assert.match(styles, /color-mix\(in srgb, #e6a20f 11%, var\(--surface-2\)\)/);
+  assert.match(styles, /filter: saturate\(0\.55\) brightness\(0\.96\)/);
+});
+
 test("matrix sorting is priority first then nearest deadline with no deadline last", () => {
   const orderBody = app.match(/function compareMatrixTaskOrder\(a, b\)[\s\S]*?\n}\r?\n\r?\nfunction compareMatrixTodoTasks/)?.[0] || "";
   assert.match(app, /function matrixTaskDeadlineKey\(task\)/);
