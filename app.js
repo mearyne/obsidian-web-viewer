@@ -6074,8 +6074,17 @@ function isMindmapTextEditingTarget(target) {
   if (!element?.closest) return false;
   const editWrap = element.closest(".smm-node-edit-wrap, .smm-richtext-node-edit-wrap, .associative-line-text-edit-wrap, .outer-frame-text-edit-wrap");
   if (editWrap) return !isElementVisiblyHidden(editWrap);
-  const editable = element.closest("input, textarea, [contenteditable='true']");
+  const editable = isEditableMindmapTextElement(element);
   return Boolean(element.closest(".mindmap-shell") && editable && !isElementVisiblyHidden(editable));
+}
+
+function isEditableMindmapTextElement(element) {
+  const editable = element?.closest?.("input, textarea, [contenteditable]");
+  if (!editable) return null;
+  if (editable.matches?.("input, textarea")) return editable;
+  const value = editable.getAttribute?.("contenteditable");
+  if (String(value || "").toLowerCase() === "false") return null;
+  return editable.isContentEditable || value !== null ? editable : null;
 }
 
 function isElementVisiblyHidden(element) {

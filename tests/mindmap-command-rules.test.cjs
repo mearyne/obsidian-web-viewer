@@ -846,3 +846,37 @@ test("hidden rich text editor focus does not block e from reopening node edit", 
 
   assert.equal(context.isMindmapTextEditingEvent({ target: { closest: () => null } }), false);
 });
+
+test("mindmap title editor treats any visible contenteditable in the shell as text editing", () => {
+  const app = fs.readFileSync("app.js", "utf8");
+  const mindmapShell = { style: { display: "block", visibility: "visible" }, hidden: false };
+  const editable = {
+    nodeType: 1,
+    hidden: false,
+    style: { display: "block", visibility: "visible" },
+    isContentEditable: true,
+    getAttribute: (name) => (name === "contenteditable" ? "plaintext-only" : null),
+    closest: (selector) => {
+      if (selector === ".mindmap-shell") return mindmapShell;
+      if (selector.includes("[contenteditable]")) return editable;
+      return null;
+    },
+  };
+  const context = {
+    window: {
+      getComputedStyle: (element) => element.style || { display: "block", visibility: "visible" },
+    },
+    document: {
+      activeElement: { closest: () => null },
+    },
+  };
+  vm.createContext(context);
+  vm.runInContext([
+    extractFunction(app, "isElementVisiblyHidden"),
+    extractFunction(app, "isEditableMindmapTextElement"),
+    extractFunction(app, "isMindmapTextEditingTarget"),
+    extractFunction(app, "isMindmapTextEditingEvent"),
+  ].join("\n"), context);
+
+  assert.equal(context.isMindmapTextEditingEvent({ target: editable }), true);
+});
