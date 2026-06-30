@@ -1,10 +1,27 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const test = require("node:test");
+const vm = require("node:vm");
 
 const app = fs.readFileSync("app.js", "utf8");
 const html = fs.readFileSync("index.html", "utf8");
 const styles = fs.readFileSync("styles.css", "utf8");
+
+function extractFunction(source, name) {
+  const start = source.indexOf(`function ${name}`);
+  assert.notEqual(start, -1, `Missing function ${name}`);
+  let depth = 0;
+  let bodyStart = source.indexOf("{", start);
+  for (let index = bodyStart; index < source.length; index += 1) {
+    const ch = source[index];
+    if (ch === "{") depth += 1;
+    if (ch === "}") {
+      depth -= 1;
+      if (depth === 0) return source.slice(start, index + 1);
+    }
+  }
+  throw new Error(`Could not extract function ${name}`);
+}
 
 test("calendar extension exclude options are present in settings UI and state", () => {
   assert.match(html, /id="calendarCreatedExcludeExtensionsInput"/);
@@ -92,6 +109,19 @@ test("duplicating a task pre-fills the body with a link to the source document",
   assert.match(createBody, /taskLinkSubItemsToEditableText\(prefill\.subItems\)/);
   assert.doesNotMatch(createBody, /taskSubItemsToEditableText\(prefill\.subItems\)/);
   assert.match(app, /function taskLinkSubItemsToEditableText/);
+});
+
+test("task view copies sub-items as markdown bullets", () => {
+  const context = {};
+  vm.createContext(context);
+  vm.runInContext([
+    extractFunction(app, "taskSubItemsToEditableText"),
+    extractFunction(app, "taskSubItemsToClipboardText"),
+  ].join("\n"), context);
+
+  assert.equal(context.taskSubItemsToClipboardText(["alpha", "  - child"]), "- alpha\n  - child\n");
+  assert.match(app, /taskSubItemsPreview.*addEventListener\("copy", handleTaskSubItemsPreviewCopy/);
+  assert.match(app, /event\.clipboardData\.setData\("text\/plain", text\)/);
 });
 
 test("task edit delete closes the native dialog before showing app confirm", () => {

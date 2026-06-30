@@ -11488,6 +11488,7 @@ function bindTaskEditDialog() {
   els.taskEditSubItemsInput?.addEventListener("input", normalizeTaskEditSubItemDraft);
   els.taskEditSubItemsInput?.addEventListener("paste", handleSubItemsPaste);
   els.taskCreateSubItemsInput?.addEventListener("paste", handleSubItemsPaste);
+  els.taskSubItemsPreview?.addEventListener("copy", handleTaskSubItemsPreviewCopy);
   els.taskEditIndentButton?.addEventListener("click", () => adjustTaskEditSubItemDepth(false));
   els.taskEditOutdentButton?.addEventListener("click", () => adjustTaskEditSubItemDepth(true));
 
@@ -11859,6 +11860,18 @@ function taskSubItemsToEditableText(subItems) {
       return /^[-*+]\s+/.test(body) ? `${indent}${body}` : `${indent}- ${body}`;
     })
     .join("\n");
+}
+
+function taskSubItemsToClipboardText(subItems) {
+  const text = taskSubItemsToEditableText(subItems);
+  return text ? `${text}\n` : "";
+}
+
+function handleTaskSubItemsPreviewCopy(event) {
+  const text = taskSubItemsToClipboardText(state.taskEditTask?.subItems || []);
+  if (!text) return;
+  event.preventDefault();
+  if (event.clipboardData) event.clipboardData.setData("text/plain", text);
 }
 
 function taskLinkSubItemsToEditableText(subItems) {
