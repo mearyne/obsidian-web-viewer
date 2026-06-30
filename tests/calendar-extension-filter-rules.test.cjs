@@ -174,6 +174,7 @@ test("matrix active quadrant has quick todo input that adds medium-priority todo
   const quickAddBody = app.match(/function renderMatrixQuickAdd\(\)[\s\S]*?\n}\r?\n\r?\nfunction matrixTaskTime/)?.[0] || "";
   const bindBody = app.match(/function bindMatrixEvents\(\)[\s\S]*?\n}\r?\n\r?\nfunction bindMatrixQuickAdd/)?.[0] || "";
   assert.match(renderQuadrantBody, /renderMatrixQuickAdd/);
+  assert.match(renderQuadrantBody, /matrix-task-list[\s\S]*renderMatrixQuickAdd/);
   assert.match(quickAddBody, /matrix-quick-add/);
   assert.match(quickAddBody, /data-matrix-quick-input/);
   assert.match(quickAddBody, /data-matrix-quick-submit/);
@@ -193,15 +194,36 @@ test("matrix supports subitem expand controls and compact subitem rows", () => {
   const subBulletBody = styles.match(/\.matrix-task-sub-items \.task-sub-bullet \{[\s\S]*?\n\}/)?.[0] || "";
   assert.match(app, /matrixExpandedTasks: new Set\(\)/);
   assert.match(app, /data-matrix-expand-all/);
-  assert.match(renderTaskBody, /matrix-subitems-toggle/);
+  assert.doesNotMatch(renderTaskBody, /matrix-subitems-toggle/);
   assert.match(renderTaskBody, /renderMatrixTaskSubItems\(task\)/);
   assert.match(app, /function renderMatrixTaskSubItems\(task\)/);
   assert.match(app, /renderSubItemsHtml\(task\.subItems\)/);
   assert.match(bindBody, /toggleMatrixAllSubItems/);
-  assert.match(bindBody, /toggleMatrixTaskSubItems/);
+  assert.doesNotMatch(bindBody, /toggleMatrixTaskSubItems/);
   assert.match(listBody, /gap: 3px/);
+  assert.match(subItemsBody, /grid-column: 1/);
   assert.match(subItemsBody, /padding: 1px 6px 1px/);
   assert.match(subBulletBody, /font-size: 70%/);
+});
+
+test("matrix task rows put delete action on the right and shrink quick add height", () => {
+  const styles = fs.readFileSync("styles.css", "utf8");
+  const renderTaskBody = app.match(/function renderMatrixTask\(task, quadrant = \{\}\)[\s\S]*?\n}\r?\n\r?\nfunction renderMatrixQuickAdd/)?.[0] || "";
+  const bindBody = app.match(/function bindMatrixEvents\(\)[\s\S]*?\n}\r?\n\r?\nfunction bindMatrixQuickAdd/)?.[0] || "";
+  const quickAddBody = styles.match(/\.matrix-quick-add \{[\s\S]*?\n\}/)?.[0] || "";
+  const quickInputBody = styles.match(/\.matrix-quick-add input \{[\s\S]*?\n\}/)?.[0] || "";
+  const quickButtonBody = styles.match(/\.matrix-quick-add button \{[\s\S]*?\n\}/)?.[0] || "";
+  assert.match(renderTaskBody, /matrix-task-row/);
+  assert.match(renderTaskBody, /matrix-task-delete/);
+  assert.match(renderTaskBody, /data-matrix-delete-path/);
+  assert.match(bindBody, /deleteMatrixTask/);
+  assert.match(app, /async function deleteMatrixTask\(path, line\)/);
+  assert.match(app, /await deleteCalendarTaskLine\(path, line\)/);
+  assert.match(quickAddBody, /padding: 2px 8px/);
+  assert.match(quickInputBody, /font-size: 70%/);
+  assert.match(quickInputBody, /padding: 2px 6px/);
+  assert.match(quickButtonBody, /font-size: 70%/);
+  assert.match(quickButtonBody, /padding: 2px 6px/);
 });
 
 test("matrix sorting is priority first then nearest deadline with no deadline last", () => {

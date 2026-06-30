@@ -8532,10 +8532,10 @@ function renderMatrixQuadrant(quadrant) {
         </strong>
         <span>${quadrant.tasks.length}</span>
       </header>
-      ${quadrant.key === "active" ? renderMatrixQuickAdd() : ""}
       <div class="matrix-task-list">
         ${quadrant.tasks.length ? quadrant.tasks.map((task) => renderMatrixTask(task, quadrant)).join("") : '<div class="matrix-empty">No tasks</div>'}
       </div>
+      ${quadrant.key === "active" ? renderMatrixQuickAdd() : ""}
     </section>
   `;
 }
@@ -8548,14 +8548,16 @@ function renderMatrixTask(task, quadrant = {}) {
   const expanded = hasSubItems && state.matrixExpandedTasks.has(key);
   return `
     <div class="matrix-task-card ${hasSubItems ? "has-sub-items" : ""}">
-      ${hasSubItems ? `<button class="matrix-subitems-toggle" type="button" data-matrix-expand="${escapeAttribute(key)}" aria-label="${expanded ? "하위 항목 접기" : "하위 항목 펼치기"}">${expanded ? "▼" : "▶"}</button>` : ""}
-      <button class="matrix-task ${task.checked ? "done" : task.deferred ? "deferred" : ""}" type="button" draggable="true" data-matrix-key="${escapeAttribute(quadrant.key || "")}" data-path="${escapeAttribute(task.path)}" data-line="${task.line}" title="${escapeAttribute(`${task.path}: ${task.rawText || task.text}`)}">
-        <span class="matrix-task-title">
-          <span class="matrix-task-icon" aria-hidden="true">${taskDisplayIcon(task)}</span>
-          <span class="matrix-task-text">${escapeHtml(task.text)}</span>
-        </span>
-        ${meta ? `<span class="matrix-task-meta">${escapeHtml(meta)}</span>` : ""}
-      </button>
+      <div class="matrix-task-row">
+        <button class="matrix-task ${task.checked ? "done" : task.deferred ? "deferred" : ""}" type="button" draggable="true" data-matrix-key="${escapeAttribute(quadrant.key || "")}" data-path="${escapeAttribute(task.path)}" data-line="${task.line}" title="${escapeAttribute(`${task.path}: ${task.rawText || task.text}`)}">
+          <span class="matrix-task-title">
+            <span class="matrix-task-icon" aria-hidden="true">${taskDisplayIcon(task)}</span>
+            <span class="matrix-task-text">${escapeHtml(task.text)}</span>
+          </span>
+          ${meta ? `<span class="matrix-task-meta">${escapeHtml(meta)}</span>` : ""}
+        </button>
+        <button class="matrix-task-delete" type="button" data-matrix-delete-path="${escapeAttribute(task.path)}" data-matrix-delete-line="${task.line}" aria-label="태스크 삭제" title="태스크 삭제">×</button>
+      </div>
       ${expanded ? renderMatrixTaskSubItems(task) : ""}
     </div>
   `;
@@ -8687,11 +8689,13 @@ function bindMatrixEvents() {
     toggleMatrixAllSubItems();
   });
 
-  els.calendarView.querySelectorAll("[data-matrix-expand]").forEach((button) => {
+  els.calendarView.querySelectorAll("[data-matrix-delete-path]").forEach((button) => {
     button.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
-      toggleMatrixTaskSubItems(button.getAttribute("data-matrix-expand"));
+      const path = button.getAttribute("data-matrix-delete-path");
+      const line = Number(button.getAttribute("data-matrix-delete-line"));
+      void deleteMatrixTask(path, line);
     });
   });
 
@@ -8780,13 +8784,6 @@ function bindMatrixEvents() {
   });
 }
 
-function toggleMatrixTaskSubItems(key) {
-  if (!key) return;
-  if (state.matrixExpandedTasks.has(key)) state.matrixExpandedTasks.delete(key);
-  else state.matrixExpandedTasks.add(key);
-  renderCalendar();
-}
-
 function toggleMatrixAllSubItems() {
   const expandable = matrixExpandableTasks();
   if (!expandable.length) return;
@@ -8796,6 +8793,14 @@ function toggleMatrixAllSubItems() {
     if (collapse) state.matrixExpandedTasks.delete(key);
     else state.matrixExpandedTasks.add(key);
   });
+  renderCalendar();
+}
+
+async function deleteMatrixTask(path, line) {
+  if (!path || !Number.isInteger(line)) return;
+  if (!(await appConfirm("태스크를 삭제할까요?", "태스크 삭제"))) return;
+  await deleteCalendarTaskLine(path, line);
+  state.matrixExpandedTasks.delete(`${path}:${line}`);
   renderCalendar();
 }
 
