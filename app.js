@@ -8754,10 +8754,6 @@ function bindMatrixEvents() {
       }
       const path = button.getAttribute("data-path");
       const line = Number(button.getAttribute("data-line"));
-      if (button.getAttribute("data-matrix-key") === "recurring") {
-        await toggleCalendarTask(path, line, button);
-        return;
-      }
       const task = state.tasks.find((item) => item.path === path && item.line === line);
       if (task) await showTaskEditDialog(task);
     });
@@ -8862,10 +8858,10 @@ function shiftMatrixDate(direction) {
 
 function matrixPlacementFromKey(key) {
   return {
-    active: { key: "active", recurring: false, checked: false, deferred: false },
-    completed: { key: "completed", checked: true, deferred: false },
+    active: { key: "active", kind: TASK_KIND_TODO, priority: TASK_PRIORITY_MEDIUM, recurring: false, checked: false, deferred: false },
+    completed: { key: "completed", kind: TASK_KIND_TODO, priority: TASK_PRIORITY_MEDIUM, recurring: false, checked: true, deferred: false },
     recurring: { key: "recurring", kind: TASK_KIND_RECURRING, recurring: true, checked: false, deferred: false },
-    deferred: { key: "deferred", deferred: true, checked: false },
+    deferred: { key: "deferred", kind: TASK_KIND_TODO, priority: TASK_PRIORITY_MEDIUM, recurring: false, deferred: true, checked: false },
   }[key] || null;
 }
 
@@ -10401,8 +10397,7 @@ async function moveTaskToMatrixQuadrant(path, lineNumber, placement) {
   if (placement.priority) nextLine = replaceTaskPriorityTag(nextLine, placement.priority);
   if ("recurring" in placement) nextLine = replaceTaskRecurringTag(nextLine, Boolean(placement.recurring));
   if (placement.recurring) {
-    const existingWeekdays = extractTaskRepeatWeekdays(nextLine);
-    nextLine = replaceTaskRepeatWeekdays(nextLine, existingWeekdays.length ? existingWeekdays : TASK_REPEAT_WEEKDAYS);
+    nextLine = replaceTaskRepeatWeekdays(nextLine, TASK_REPEAT_WEEKDAYS);
   } else if ("recurring" in placement) {
     nextLine = replaceTaskRepeatWeekdays(nextLine, []);
   }

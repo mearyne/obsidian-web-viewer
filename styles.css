@@ -4740,7 +4740,6 @@ button:disabled {
 .matrix-shell {
   display: flex;
   flex-direction: column;
-  gap: 10px;
   height: 100%;
   min-height: 0;
 }
@@ -4955,10 +4954,10 @@ button:disabled {
   box-sizing: border-box;
   color: var(--text);
   cursor: grab;
-  display: flex;
+  display: grid;
   flex: 0 0 auto;
-  flex-direction: row;
   gap: 6px;
+  grid-template-columns: minmax(0, 1fr) 156px;
   line-height: 1.35;
   min-height: 28px;
   padding: 4px 7px;
@@ -5037,7 +5036,18 @@ button:disabled {
 
 .matrix-task-meta-separator {
   color: var(--muted);
+  display: none;
   opacity: 0.55;
+}
+
+.matrix-task-meta-priority {
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.1;
+  padding: 1px 4px;
+  text-align: center;
 }
 
 .matrix-task-meta-date.date-color-0 { color: #7057d6; }
@@ -5079,11 +5089,12 @@ button:disabled {
 }
 
 .matrix-task-meta {
-  display: block;
+  display: grid;
   flex: 0 0 auto;
+  gap: 0;
+  grid-template-columns: 96px 34px 26px;
   color: var(--muted);
   font-size: 11px;
-  max-width: 48%;
   overflow: hidden;
   overflow-wrap: anywhere;
   text-overflow: ellipsis;

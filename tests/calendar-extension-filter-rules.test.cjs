@@ -109,15 +109,20 @@ test("matrix uses today progress completed routine and deferred sections", () =>
   assert.doesNotMatch(app, /if \(task\.deferred \|\| isLowPriorityTask\(task\)\) return "deferred"/);
   assert.match(app, /function compareMatrixTodoTasks\(a, b\)/);
   assert.match(app, /function compareMatrixDateTasks\(a, b\)/);
-  assert.match(app, /completed: \{ key: "completed", checked: true/);
-  assert.match(app, /deferred: \{ key: "deferred", deferred: true/);
+  assert.match(app, /completed: \{ key: "completed", kind: TASK_KIND_TODO, priority: TASK_PRIORITY_MEDIUM, recurring: false, checked: true/);
+  assert.match(app, /deferred: \{ key: "deferred", kind: TASK_KIND_TODO, priority: TASK_PRIORITY_MEDIUM, recurring: false, deferred: true/);
   assert.match(app, /function replaceMatrixTaskStatus\(line, placement\)/);
-  assert.match(app, /if \(button\.getAttribute\("data-matrix-key"\) === "recurring"\)/);
-  assert.match(app, /await toggleCalendarTask\(path, line, button\)/);
+  assert.doesNotMatch(app, /if \(button\.getAttribute\("data-matrix-key"\) === "recurring"\)[\s\S]*?await toggleCalendarTask\(path, line, button\)/);
   assert.match(styles, /\.matrix-quadrant\.active/);
   assert.match(styles, /\.matrix-quadrant\.completed/);
   assert.match(styles, /\.matrix-quadrant\.deferred/);
   assert.match(styles, /grid-row: 1 \/ span 2/);
+});
+
+test("matrix removes shell gap", () => {
+  const styles = fs.readFileSync("styles.css", "utf8");
+  const shellBody = styles.match(/\.matrix-shell \{[\s\S]*?\n\}/)?.[0] || "";
+  assert.doesNotMatch(shellBody, /gap:/);
 });
 
 test("matrix hides explanatory rules and keeps task text inside one-line cards", () => {
@@ -141,7 +146,8 @@ test("matrix task rows are compact one-line title and metadata rows", () => {
   const titleBody = styles.match(/\.matrix-task-title \{[\s\S]*?\n\}/)?.[0] || "";
   const metaBody = styles.match(/\.matrix-task-meta \{[\s\S]*?\n\}/)?.[0] || "";
   assert.match(taskBody, /flex: 0 0 auto/);
-  assert.match(taskBody, /flex-direction: row/);
+  assert.match(taskBody, /display: grid/);
+  assert.match(taskBody, /grid-template-columns: minmax\(0, 1fr\) 156px/);
   assert.match(taskBody, /line-height: 1\.35/);
   assert.match(taskBody, /min-height: 28px/);
   assert.match(titleBody, /flex: 1 1 auto/);
@@ -163,7 +169,7 @@ test("matrix tasks are one-line cards with time and no per-task attitude text", 
   assert.doesNotMatch(app, /미루기와 중요도 낮음/);
   assert.doesNotMatch(app, /오늘 처리한 항목/);
   assert.doesNotMatch(app, /습관은 체크 중심/);
-  assert.match(taskBody, /flex-direction: row/);
+  assert.match(taskBody, /display: grid/);
   assert.match(taskBody, /min-height: 28px/);
   assert.match(textBody, /text-overflow: ellipsis/);
   assert.match(textBody, /white-space: nowrap/);
@@ -217,6 +223,8 @@ test("matrix task rows put delete action on the right and shrink quick add heigh
   const rowTaskBody = styles.match(/\.matrix-task-row > button:is\(\.matrix-task\) \{[\s\S]*?\n\}/)?.[0] || "";
   const rowBody = styles.match(/\.matrix-task-row \{[\s\S]*?\n\}/)?.[0] || "";
   const deleteBody = styles.match(/\.matrix-task-delete \{[\s\S]*?\n\}/)?.[0] || "";
+  const taskBody = styles.match(/\.matrix-task \{[\s\S]*?\n\}/)?.[0] || "";
+  const metaBody = styles.match(/\.matrix-task-meta \{[\s\S]*?\n\}/)?.[0] || "";
   assert.match(renderTaskBody, /matrix-task-row/);
   assert.match(renderTaskBody, /matrix-task-delete/);
   assert.match(renderTaskBody, /data-matrix-delete-path/);
@@ -226,6 +234,10 @@ test("matrix task rows put delete action on the right and shrink quick add heigh
   assert.match(app, /await deleteCalendarTaskLine\(path, line\)/);
   assert.match(rowBody, /background: var\(--surface-2\)/);
   assert.match(rowBody, /border: 1px solid var\(--line\)/);
+  assert.match(taskBody, /display: grid/);
+  assert.match(taskBody, /grid-template-columns: minmax\(0, 1fr\) 156px/);
+  assert.match(metaBody, /display: grid/);
+  assert.match(metaBody, /grid-template-columns: 96px 34px 26px/);
   assert.match(deleteBody, /background: transparent/);
   assert.match(deleteBody, /border: 0/);
   assert.match(quickAddBody, /padding: 2px 8px/);
@@ -236,6 +248,24 @@ test("matrix task rows put delete action on the right and shrink quick add heigh
   assert.match(rowTaskBody, /flex: 1 1 auto/);
   assert.match(rowTaskBody, /min-width: 0/);
   assert.match(rowTaskBody, /width: auto/);
+});
+
+test("matrix recurring moves set daily recurring and moving out resets to medium todo", () => {
+  const placementBody = app.match(/function matrixPlacementFromKey\(key\)[\s\S]*?\n}\r?\n\r?\nfunction bindMatrixTaskPointerDrag/)?.[0] || "";
+  const moveBody = app.match(/async function moveTaskToMatrixQuadrant\(path, lineNumber, placement\)[\s\S]*?\n}\r?\n\r?\nfunction replaceMatrixTaskStatus/)?.[0] || "";
+  assert.match(placementBody, /recurring: \{ key: "recurring", kind: TASK_KIND_RECURRING, recurring: true, checked: false, deferred: false \}/);
+  assert.match(placementBody, /active: \{ key: "active", kind: TASK_KIND_TODO, priority: TASK_PRIORITY_MEDIUM, recurring: false, checked: false, deferred: false \}/);
+  assert.match(placementBody, /completed: \{ key: "completed", kind: TASK_KIND_TODO, priority: TASK_PRIORITY_MEDIUM, recurring: false, checked: true, deferred: false \}/);
+  assert.match(placementBody, /deferred: \{ key: "deferred", kind: TASK_KIND_TODO, priority: TASK_PRIORITY_MEDIUM, recurring: false, deferred: true, checked: false \}/);
+  assert.match(moveBody, /replaceTaskRepeatWeekdays\(nextLine, TASK_REPEAT_WEEKDAYS\)/);
+  assert.match(moveBody, /replaceTaskKindTag\(nextLine, placement\.kind\)/);
+  assert.match(moveBody, /replaceTaskPriorityTag\(nextLine, placement\.priority\)/);
+});
+
+test("matrix recurring task click opens task view instead of toggling done", () => {
+  const bindBody = app.match(/function bindMatrixEvents\(\)[\s\S]*?\n}\r?\n\r?\nfunction toggleMatrixAllSubItems/)?.[0] || "";
+  assert.doesNotMatch(bindBody, /if \(button\.getAttribute\("data-matrix-key"\) === "recurring"\)[\s\S]*?toggleCalendarTask/);
+  assert.match(bindBody, /if \(task\) await showTaskEditDialog\(task\)/);
 });
 
 test("matrix active keeps low priority tasks while deferred only shows postponed tasks", () => {
@@ -270,6 +300,8 @@ test("matrix task metadata colors matching dates and priorities consistently", (
   assert.match(styles, /\.matrix-task-meta-priority\.priority-rank-0/);
   assert.match(styles, /\.matrix-task-meta-priority\.priority-rank-1/);
   assert.match(styles, /\.matrix-task-meta-priority\.priority-rank-2/);
+  assert.match(styles, /\.matrix-task-meta-priority \{/);
+  assert.match(styles, /border: 1px solid currentColor/);
 });
 
 test("matrix sorting is priority first then nearest deadline with no deadline last", () => {
