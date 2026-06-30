@@ -4748,6 +4748,23 @@ button:disabled {
   flex: 0 0 auto;
 }
 
+.matrix-date-nav {
+  flex: 1 1 220px;
+  grid-template-columns: 28px minmax(0, 1fr) 28px;
+  max-width: 360px;
+  min-width: 0;
+}
+
+.matrix-date-nav strong {
+  text-overflow: ellipsis;
+  width: 100%;
+}
+
+.matrix-date-nav button {
+  min-width: 28px;
+  width: 28px;
+}
+
 .matrix-rules {
   align-items: center;
   color: var(--muted);

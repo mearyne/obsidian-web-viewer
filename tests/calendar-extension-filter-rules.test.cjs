@@ -125,6 +125,20 @@ test("matrix removes shell gap", () => {
   assert.doesNotMatch(shellBody, /gap:/);
 });
 
+test("matrix date range navigation keeps arrows from overlapping long titles", () => {
+  const styles = fs.readFileSync("styles.css", "utf8");
+  const renderMatrixBody = app.match(/function renderEisenhowerMatrix\(\)[\s\S]*?\n}\r?\nfunction renderCalendarFilterToggleButton/)?.[0] || "";
+  const navBody = styles.match(/\.matrix-date-nav \{[\s\S]*?\n\}/)?.[0] || "";
+  const titleBody = styles.match(/\.matrix-date-nav strong \{[\s\S]*?\n\}/)?.[0] || "";
+  const buttonBody = styles.match(/\.matrix-date-nav button \{[\s\S]*?\n\}/)?.[0] || "";
+  assert.match(renderMatrixBody, /class="calendar-month-nav matrix-date-nav"/);
+  assert.match(navBody, /grid-template-columns: 28px minmax\(0, 1fr\) 28px/);
+  assert.match(navBody, /min-width: 0/);
+  assert.match(titleBody, /width: 100%/);
+  assert.match(titleBody, /text-overflow: ellipsis/);
+  assert.match(buttonBody, /width: 28px/);
+});
+
 test("matrix hides explanatory rules and keeps task text inside one-line cards", () => {
   const styles = fs.readFileSync("styles.css", "utf8");
   const matrixBody = app.match(/function renderEisenhowerMatrix\(\)[\s\S]*?\n}\r?\nfunction renderCalendarFilterToggleButton/)?.[0] || "";

@@ -8495,7 +8495,7 @@ function renderEisenhowerMatrix() {
   els.calendarView.innerHTML = `
     <div class="matrix-shell">
       <div class="calendar-toolbar matrix-toolbar">
-        <div class="calendar-month-nav">
+        <div class="calendar-month-nav matrix-date-nav">
           <button type="button" data-matrix-action="prev">&lt;</button>
           <strong>${escapeHtml(matrixTitle())}</strong>
           <button type="button" data-matrix-action="next">&gt;</button>
