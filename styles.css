@@ -4888,8 +4888,38 @@ button:disabled {
   padding: 8px;
 }
 
+.matrix-quick-add {
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+  padding: 7px 8px;
+}
+
+.matrix-quick-add input {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  flex: 1 1 auto;
+  font: inherit;
+  min-width: 0;
+  padding: 5px 7px;
+}
+
+.matrix-quick-add button {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  cursor: pointer;
+  flex: 0 0 auto;
+  font: inherit;
+  padding: 5px 8px;
+}
+
 .matrix-task {
-  align-items: flex-start;
+  align-items: center;
   background: var(--surface-2);
   border: 1px solid var(--line);
   border-radius: 7px;
@@ -4898,11 +4928,11 @@ button:disabled {
   cursor: grab;
   display: flex;
   flex: 0 0 auto;
-  flex-direction: column;
-  gap: 3px;
+  flex-direction: row;
+  gap: 6px;
   line-height: 1.35;
-  min-height: 42px;
-  padding: 7px 8px;
+  min-height: 28px;
+  padding: 4px 7px;
   text-align: left;
   touch-action: none;
   width: 100%;
@@ -4917,9 +4947,9 @@ button:disabled {
 }
 
 .matrix-task-title {
-  align-items: flex-start;
+  align-items: center;
   display: flex;
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   font-size: 13px;
   gap: 5px;
   line-height: 1.35;
@@ -4932,8 +4962,10 @@ button:disabled {
 .matrix-task-text {
   min-width: 0;
   display: block;
+  overflow: hidden;
   overflow-wrap: anywhere;
-  white-space: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   word-break: break-word;
 }
 
@@ -4943,16 +4975,15 @@ button:disabled {
 }
 
 .matrix-task-meta {
-  display: flex;
+  display: block;
   flex: 0 0 auto;
-  flex-direction: column;
-  gap: 2px;
   color: var(--muted);
   font-size: 11px;
-  max-width: 100%;
+  max-width: 48%;
   overflow: hidden;
   overflow-wrap: anywhere;
-  width: 100%;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   word-break: break-word;
 }
 

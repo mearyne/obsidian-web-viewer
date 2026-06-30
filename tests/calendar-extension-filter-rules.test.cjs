@@ -119,7 +119,7 @@ test("matrix uses today progress completed routine and deferred sections", () =>
   assert.match(styles, /grid-row: 1 \/ span 2/);
 });
 
-test("matrix hides explanatory rules and wraps full task text inside cards", () => {
+test("matrix hides explanatory rules and keeps task text inside one-line cards", () => {
   const styles = fs.readFileSync("styles.css", "utf8");
   const matrixBody = app.match(/function renderEisenhowerMatrix\(\)[\s\S]*?\n}\r?\nfunction renderCalendarFilterToggleButton/)?.[0] || "";
   assert.doesNotMatch(matrixBody, /renderMatrixRules/);
@@ -128,24 +128,58 @@ test("matrix hides explanatory rules and wraps full task text inside cards", () 
   assert.match(styles, /\.matrix-task \{[\s\S]*?box-sizing: border-box/);
   assert.match(styles, /\.matrix-task-title \{[\s\S]*?overflow: hidden/);
   assert.match(taskTextBody, /overflow-wrap: anywhere/);
-  assert.match(taskTextBody, /white-space: normal/);
+  assert.match(taskTextBody, /white-space: nowrap/);
+  assert.match(taskTextBody, /text-overflow: ellipsis/);
   assert.doesNotMatch(taskTextBody, /-webkit-line-clamp/);
-  assert.doesNotMatch(taskTextBody, /overflow: hidden/);
   assert.match(styles, /\.matrix-task-meta \{[\s\S]*?overflow-wrap: anywhere/);
-  assert.match(styles, /\.matrix-task-attitude \{[\s\S]*?overflow-wrap: anywhere/);
 });
 
-test("matrix task rows keep title attitude and metadata in separate rows", () => {
+test("matrix task rows are compact one-line title and metadata rows", () => {
   const styles = fs.readFileSync("styles.css", "utf8");
   const taskBody = styles.match(/\.matrix-task \{[\s\S]*?\n\}/)?.[0] || "";
   const titleBody = styles.match(/\.matrix-task-title \{[\s\S]*?\n\}/)?.[0] || "";
-  const attitudeBody = styles.match(/\.matrix-task-attitude \{[\s\S]*?\n\}/)?.[0] || "";
   const metaBody = styles.match(/\.matrix-task-meta \{[\s\S]*?\n\}/)?.[0] || "";
   assert.match(taskBody, /flex: 0 0 auto/);
+  assert.match(taskBody, /flex-direction: row/);
   assert.match(taskBody, /line-height: 1\.35/);
-  assert.match(titleBody, /flex: 0 0 auto/);
-  assert.match(attitudeBody, /display: block/);
-  assert.match(attitudeBody, /width: 100%/);
+  assert.match(taskBody, /min-height: 28px/);
+  assert.match(titleBody, /flex: 1 1 auto/);
   assert.match(metaBody, /flex: 0 0 auto/);
-  assert.match(metaBody, /width: 100%/);
+  assert.match(metaBody, /white-space: nowrap/);
+});
+
+test("matrix tasks are one-line cards with time and no per-task attitude text", () => {
+  const styles = fs.readFileSync("styles.css", "utf8");
+  const renderTaskBody = app.match(/function renderMatrixTask\(task, quadrant = \{\}\)[\s\S]*?\n}\r?\n\r?\nfunction renderMatrixQuickAdd/)?.[0] || "";
+  const taskBody = styles.match(/\.matrix-task \{[\s\S]*?\n\}/)?.[0] || "";
+  const textBody = styles.match(/\.matrix-task-text \{[\s\S]*?\n\}/)?.[0] || "";
+  const metaBody = styles.match(/\.matrix-task-meta \{[\s\S]*?\n\}/)?.[0] || "";
+  assert.doesNotMatch(renderTaskBody, /matrix-task-attitude/);
+  assert.match(renderTaskBody, /matrixTaskMetaText\(task, due\)/);
+  assert.match(app, /function matrixTaskTime\(task, due\)/);
+  assert.match(app, /taskTimeForDate\(task, due\)/);
+  assert.doesNotMatch(app, /일정과 할 일, 중요도 높은 순/);
+  assert.doesNotMatch(app, /미루기와 중요도 낮음/);
+  assert.doesNotMatch(app, /오늘 처리한 항목/);
+  assert.doesNotMatch(app, /습관은 체크 중심/);
+  assert.match(taskBody, /flex-direction: row/);
+  assert.match(taskBody, /min-height: 28px/);
+  assert.match(textBody, /text-overflow: ellipsis/);
+  assert.match(textBody, /white-space: nowrap/);
+  assert.match(metaBody, /white-space: nowrap/);
+});
+
+test("matrix active quadrant has quick todo input that adds medium-priority todo for the matrix date", () => {
+  const renderQuadrantBody = app.match(/function renderMatrixQuadrant\(quadrant\)[\s\S]*?\n}\r?\n\r?\nfunction renderMatrixTask/)?.[0] || "";
+  const quickAddBody = app.match(/function renderMatrixQuickAdd\(\)[\s\S]*?\n}\r?\n\r?\nfunction matrixTaskTime/)?.[0] || "";
+  const bindBody = app.match(/function bindMatrixEvents\(\)[\s\S]*?\n}\r?\n\r?\nfunction bindMatrixQuickAdd/)?.[0] || "";
+  assert.match(renderQuadrantBody, /renderMatrixQuickAdd/);
+  assert.match(quickAddBody, /matrix-quick-add/);
+  assert.match(quickAddBody, /data-matrix-quick-input/);
+  assert.match(quickAddBody, /data-matrix-quick-submit/);
+  assert.match(bindBody, /bindMatrixQuickAdd/);
+  assert.match(app, /async function addMatrixQuickTodo\(title\)/);
+  assert.match(app, /const dateKey = formatDate\(matrixDateRange\(\)\.start\)/);
+  assert.match(app, /#\$\{TASK_KIND_TODO\} #\$\{TASK_PRIORITY_MEDIUM\}/);
+  assert.match(app, /📅 \$\{dateKey\}/);
 });

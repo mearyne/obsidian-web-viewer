@@ -8456,28 +8456,24 @@ function renderEisenhowerMatrix() {
       key: "active",
       icon: "▶",
       title: "오늘 진행",
-      attitude: "일정과 할 일, 중요도 높은 순",
       sorter: compareMatrixTodoTasks,
     },
     {
       key: "completed",
       icon: "✓",
       title: "완료",
-      attitude: "오늘 처리한 항목",
       sorter: compareMatrixDateTasks,
     },
     {
       key: "recurring",
       icon: "🔁",
       title: "루틴 / 반복",
-      attitude: "습관은 체크 중심",
       sorter: compareMatrixDateTasks,
     },
     {
       key: "deferred",
       icon: "…",
       title: "보류",
-      attitude: "미루기와 중요도 낮음",
       sorter: compareMatrixDateTasks,
     },
   ].map((quadrant) => ({
@@ -8529,10 +8525,10 @@ function renderMatrixQuadrant(quadrant) {
         <strong>
           <span aria-hidden="true">${quadrant.icon}</span>
           ${escapeHtml(quadrant.title)}
-          ${quadrant.attitude ? `<span class="matrix-quadrant-attitude">${escapeHtml(quadrant.attitude)}</span>` : ""}
         </strong>
         <span>${quadrant.tasks.length}</span>
       </header>
+      ${quadrant.key === "active" ? renderMatrixQuickAdd() : ""}
       <div class="matrix-task-list">
         ${quadrant.tasks.length ? quadrant.tasks.map((task) => renderMatrixTask(task, quadrant)).join("") : '<div class="matrix-empty">No tasks</div>'}
       </div>
@@ -8542,19 +8538,33 @@ function renderMatrixQuadrant(quadrant) {
 
 function renderMatrixTask(task, quadrant = {}) {
   const due = task.dates?.due || task.dates?.end || task.dates?.scheduled || task.dates?.start || task.date || "";
-  const attitude = quadrant?.attitude || "";
+  const meta = matrixTaskMetaText(task, due);
   return `
     <button class="matrix-task ${task.checked ? "done" : task.deferred ? "deferred" : ""}" type="button" draggable="true" data-matrix-key="${escapeAttribute(quadrant.key || "")}" data-path="${escapeAttribute(task.path)}" data-line="${task.line}" title="${escapeAttribute(`${task.path}: ${task.rawText || task.text}`)}">
       <span class="matrix-task-title">
         <span class="matrix-task-icon" aria-hidden="true">${taskDisplayIcon(task)}</span>
         <span class="matrix-task-text">${escapeHtml(task.text)}</span>
       </span>
-      ${attitude ? `<span class="matrix-task-attitude">${escapeHtml(attitude)}</span>` : ""}
-      <span class="matrix-task-meta">
-        <span>${escapeHtml(due)}${task.priority ? ` · ${escapeHtml(task.priority)}` : ""}</span>
-      </span>
+      ${meta ? `<span class="matrix-task-meta">${escapeHtml(meta)}</span>` : ""}
     </button>
   `;
+}
+
+function renderMatrixQuickAdd() {
+  return `
+    <form class="matrix-quick-add" data-matrix-quick-add>
+      <input type="text" data-matrix-quick-input placeholder="할 일 빠른 추가" autocomplete="off" />
+      <button type="submit" data-matrix-quick-submit>등록</button>
+    </form>
+  `;
+}
+
+function matrixTaskTime(task, due) {
+  return taskTimeForDate(task, due) || task.dueTime || task.startTime || "";
+}
+
+function matrixTaskMetaText(task, due) {
+  return [due, matrixTaskTime(task, due), task.priority].filter(Boolean).join(" · ");
 }
 
 function renderMatrixUnclassified(tasks) {
@@ -8632,6 +8642,7 @@ function matrixTaskPlacement(task) {
 }
 function bindMatrixEvents() {
   bindCalendarFilterEvents();
+  bindMatrixQuickAdd();
 
   els.calendarView.querySelectorAll("[data-matrix-action]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -8716,6 +8727,39 @@ function bindMatrixEvents() {
       await moveTaskToMatrixQuadrant(payload.path, payload.line, placement);
     });
   });
+}
+
+function bindMatrixQuickAdd() {
+  const form = els.calendarView.querySelector("[data-matrix-quick-add]");
+  if (!form) return;
+  const input = form.querySelector("[data-matrix-quick-input]");
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const title = input?.value.trim() || "";
+    if (!title) {
+      input?.focus();
+      return;
+    }
+    await addMatrixQuickTodo(title);
+    if (input) input.value = "";
+  });
+}
+
+async function addMatrixQuickTodo(title) {
+  const dateKey = formatDate(matrixDateRange().start);
+  const node = await getOrCreateDailyNote(dateKey);
+  const content = await readFileNode(node);
+  const prefix = content.endsWith("\n") ? "" : "\n";
+  const taskLine = `${prefix}- [ ] ${title} #${TASK_KIND_TODO} #${TASK_PRIORITY_MEDIUM} 📅 ${dateKey}\n`;
+  const nextContent = content + taskLine;
+  await writeNodeContent(node, nextContent, { backup: false, previousContent: content });
+  if (typeof node.content === "string") node.content = nextContent;
+  if (state.currentPath === node.path) {
+    state.currentContent = nextContent;
+    if (state.activeView === "note" && !state.editMode) renderCurrentDocument();
+  }
+  updateTasksForFile(node.path, nextContent);
+  refreshRecentFilesCache();
 }
 
 function shiftMatrixDate(direction) {
