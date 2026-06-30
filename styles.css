@@ -4882,7 +4882,7 @@ button:disabled {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: 6px;
+  gap: 3px;
   min-height: 0;
   overflow: auto;
   padding: 8px;
@@ -4916,6 +4916,37 @@ button:disabled {
   flex: 0 0 auto;
   font: inherit;
   padding: 5px 8px;
+}
+
+.matrix-task-card {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 3px;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+}
+
+.matrix-task-card.has-sub-items {
+  grid-template-columns: 22px minmax(0, 1fr);
+}
+
+.matrix-subitems-toggle {
+  align-items: center;
+  align-self: stretch;
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 11px;
+  justify-content: center;
+  line-height: 1;
+  min-height: 28px;
+  padding: 0;
+}
+
+.matrix-subitems-toggle:hover {
+  color: var(--text);
 }
 
 .matrix-task {
@@ -4957,6 +4988,23 @@ button:disabled {
   max-width: 100%;
   overflow: hidden;
   width: 100%;
+}
+
+.matrix-task-sub-items {
+  grid-column: 2;
+  gap: 2px;
+  padding: 1px 6px 1px;
+}
+
+.matrix-task-sub-items .task-sub-bullet {
+  font-size: 70%;
+  gap: 3px;
+  line-height: 1.15;
+}
+
+.matrix-task-sub-items .task-sub-bullet span:first-child {
+  font-size: 8px;
+  padding-top: 0;
 }
 
 .matrix-task-text {
@@ -5649,7 +5697,7 @@ button.calendar-more {
   }
 
   .matrix-task-list {
-    gap: 5px;
+    gap: 3px;
     padding: 6px;
   }
 

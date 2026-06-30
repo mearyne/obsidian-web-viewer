@@ -379,6 +379,7 @@ const state = {
   calendarDateOpenSuppressedUntil: 0,
   fullscreenAttempted: false,
   fullscreenFallback: false,
+  matrixExpandedTasks: new Set(),
   fontDeviceKey: "",
   sseSource: null,
   documentRenderToken: 0,
@@ -2401,6 +2402,7 @@ function resetVault() {
   state.calendarTaskOpenSuppressedUntil = 0;
   state.calendarDateOpenSuppressedUntil = 0;
   state.matrixTaskDrag = null;
+  state.matrixExpandedTasks = new Set();
   state.vaultLoaded = false;
   state.contentSearchMatches = null;
   if (state.calendarRefreshTimer) {
@@ -8451,6 +8453,7 @@ function renderCalendar() {
 function renderEisenhowerMatrix() {
   const range = matrixDateRange();
   const tasks = matrixVisibleTasks(range);
+  const allSubItemsExpanded = matrixAllSubItemsExpanded(tasks);
   const quadrants = [
     {
       key: "active",
@@ -8491,6 +8494,7 @@ function renderEisenhowerMatrix() {
         </div>
         <div class="calendar-nav-group">
           <button class="calendar-today-button" type="button" data-matrix-action="today">Today</button>
+          <button type="button" class="calendar-mode-btn matrix-expand-all" data-matrix-expand-all>${allSubItemsExpanded ? "모두 접기" : "모두 펼치기"}</button>
           <button type="button" data-matrix-mode="month" class="calendar-mode-btn">30d</button>
           <button type="button" data-matrix-mode="week" class="calendar-mode-btn">7d</button>
           <button type="button" data-matrix-mode="day" class="calendar-mode-btn active">1d</button>
@@ -8539,15 +8543,26 @@ function renderMatrixQuadrant(quadrant) {
 function renderMatrixTask(task, quadrant = {}) {
   const due = task.dates?.due || task.dates?.end || task.dates?.scheduled || task.dates?.start || task.date || "";
   const meta = matrixTaskMetaText(task, due);
+  const key = matrixTaskKey(task);
+  const hasSubItems = Boolean(task.subItems?.length);
+  const expanded = hasSubItems && state.matrixExpandedTasks.has(key);
   return `
-    <button class="matrix-task ${task.checked ? "done" : task.deferred ? "deferred" : ""}" type="button" draggable="true" data-matrix-key="${escapeAttribute(quadrant.key || "")}" data-path="${escapeAttribute(task.path)}" data-line="${task.line}" title="${escapeAttribute(`${task.path}: ${task.rawText || task.text}`)}">
-      <span class="matrix-task-title">
-        <span class="matrix-task-icon" aria-hidden="true">${taskDisplayIcon(task)}</span>
-        <span class="matrix-task-text">${escapeHtml(task.text)}</span>
-      </span>
-      ${meta ? `<span class="matrix-task-meta">${escapeHtml(meta)}</span>` : ""}
-    </button>
+    <div class="matrix-task-card ${hasSubItems ? "has-sub-items" : ""}">
+      ${hasSubItems ? `<button class="matrix-subitems-toggle" type="button" data-matrix-expand="${escapeAttribute(key)}" aria-label="${expanded ? "하위 항목 접기" : "하위 항목 펼치기"}">${expanded ? "▼" : "▶"}</button>` : ""}
+      <button class="matrix-task ${task.checked ? "done" : task.deferred ? "deferred" : ""}" type="button" draggable="true" data-matrix-key="${escapeAttribute(quadrant.key || "")}" data-path="${escapeAttribute(task.path)}" data-line="${task.line}" title="${escapeAttribute(`${task.path}: ${task.rawText || task.text}`)}">
+        <span class="matrix-task-title">
+          <span class="matrix-task-icon" aria-hidden="true">${taskDisplayIcon(task)}</span>
+          <span class="matrix-task-text">${escapeHtml(task.text)}</span>
+        </span>
+        ${meta ? `<span class="matrix-task-meta">${escapeHtml(meta)}</span>` : ""}
+      </button>
+      ${expanded ? renderMatrixTaskSubItems(task) : ""}
+    </div>
   `;
+}
+
+function renderMatrixTaskSubItems(task) {
+  return `<div class="task-sub-items-inline matrix-task-sub-items">${renderSubItemsHtml(task.subItems)}</div>`;
 }
 
 function renderMatrixQuickAdd() {
@@ -8565,6 +8580,19 @@ function matrixTaskTime(task, due) {
 
 function matrixTaskMetaText(task, due) {
   return [due, matrixTaskTime(task, due), task.priority].filter(Boolean).join(" · ");
+}
+
+function matrixTaskKey(task) {
+  return `${task.path}:${task.line}`;
+}
+
+function matrixExpandableTasks(tasks = matrixVisibleTasks(matrixDateRange())) {
+  return tasks.filter((task) => task.subItems?.length);
+}
+
+function matrixAllSubItemsExpanded(tasks = matrixVisibleTasks(matrixDateRange())) {
+  const expandable = matrixExpandableTasks(tasks);
+  return Boolean(expandable.length) && expandable.every((task) => state.matrixExpandedTasks.has(matrixTaskKey(task)));
 }
 
 function renderMatrixUnclassified(tasks) {
@@ -8622,16 +8650,27 @@ function matrixTaskDateKey(task) {
   return task.dates?.due || task.dates?.end || task.dates?.scheduled || task.dates?.start || task.date || "";
 }
 
-function compareMatrixTodoTasks(a, b) {
-  return matrixPriorityRank(a) - matrixPriorityRank(b)
-    || matrixTaskDateKey(a).localeCompare(matrixTaskDateKey(b))
+function matrixTaskDeadlineKey(task) {
+  return task.dates?.due || task.dates?.end || "";
+}
+
+function compareMatrixTaskOrder(a, b) {
+  const priority = matrixPriorityRank(a) - matrixPriorityRank(b);
+  if (priority) return priority;
+  const aDeadline = matrixTaskDeadlineKey(a);
+  const bDeadline = matrixTaskDeadlineKey(b);
+  if (!aDeadline && bDeadline) return 1;
+  if (aDeadline && !bDeadline) return -1;
+  return aDeadline.localeCompare(bDeadline)
     || a.text.localeCompare(b.text, "ko");
 }
 
+function compareMatrixTodoTasks(a, b) {
+  return compareMatrixTaskOrder(a, b);
+}
+
 function compareMatrixDateTasks(a, b) {
-  return matrixTaskDateKey(a).localeCompare(matrixTaskDateKey(b))
-    || matrixPriorityRank(a) - matrixPriorityRank(b)
-    || a.text.localeCompare(b.text, "ko");
+  return compareMatrixTaskOrder(a, b);
 }
 
 function matrixTaskPlacement(task) {
@@ -8643,6 +8682,18 @@ function matrixTaskPlacement(task) {
 function bindMatrixEvents() {
   bindCalendarFilterEvents();
   bindMatrixQuickAdd();
+
+  els.calendarView.querySelector("[data-matrix-expand-all]")?.addEventListener("click", () => {
+    toggleMatrixAllSubItems();
+  });
+
+  els.calendarView.querySelectorAll("[data-matrix-expand]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      toggleMatrixTaskSubItems(button.getAttribute("data-matrix-expand"));
+    });
+  });
 
   els.calendarView.querySelectorAll("[data-matrix-action]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -8727,6 +8778,25 @@ function bindMatrixEvents() {
       await moveTaskToMatrixQuadrant(payload.path, payload.line, placement);
     });
   });
+}
+
+function toggleMatrixTaskSubItems(key) {
+  if (!key) return;
+  if (state.matrixExpandedTasks.has(key)) state.matrixExpandedTasks.delete(key);
+  else state.matrixExpandedTasks.add(key);
+  renderCalendar();
+}
+
+function toggleMatrixAllSubItems() {
+  const expandable = matrixExpandableTasks();
+  if (!expandable.length) return;
+  const collapse = matrixAllSubItemsExpanded(expandable);
+  expandable.forEach((task) => {
+    const key = matrixTaskKey(task);
+    if (collapse) state.matrixExpandedTasks.delete(key);
+    else state.matrixExpandedTasks.add(key);
+  });
+  renderCalendar();
 }
 
 function bindMatrixQuickAdd() {

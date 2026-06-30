@@ -183,3 +183,33 @@ test("matrix active quadrant has quick todo input that adds medium-priority todo
   assert.match(app, /#\$\{TASK_KIND_TODO\} #\$\{TASK_PRIORITY_MEDIUM\}/);
   assert.match(app, /📅 \$\{dateKey\}/);
 });
+
+test("matrix supports subitem expand controls and compact subitem rows", () => {
+  const styles = fs.readFileSync("styles.css", "utf8");
+  const renderTaskBody = app.match(/function renderMatrixTask\(task, quadrant = \{\}\)[\s\S]*?\n}\r?\n\r?\nfunction renderMatrixQuickAdd/)?.[0] || "";
+  const bindBody = app.match(/function bindMatrixEvents\(\)[\s\S]*?\n}\r?\n\r?\nfunction bindMatrixQuickAdd/)?.[0] || "";
+  const listBody = styles.match(/\.matrix-task-list \{[\s\S]*?\n\}/)?.[0] || "";
+  const subItemsBody = styles.match(/\.matrix-task-sub-items \{[\s\S]*?\n\}/)?.[0] || "";
+  const subBulletBody = styles.match(/\.matrix-task-sub-items \.task-sub-bullet \{[\s\S]*?\n\}/)?.[0] || "";
+  assert.match(app, /matrixExpandedTasks: new Set\(\)/);
+  assert.match(app, /data-matrix-expand-all/);
+  assert.match(renderTaskBody, /matrix-subitems-toggle/);
+  assert.match(renderTaskBody, /renderMatrixTaskSubItems\(task\)/);
+  assert.match(app, /function renderMatrixTaskSubItems\(task\)/);
+  assert.match(app, /renderSubItemsHtml\(task\.subItems\)/);
+  assert.match(bindBody, /toggleMatrixAllSubItems/);
+  assert.match(bindBody, /toggleMatrixTaskSubItems/);
+  assert.match(listBody, /gap: 3px/);
+  assert.match(subItemsBody, /padding: 1px 6px 1px/);
+  assert.match(subBulletBody, /font-size: 70%/);
+});
+
+test("matrix sorting is priority first then nearest deadline with no deadline last", () => {
+  const orderBody = app.match(/function compareMatrixTaskOrder\(a, b\)[\s\S]*?\n}\r?\n\r?\nfunction compareMatrixTodoTasks/)?.[0] || "";
+  assert.match(app, /function matrixTaskDeadlineKey\(task\)/);
+  assert.match(orderBody, /const priority = matrixPriorityRank\(a\) - matrixPriorityRank\(b\)/);
+  assert.match(orderBody, /if \(priority\) return priority/);
+  assert.match(orderBody, /if \(!aDeadline && bDeadline\) return 1/);
+  assert.match(orderBody, /if \(aDeadline && !bDeadline\) return -1/);
+  assert.match(app, /return compareMatrixTaskOrder\(a, b\)/);
+});

@@ -126,3 +126,4 @@
 - 2026-06-30: Stop task 1d matrix titles from being line-clamped while keeping long text wrapped inside cards.
 - 2026-06-30: Prevent task 1d matrix card rows from shrinking and overlapping title, attitude, and metadata spans.
 - 2026-06-30: Update task 1d cards to hide per-task guidance text, show task times, use compact one-line rows, and add a quick medium-priority todo input under Today Progress.
+- 2026-06-30: 1d matrix에 task 하위 항목 접기/펼치기, 전체 토글, compact subitem styling, gap 3px, 중요도/마감일 정렬을 적용.
