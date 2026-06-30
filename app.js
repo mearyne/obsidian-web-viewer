@@ -8297,18 +8297,19 @@ function syncTaskRepeatControls(scope) {
   const isRecurring = meta.kind === TASK_KIND_RECURRING;
   container.hidden = !isRecurring;
   const startField = scope === "edit" ? els.taskEditStartDateBtn?.closest(".task-create-field") : els.taskStartDateBtn?.closest(".task-create-field");
-  if (startField) startField.hidden = isRecurring;
+  const dueField = scope === "edit" ? els.taskEditDueDateBtn?.closest(".task-create-field") : els.taskDueDateBtn?.closest(".task-create-field");
+  if (startField) startField.hidden = false;
+  if (dueField) dueField.hidden = isRecurring;
   if (isRecurring && !Array.isArray(meta.repeatWeekdays)) meta.repeatWeekdays = [];
-  if (isRecurring && meta.repeatWeekdays.length === 0) meta.repeatWeekdays = [...TASK_REPEAT_WEEKDAYS];
   if (scope === "create" && isRecurring) {
-    setTaskDialogDate("start", "");
-    if (els.taskStartTimeInput) els.taskStartTimeInput.value = "";
-    if (els.taskStartTimeClearBtn) els.taskStartTimeClearBtn.hidden = true;
+    const startDate = els.taskStartDateBtn?.dataset.date || state.taskCreateSourceDate || els.taskDueDateBtn?.dataset.date || "";
+    if (startDate) setTaskDialogDate("start", startDate);
+    if (els.taskDueTimeInput) els.taskDueTimeInput.value = "";
+    if (els.taskDueTimeClearBtn) els.taskDueTimeClearBtn.hidden = true;
   }
   if (scope === "edit" && isRecurring) {
-    setTaskEditDate("start", "");
-    if (els.taskEditStartTimeInput) els.taskEditStartTimeInput.value = "";
-    if (els.taskEditStartTimeClearBtn) els.taskEditStartTimeClearBtn.hidden = true;
+    if (els.taskEditDueTimeInput) els.taskEditDueTimeInput.value = "";
+    if (els.taskEditDueTimeClearBtn) els.taskEditDueTimeClearBtn.hidden = true;
   }
   const selected = new Set(normalizeTaskRepeatWeekdays(meta.repeatWeekdays));
   container.querySelectorAll("[data-repeat-weekday]").forEach((button) => {
@@ -8327,10 +8328,11 @@ function toggleTaskRepeatWeekday(scope, weekday) {
   syncTaskRepeatControls(scope);
 }
 
-function setTaskRepeatEveryday(scope) {
+function toggleTaskRepeatEveryday(scope) {
   const meta = repeatMetaForScope(scope);
   if (!meta) return;
-  meta.repeatWeekdays = [...TASK_REPEAT_WEEKDAYS];
+  const selected = new Set(normalizeTaskRepeatWeekdays(meta.repeatWeekdays));
+  meta.repeatWeekdays = selected.size === TASK_REPEAT_WEEKDAYS.length ? [] : [...TASK_REPEAT_WEEKDAYS];
   syncTaskRepeatControls(scope);
 }
 
@@ -8341,7 +8343,7 @@ function bindTaskRepeatControls(scope) {
   container.querySelectorAll("[data-repeat-weekday]").forEach((button) => {
     button.addEventListener("click", () => toggleTaskRepeatWeekday(scope, button.dataset.repeatWeekday));
   });
-  container.querySelector("[data-repeat-all]")?.addEventListener("click", () => setTaskRepeatEveryday(scope));
+  container.querySelector("[data-repeat-all]")?.addEventListener("click", () => toggleTaskRepeatEveryday(scope));
 }
 
 function renderCalendar() {
@@ -10714,7 +10716,11 @@ function bindTaskCreateDialog() {
       btn.addEventListener("click", () => {
         const key = btn.dataset.meta;
         const val = btn.dataset.val;
+        const wasRecurring = state.taskDialogMeta.kind === TASK_KIND_RECURRING;
         state.taskDialogMeta[key] = state.taskDialogMeta[key] === val ? null : val;
+        if (key === "kind" && state.taskDialogMeta.kind === TASK_KIND_RECURRING && !wasRecurring && !normalizeTaskRepeatWeekdays(state.taskDialogMeta.repeatWeekdays).length) {
+          state.taskDialogMeta.repeatWeekdays = [...TASK_REPEAT_WEEKDAYS];
+        }
         updateTaskDialogMetaUI();
       });
     });
@@ -10810,9 +10816,11 @@ function bindTaskCreateDialog() {
     const hashParts = [isRecurring ? null : kind, category, priority, ...cleanTags].filter(Boolean).map((v) => `#${v}`);
     const metaStr = hashParts.length ? ` ${hashParts.join(" ")}` : "";
     const startTime = normalizeTaskTimeInput(els.taskStartTimeInput);
-    const dueTime = normalizeTaskTimeInput(els.taskDueTimeInput);
-    const startPart = !isRecurring && startDate ? ` 🛫 ${startDate}${startTime ? " " + startTime : ""}` : "";
-    const duePart = ` 📅 ${dueDate}${dueTime ? " " + dueTime : ""}`;
+    const dueTime = isRecurring ? "" : normalizeTaskTimeInput(els.taskDueTimeInput);
+    const startPart = isRecurring
+      ? ` 🛫 ${startDate || dueDate}${startTime ? " " + startTime : ""}`
+      : (startDate ? ` 🛫 ${startDate}${startTime ? " " + startTime : ""}` : "");
+    const duePart = !isRecurring && dueDate ? ` 📅 ${dueDate}${dueTime ? " " + dueTime : ""}` : "";
     const notifyOff = els.taskNotifyChip?.dataset.notify === "false";
     const notifyPart = notifyOff ? " 🔕" : "";
     const subItemsText = els.taskCreateSubItemsInput?.value || "";
@@ -10860,7 +10868,11 @@ function bindTaskEditDialog() {
       btn.addEventListener("click", () => {
         const key = btn.dataset.meta;
         const val = btn.dataset.val;
+        const wasRecurring = state.taskEditMeta.kind === TASK_KIND_RECURRING;
         state.taskEditMeta[key] = state.taskEditMeta[key] === val ? null : val;
+        if (key === "kind" && state.taskEditMeta.kind === TASK_KIND_RECURRING && !wasRecurring && !normalizeTaskRepeatWeekdays(state.taskEditMeta.repeatWeekdays).length) {
+          state.taskEditMeta.repeatWeekdays = [...TASK_REPEAT_WEEKDAYS];
+        }
         updateTaskEditMetaUI();
       });
     });
@@ -10991,7 +11003,8 @@ function bindTaskEditDialog() {
     const title = els.taskEditDialogTitle?.value.trim() || "";
     const dueDate = els.taskEditDueDateBtn?.dataset.date || "";
     const startDate = els.taskEditStartDateBtn?.dataset.date || "";
-    const dueTime = normalizeTaskTimeInput(els.taskEditDueTimeInput);
+    const isRecurring = state.taskEditMeta.kind === TASK_KIND_RECURRING;
+    const dueTime = isRecurring ? "" : normalizeTaskTimeInput(els.taskEditDueTimeInput);
     const startTime = normalizeTaskTimeInput(els.taskEditStartTimeInput);
     const checked = els.taskEditChecked?.checked || false;
     const deferred = els.taskEditDeferred?.checked || false;
@@ -11384,8 +11397,10 @@ async function saveTaskEdit(task, title, meta, dueDate, startDate, checked, dueT
     const cleanTags = Array.isArray(tags) ? tags.filter((tag) => tag !== TASK_KIND_RECURRING) : [];
     const hashParts = [isRecurring ? null : kind, category, priority, ...cleanTags].filter(Boolean).map((v) => `#${v}`);
     const metaStr = hashParts.length ? ` ${hashParts.join(" ")}` : "";
-    const startPart = !isRecurring && startDate ? ` 🛫 ${startDate}${startTime ? " " + startTime : ""}` : "";
-    const duePart = ` 📅 ${dueDate}${dueTime ? " " + dueTime : ""}`;
+    const startPart = isRecurring
+      ? ` 🛫 ${startDate || dueDate}${startTime ? " " + startTime : ""}`
+      : (startDate ? ` 🛫 ${startDate}${startTime ? " " + startTime : ""}` : "");
+    const duePart = !isRecurring && dueDate ? ` 📅 ${dueDate}${dueTime ? " " + dueTime : ""}` : "";
     const notifyOff = els.taskEditNotifyChip?.dataset.notify === "false";
     const notifyPart = notifyOff ? " 🔕" : "";
     const statusChar = checked ? "x" : deferred ? ">" : " ";

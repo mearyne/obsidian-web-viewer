@@ -120,3 +120,4 @@
 - 2026-06-30: Include mindmap node images as Markdown image embeds when copying selected nodes as bullets.
 - 2026-06-30: Keep low-priority calendar tasks visually subdued and sorted last, fix pinned calendar task restore, improve mindmap save color, image-node paste/context/pinch behavior, and make task delete confirmation appear above the task popup.
 - 2026-06-30: Add weekday-based recurring tasks, simplify recurring task dates, show recurring tasks on selected weekdays, and change the matrix into todo/schedule/recurring sections.
+- 2026-06-30: Restore recurring task start dates, remove recurring task end time storage, make the everyday repeat button toggle all weekdays off, and visually separate everyday from weekday buttons.

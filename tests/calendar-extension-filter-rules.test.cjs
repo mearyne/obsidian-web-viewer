@@ -71,15 +71,27 @@ test("recurring tasks store weekdays and render only on selected weekdays", () =
   assert.match(app, /function recurringTaskCalendarDates\(task\)/);
 });
 
-test("recurring task dialogs hide start date and expose weekday toggles", () => {
+test("recurring task dialogs expose weekday toggles", () => {
   const html = fs.readFileSync("index.html", "utf8");
   assert.match(html, /id="taskRepeatWeekdays"/);
   assert.match(html, /id="taskEditRepeatWeekdays"/);
   assert.match(html, /data-repeat-all/);
   assert.match(app, /function syncTaskRepeatControls\(scope\)/);
   assert.match(app, /toggleTaskRepeatWeekday\(scope, weekday\)/);
-  assert.match(app, /setTaskDialogDate\("start", ""\)/);
-  assert.match(app, /setTaskEditDate\("start", ""\)/);
+});
+
+test("recurring task dialogs keep start date, remove end time, and separate everyday from weekdays", () => {
+  const html = fs.readFileSync("index.html", "utf8");
+  assert.match(html, /class="task-repeat-everyday"[\s\S]*data-repeat-all/);
+  assert.match(html, /class="task-repeat-weekday-list"[\s\S]*data-repeat-weekday/);
+  assert.match(app, /const startPart = isRecurring[\s\S]*startDate/);
+  assert.match(app, /const duePart = !isRecurring[\s\S]*dueDate/);
+  assert.match(app, /const dueTime = isRecurring \? "" : normalizeTaskTimeInput\(els\.taskDueTimeInput\)/);
+  assert.match(app, /const dueTime = isRecurring \? "" : normalizeTaskTimeInput\(els\.taskEditDueTimeInput\)/);
+  assert.match(app, /const dueField = scope === "edit"[\s\S]*closest\("\.task-create-field"\)/);
+  assert.match(app, /if \(dueField\) dueField\.hidden = isRecurring/);
+  assert.match(app, /function toggleTaskRepeatEveryday\(scope\)/);
+  assert.match(app, /selected\.size === TASK_REPEAT_WEEKDAYS\.length \? \[\] : \[\.\.\.TASK_REPEAT_WEEKDAYS\]/);
 });
 
 test("matrix uses todo schedule recurring sections and their sort rules", () => {

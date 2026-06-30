@@ -3575,14 +3575,27 @@ button:disabled {
 
 .task-repeat-weekdays {
   align-items: center;
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
   gap: 5px;
   grid-column: 1 / -1;
-  grid-template-columns: minmax(54px, 1fr) repeat(7, 34px);
 }
 
 .task-repeat-weekdays[hidden] {
   display: none;
+}
+
+.task-repeat-everyday {
+  border-right: 1px solid var(--line);
+  flex: 0 0 auto;
+  padding-right: 7px;
+}
+
+.task-repeat-weekday-list {
+  display: grid;
+  flex: 1 1 250px;
+  gap: 5px;
+  grid-template-columns: repeat(7, minmax(30px, 1fr));
 }
 
 .task-repeat-weekdays button {
@@ -5549,11 +5562,19 @@ button.calendar-more {
 
 @media (max-width: 520px) {
   .task-repeat-weekdays {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    align-items: stretch;
   }
 
-  .task-repeat-weekdays .task-repeat-all {
-    grid-column: 1 / -1;
+  .task-repeat-everyday {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    flex-basis: 100%;
+    padding: 0 0 6px;
+  }
+
+  .task-repeat-weekday-list {
+    flex-basis: 100%;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .matrix-grid {
