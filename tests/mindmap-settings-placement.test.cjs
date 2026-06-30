@@ -57,3 +57,15 @@ test("mindmap edit input uses the same node box variables", () => {
   assert.match(inputRule, /border: 1px solid var\(--mindmap-node-border\)/);
   assert.match(inputRule, /color: var\(--mindmap-node-text\)/);
 });
+
+test("mindmap rich text editor uses the same node box variables", () => {
+  const styles = fs.readFileSync("styles.css", "utf8");
+  const editRule = styles.match(/\.mindmap-canvas \.smm-node-edit-wrap,[\s\S]*?\.mindmap-canvas \.smm-richtext-node-edit-wrap \.ql-editor \{[\s\S]*?\}/)?.[0] || "";
+  assert.match(editRule, /background: var\(--mindmap-node-bg\)/);
+  assert.match(editRule, /border: 1px solid var\(--mindmap-node-border\)/);
+  assert.match(editRule, /color: var\(--mindmap-node-text\)/);
+});
+
+test("mindmap edit overlays are attached inside the themed canvas", () => {
+  assert.match(app, /customInnerElsAppendTo: canvas/);
+});

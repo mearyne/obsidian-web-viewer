@@ -2798,6 +2798,14 @@ button:disabled {
   padding: 3px 6px;
 }
 
+.mindmap-canvas .smm-node-edit-wrap,
+.mindmap-canvas .smm-richtext-node-edit-wrap,
+.mindmap-canvas .smm-richtext-node-edit-wrap .ql-editor {
+  background: var(--mindmap-node-bg) !important;
+  border: 1px solid var(--mindmap-node-border) !important;
+  color: var(--mindmap-node-text) !important;
+}
+
 .mindmap-embed-preview {
   border: 1px solid var(--line);
   border-radius: 8px;

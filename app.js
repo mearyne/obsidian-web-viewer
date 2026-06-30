@@ -5447,6 +5447,7 @@ function renderSimpleMindMapDocument(data, canvas) {
     defaultOuterFrameText: "프레임",
     enableShortcutOnlyWhenMouseInSvg: true,
     customCheckEnableShortcut: shouldEnableMindmapShortcut,
+    customInnerElsAppendTo: canvas,
     enableAutoEnterTextEditWhenKeydown: true,
     selectTextOnEnterEditText: true,
     errorHandler: handleMindmapError,
