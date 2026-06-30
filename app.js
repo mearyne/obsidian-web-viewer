@@ -8542,7 +8542,7 @@ function renderMatrixQuadrant(quadrant) {
 
 function renderMatrixTask(task, quadrant = {}) {
   const due = task.dates?.due || task.dates?.end || task.dates?.scheduled || task.dates?.start || task.date || "";
-  const meta = matrixTaskMetaText(task, due);
+  const meta = matrixTaskMetaHtml(task, due);
   const key = matrixTaskKey(task);
   const hasSubItems = Boolean(task.subItems?.length);
   const expanded = hasSubItems && state.matrixExpandedTasks.has(key);
@@ -8554,9 +8554,9 @@ function renderMatrixTask(task, quadrant = {}) {
             <span class="matrix-task-icon" aria-hidden="true">${taskDisplayIcon(task)}</span>
             <span class="matrix-task-text">${escapeHtml(task.text)}</span>
           </span>
-          ${meta ? `<span class="matrix-task-meta">${escapeHtml(meta)}</span>` : ""}
+          ${meta ? `<span class="matrix-task-meta">${meta}</span>` : ""}
         </button>
-        <button class="matrix-task-delete" type="button" data-matrix-delete-path="${escapeAttribute(task.path)}" data-matrix-delete-line="${task.line}" aria-label="태스크 삭제" title="태스크 삭제">×</button>
+        <button class="matrix-task-delete" type="button" data-matrix-delete-path="${escapeAttribute(task.path)}" data-matrix-delete-line="${task.line}" aria-label="태스크 삭제" title="태스크 삭제">&#128465;</button>
       </div>
       ${expanded ? renderMatrixTaskSubItems(task) : ""}
     </div>
@@ -8583,12 +8583,23 @@ function renderMatrixQuickAdd() {
   `;
 }
 
-function matrixTaskTime(task, due) {
-  return taskTimeForDate(task, due) || task.dueTime || task.startTime || "";
+function matrixTaskMetaHtml(task, due) {
+  const time = matrixTaskTime(task, due);
+  return [
+    due ? `<span class="matrix-task-meta-item matrix-task-meta-date ${matrixMetaDateClass(due)}">${escapeHtml(due)}</span>` : "",
+    time ? `<span class="matrix-task-meta-item matrix-task-meta-time">${escapeHtml(time)}</span>` : "",
+    task.priority ? `<span class="matrix-task-meta-item matrix-task-meta-priority priority-rank-${matrixPriorityRank(task)}">${escapeHtml(task.priority)}</span>` : "",
+  ].filter(Boolean).join('<span class="matrix-task-meta-separator">·</span>');
 }
 
-function matrixTaskMetaText(task, due) {
-  return [due, matrixTaskTime(task, due), task.priority].filter(Boolean).join(" · ");
+function matrixMetaDateClass(dateKey) {
+  let hash = 0;
+  for (let index = 0; index < dateKey.length; index += 1) hash = (hash * 31 + dateKey.charCodeAt(index)) >>> 0;
+  return `date-color-${hash % 6}`;
+}
+
+function matrixTaskTime(task, due) {
+  return taskTimeForDate(task, due) || task.dueTime || task.startTime || "";
 }
 
 function matrixTaskKey(task) {

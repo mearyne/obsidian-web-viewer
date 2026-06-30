@@ -156,7 +156,7 @@ test("matrix tasks are one-line cards with time and no per-task attitude text", 
   const textBody = styles.match(/\.matrix-task-text \{[\s\S]*?\n\}/)?.[0] || "";
   const metaBody = styles.match(/\.matrix-task-meta \{[\s\S]*?\n\}/)?.[0] || "";
   assert.doesNotMatch(renderTaskBody, /matrix-task-attitude/);
-  assert.match(renderTaskBody, /matrixTaskMetaText\(task, due\)/);
+  assert.match(renderTaskBody, /matrixTaskMetaHtml\(task, due\)/);
   assert.match(app, /function matrixTaskTime\(task, due\)/);
   assert.match(app, /taskTimeForDate\(task, due\)/);
   assert.doesNotMatch(app, /일정과 할 일, 중요도 높은 순/);
@@ -215,12 +215,19 @@ test("matrix task rows put delete action on the right and shrink quick add heigh
   const quickInputBody = styles.match(/\.matrix-quick-add input \{[\s\S]*?\n\}/)?.[0] || "";
   const quickButtonBody = styles.match(/\.matrix-quick-add button \{[\s\S]*?\n\}/)?.[0] || "";
   const rowTaskBody = styles.match(/\.matrix-task-row > button:is\(\.matrix-task\) \{[\s\S]*?\n\}/)?.[0] || "";
+  const rowBody = styles.match(/\.matrix-task-row \{[\s\S]*?\n\}/)?.[0] || "";
+  const deleteBody = styles.match(/\.matrix-task-delete \{[\s\S]*?\n\}/)?.[0] || "";
   assert.match(renderTaskBody, /matrix-task-row/);
   assert.match(renderTaskBody, /matrix-task-delete/);
   assert.match(renderTaskBody, /data-matrix-delete-path/);
+  assert.match(renderTaskBody, /&#128465;/);
   assert.match(bindBody, /deleteMatrixTask/);
   assert.match(app, /async function deleteMatrixTask\(path, line\)/);
   assert.match(app, /await deleteCalendarTaskLine\(path, line\)/);
+  assert.match(rowBody, /background: var\(--surface-2\)/);
+  assert.match(rowBody, /border: 1px solid var\(--line\)/);
+  assert.match(deleteBody, /background: transparent/);
+  assert.match(deleteBody, /border: 0/);
   assert.match(quickAddBody, /padding: 2px 8px/);
   assert.match(quickInputBody, /font-size: 70%/);
   assert.match(quickInputBody, /padding: 2px 6px/);
@@ -244,12 +251,25 @@ test("matrix task cards use 30d priority background colors", () => {
   assert.match(renderTaskBody, /task\.priority \? `pri-\$\{task\.priority\}` : ""/);
   assert.match(renderTaskBody, /matrix-task-card \$\{matrixTaskClasses\(task, hasSubItems\)\}/);
   assert.match(app, /function matrixTaskClasses\(task, hasSubItems\)/);
-  assert.match(styles, /\.matrix-task-card\.pri-상 \.matrix-task/);
-  assert.match(styles, /\.matrix-task-card\.pri-중 \.matrix-task/);
-  assert.match(styles, /\.matrix-task-card\.pri-하 \.matrix-task/);
+  assert.match(styles, /\.matrix-task-card\.pri-상 \.matrix-task-row/);
+  assert.match(styles, /\.matrix-task-card\.pri-중 \.matrix-task-row/);
+  assert.match(styles, /\.matrix-task-card\.pri-하 \.matrix-task-row/);
   assert.match(styles, /color-mix\(in srgb, #e74c3c 13%, var\(--surface-2\)\)/);
   assert.match(styles, /color-mix\(in srgb, #e6a20f 11%, var\(--surface-2\)\)/);
   assert.match(styles, /filter: saturate\(0\.55\) brightness\(0\.96\)/);
+});
+
+test("matrix task metadata colors matching dates and priorities consistently", () => {
+  const styles = fs.readFileSync("styles.css", "utf8");
+  const metaBody = app.match(/function matrixTaskMetaHtml\(task, due\)[\s\S]*?\n}\r?\n\r?\nfunction matrixTaskTime/)?.[0] || "";
+  assert.match(app, /function matrixMetaDateClass\(dateKey\)/);
+  assert.match(metaBody, /matrix-task-meta-date \$\{matrixMetaDateClass\(due\)\}/);
+  assert.match(metaBody, /matrix-task-meta-priority priority-rank-\$\{matrixPriorityRank\(task\)\}/);
+  assert.match(styles, /\.matrix-task-meta-date\.date-color-0/);
+  assert.match(styles, /\.matrix-task-meta-date\.date-color-5/);
+  assert.match(styles, /\.matrix-task-meta-priority\.priority-rank-0/);
+  assert.match(styles, /\.matrix-task-meta-priority\.priority-rank-1/);
+  assert.match(styles, /\.matrix-task-meta-priority\.priority-rank-2/);
 });
 
 test("matrix sorting is priority first then nearest deadline with no deadline last", () => {

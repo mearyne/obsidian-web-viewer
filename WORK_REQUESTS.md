@@ -130,3 +130,4 @@
 - 2026-06-30: Move task 1d quick add below active tasks, remove per-task left expand icon, add right-side task delete button, and shrink quick-add height.
 - 2026-06-30: Apply 30d priority-based background colors to task 1d matrix cards.
 - 2026-06-30: Prevent horizontal scrolling in task 1d rows and keep low-priority tasks in Today Progress while Deferred only shows postponed tasks.
+- 2026-06-30: Merge task 1d delete action visually into each task row, change delete icon, and color matching dates/priorities consistently in task metadata.
