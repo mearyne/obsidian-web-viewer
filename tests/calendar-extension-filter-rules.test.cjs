@@ -94,15 +94,27 @@ test("recurring task dialogs keep start date, remove end time, and separate ever
   assert.match(app, /selected\.size === TASK_REPEAT_WEEKDAYS\.length \? \[\] : \[\.\.\.TASK_REPEAT_WEEKDAYS\]/);
 });
 
-test("matrix uses todo schedule recurring sections and their sort rules", () => {
+test("matrix uses today progress completed routine and deferred sections", () => {
   const styles = fs.readFileSync("styles.css", "utf8");
-  assert.match(app, /key: "todo"/);
-  assert.match(app, /key: "schedule"/);
+  assert.match(app, /key: "active"/);
+  assert.match(app, /key: "completed"/);
   assert.match(app, /key: "recurring"/);
+  assert.match(app, /key: "deferred"/);
   assert.doesNotMatch(app, /key: "urgent"/);
+  assert.doesNotMatch(app, /\.filter\(\(task\) => !task\.checked\)/);
   assert.match(app, /function matrixTaskPlacement\(task\)/);
+  assert.match(app, /if \(task\.isRecurring\) return "recurring"/);
+  assert.match(app, /if \(task\.checked\) return "completed"/);
+  assert.match(app, /if \(task\.deferred \|\| isLowPriorityTask\(task\)\) return "deferred"/);
   assert.match(app, /function compareMatrixTodoTasks\(a, b\)/);
   assert.match(app, /function compareMatrixDateTasks\(a, b\)/);
-  assert.match(styles, /\.matrix-quadrant\.todo/);
+  assert.match(app, /completed: \{ key: "completed", checked: true/);
+  assert.match(app, /deferred: \{ key: "deferred", deferred: true/);
+  assert.match(app, /function replaceMatrixTaskStatus\(line, placement\)/);
+  assert.match(app, /if \(button\.getAttribute\("data-matrix-key"\) === "recurring"\)/);
+  assert.match(app, /await toggleCalendarTask\(path, line, button\)/);
+  assert.match(styles, /\.matrix-quadrant\.active/);
+  assert.match(styles, /\.matrix-quadrant\.completed/);
+  assert.match(styles, /\.matrix-quadrant\.deferred/);
   assert.match(styles, /grid-row: 1 \/ span 2/);
 });

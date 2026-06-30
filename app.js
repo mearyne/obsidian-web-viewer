@@ -8453,24 +8453,31 @@ function renderEisenhowerMatrix() {
   const tasks = matrixVisibleTasks(range);
   const quadrants = [
     {
-      key: "todo",
-      icon: "☑",
-      title: "할 일",
-      attitude: "중요도 높은 순, 마감 가까운 순",
+      key: "active",
+      icon: "▶",
+      title: "오늘 진행",
+      attitude: "일정과 할 일, 중요도 높은 순",
       sorter: compareMatrixTodoTasks,
     },
     {
-      key: "schedule",
-      icon: "🗓",
-      title: "일정",
-      attitude: "끝날짜 가까운 순",
+      key: "completed",
+      icon: "✓",
+      title: "완료",
+      attitude: "오늘 처리한 항목",
       sorter: compareMatrixDateTasks,
     },
     {
       key: "recurring",
       icon: "🔁",
-      title: "반복",
-      attitude: "매일 또는 선택 요일",
+      title: "루틴 / 반복",
+      attitude: "습관은 체크 중심",
+      sorter: compareMatrixDateTasks,
+    },
+    {
+      key: "deferred",
+      icon: "…",
+      title: "보류",
+      attitude: "미루기와 중요도 낮음",
       sorter: compareMatrixDateTasks,
     },
   ].map((quadrant) => ({
@@ -8538,7 +8545,7 @@ function renderMatrixTask(task, quadrant = {}) {
   const due = task.dates?.due || task.dates?.end || task.dates?.scheduled || task.dates?.start || task.date || "";
   const attitude = quadrant?.attitude || "";
   return `
-    <button class="matrix-task ${task.checked ? "done" : task.deferred ? "deferred" : ""}" type="button" draggable="true" data-path="${escapeAttribute(task.path)}" data-line="${task.line}" title="${escapeAttribute(`${task.path}: ${task.rawText || task.text}`)}">
+    <button class="matrix-task ${task.checked ? "done" : task.deferred ? "deferred" : ""}" type="button" draggable="true" data-matrix-key="${escapeAttribute(quadrant.key || "")}" data-path="${escapeAttribute(task.path)}" data-line="${task.line}" title="${escapeAttribute(`${task.path}: ${task.rawText || task.text}`)}">
       <span class="matrix-task-title">
         <span class="matrix-task-icon" aria-hidden="true">${taskDisplayIcon(task)}</span>
         <span class="matrix-task-text">${escapeHtml(task.text)}</span>
@@ -8554,9 +8561,10 @@ function renderMatrixTask(task, quadrant = {}) {
 function renderMatrixRules(range) {
   return `
     <div class="matrix-rules">
-      <span>할 일: 중요도 높은 순 → 끝날짜 가까운 순</span>
-      <span>일정: #${TASK_KIND_SCHEDULE}</span>
-      <span>반복: #${TASK_KIND_RECURRING} + 선택 요일</span>
+      <span>오늘 진행: 미완료 일정 + 할 일</span>
+      <span>완료: 드래그하거나 체크한 항목</span>
+      <span>루틴: #${TASK_KIND_RECURRING} + 선택 요일</span>
+      <span>보류: 미루기 + 중요도 하</span>
     </div>
   `;
 }
@@ -8598,7 +8606,6 @@ function matrixTitle() {
 
 function matrixVisibleTasks(range = matrixDateRange()) {
   return calendarPreviewTasks()
-    .filter((task) => !task.checked)
     .filter((task) => taskCalendarDates(task).some((dateKey) => {
       const date = parseDateKey(dateKey);
       return date && date >= range.start && date < range.end;
@@ -8630,8 +8637,9 @@ function compareMatrixDateTasks(a, b) {
 
 function matrixTaskPlacement(task) {
   if (task.isRecurring) return "recurring";
-  if (task.kind === TASK_KIND_SCHEDULE) return "schedule";
-  return "todo";
+  if (task.checked) return "completed";
+  if (task.deferred || isLowPriorityTask(task)) return "deferred";
+  return "active";
 }
 function bindMatrixEvents() {
   bindCalendarFilterEvents();
@@ -8673,6 +8681,10 @@ function bindMatrixEvents() {
       }
       const path = button.getAttribute("data-path");
       const line = Number(button.getAttribute("data-line"));
+      if (button.getAttribute("data-matrix-key") === "recurring") {
+        await toggleCalendarTask(path, line, button);
+        return;
+      }
       const task = state.tasks.find((item) => item.path === path && item.line === line);
       if (task) await showTaskEditDialog(task);
     });
@@ -8724,9 +8736,10 @@ function shiftMatrixDate(direction) {
 
 function matrixPlacementFromKey(key) {
   return {
-    todo: { key: "todo", kind: TASK_KIND_TODO, recurring: false, priority: null },
-    schedule: { key: "schedule", kind: TASK_KIND_SCHEDULE, recurring: false, priority: null },
-    recurring: { key: "recurring", kind: TASK_KIND_RECURRING, recurring: true, priority: null },
+    active: { key: "active", recurring: false, checked: false, deferred: false },
+    completed: { key: "completed", checked: true, deferred: false },
+    recurring: { key: "recurring", kind: TASK_KIND_RECURRING, recurring: true, checked: false, deferred: false },
+    deferred: { key: "deferred", deferred: true, checked: false },
   }[key] || null;
 }
 
@@ -10252,18 +10265,19 @@ async function moveTaskToMatrixQuadrant(path, lineNumber, placement) {
   const content = await readFileNode(node);
   const lines = content.replace(/\r\n/g, "\n").split("\n");
   const index = lineNumber - 1;
-  if (!lines[index] || !/^\s*[-*+]\s+\[[ xX-]\]/.test(lines[index])) return;
+  if (!lines[index] || !/^\s*[-*+]\s+\[[ xX>-]\]/.test(lines[index])) return;
 
   const range = matrixDateRange();
   const targetDate = formatDate(addDays(range.end, -1));
-  let nextLine = replaceTaskLineDate(lines[index], targetDate, "\u{1F4C5}");
+  let nextLine = replaceMatrixTaskStatus(lines[index], placement);
+  if (placement.key !== "completed") nextLine = replaceTaskLineDate(nextLine, targetDate, "\u{1F4C5}");
   if (placement.kind) nextLine = replaceTaskKindTag(nextLine, placement.kind);
   if (placement.priority) nextLine = replaceTaskPriorityTag(nextLine, placement.priority);
-  nextLine = replaceTaskRecurringTag(nextLine, Boolean(placement.recurring));
+  if ("recurring" in placement) nextLine = replaceTaskRecurringTag(nextLine, Boolean(placement.recurring));
   if (placement.recurring) {
     const existingWeekdays = extractTaskRepeatWeekdays(nextLine);
     nextLine = replaceTaskRepeatWeekdays(nextLine, existingWeekdays.length ? existingWeekdays : TASK_REPEAT_WEEKDAYS);
-  } else {
+  } else if ("recurring" in placement) {
     nextLine = replaceTaskRepeatWeekdays(nextLine, []);
   }
   if (nextLine === lines[index]) return;
@@ -10287,6 +10301,17 @@ async function moveTaskToMatrixQuadrant(path, lineNumber, placement) {
   }
 
   if (state.activeView === "calendar" && isTaskCalendarKind()) renderCalendar();
+}
+
+function replaceMatrixTaskStatus(line, placement) {
+  if (!placement || (!("checked" in placement) && !("deferred" in placement))) return line;
+  const taskDate = formatDate(new Date());
+  return line.replace(/^(\s*[-*+]\s+\[)([ xX>-])(\])(.*)$/, (_, head, current, tail, rest) => {
+    const cleanRest = rest.replace(/\s*\u{2705}\s*\d{4}-\d{2}-\d{2}/gu, "");
+    if (placement.checked) return `${head}x${tail}${cleanRest} \u{2705} ${taskDate}`;
+    if (placement.deferred) return `${head}>${tail}${cleanRest}`;
+    return `${head} ${tail}${cleanRest}`;
+  });
 }
 
 function replaceTaskPriorityTag(line, priority) {

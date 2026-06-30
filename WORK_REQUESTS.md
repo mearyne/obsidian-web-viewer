@@ -121,3 +121,4 @@
 - 2026-06-30: Keep low-priority calendar tasks visually subdued and sorted last, fix pinned calendar task restore, improve mindmap save color, image-node paste/context/pinch behavior, and make task delete confirmation appear above the task popup.
 - 2026-06-30: Add weekday-based recurring tasks, simplify recurring task dates, show recurring tasks on selected weekdays, and change the matrix into todo/schedule/recurring sections.
 - 2026-06-30: Restore recurring task start dates, remove recurring task end time storage, make the everyday repeat button toggle all weekdays off, and visually separate everyday from weekday buttons.
+- 2026-06-30: Rework task 1d into today progress, completed, routine, and deferred sections with drag-to-complete, low-priority/deferred grouping, and routine click checks.
