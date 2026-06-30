@@ -119,14 +119,18 @@ test("matrix uses today progress completed routine and deferred sections", () =>
   assert.match(styles, /grid-row: 1 \/ span 2/);
 });
 
-test("matrix hides explanatory rules and clamps task text inside cards", () => {
+test("matrix hides explanatory rules and wraps full task text inside cards", () => {
   const styles = fs.readFileSync("styles.css", "utf8");
   const matrixBody = app.match(/function renderEisenhowerMatrix\(\)[\s\S]*?\n}\r?\nfunction renderCalendarFilterToggleButton/)?.[0] || "";
   assert.doesNotMatch(matrixBody, /renderMatrixRules/);
   assert.doesNotMatch(app, /오늘 진행: 미완료 일정 \+ 할 일/);
+  const taskTextBody = styles.match(/\.matrix-task-text \{[\s\S]*?\n\}/)?.[0] || "";
   assert.match(styles, /\.matrix-task \{[\s\S]*?box-sizing: border-box/);
   assert.match(styles, /\.matrix-task-title \{[\s\S]*?overflow: hidden/);
-  assert.match(styles, /\.matrix-task-text \{[\s\S]*?overflow-wrap: anywhere/);
+  assert.match(taskTextBody, /overflow-wrap: anywhere/);
+  assert.match(taskTextBody, /white-space: normal/);
+  assert.doesNotMatch(taskTextBody, /-webkit-line-clamp/);
+  assert.doesNotMatch(taskTextBody, /overflow: hidden/);
   assert.match(styles, /\.matrix-task-meta \{[\s\S]*?overflow-wrap: anywhere/);
   assert.match(styles, /\.matrix-task-attitude \{[\s\S]*?overflow-wrap: anywhere/);
 });

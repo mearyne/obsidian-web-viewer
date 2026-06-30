@@ -4928,11 +4928,9 @@ button:disabled {
 
 .matrix-task-text {
   min-width: 0;
-  -webkit-box-orient: vertical;
-  display: -webkit-box;
-  -webkit-line-clamp: var(--matrix-task-title-lines, 3);
-  overflow: hidden;
+  display: block;
   overflow-wrap: anywhere;
+  white-space: normal;
   word-break: break-word;
 }
 

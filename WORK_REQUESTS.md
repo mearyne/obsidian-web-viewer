@@ -123,3 +123,4 @@
 - 2026-06-30: Restore recurring task start dates, remove recurring task end time storage, make the everyday repeat button toggle all weekdays off, and visually separate everyday from weekday buttons.
 - 2026-06-30: Rework task 1d into today progress, completed, routine, and deferred sections with drag-to-complete, low-priority/deferred grouping, and routine click checks.
 - 2026-06-30: Remove task 1d explanatory rules text and clamp matrix task text so it stays inside cards.
+- 2026-06-30: Stop task 1d matrix titles from being line-clamped while keeping long text wrapped inside cards.
