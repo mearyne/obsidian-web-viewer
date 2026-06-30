@@ -4,6 +4,7 @@ const test = require("node:test");
 const vm = require("node:vm");
 
 const app = fs.readFileSync("app.js", "utf8");
+const server = fs.readFileSync("server.cjs", "utf8");
 const html = fs.readFileSync("index.html", "utf8");
 const styles = fs.readFileSync("styles.css", "utf8");
 
@@ -122,6 +123,18 @@ test("task view copies sub-items as markdown bullets", () => {
   assert.equal(context.taskSubItemsToClipboardText(["alpha", "  - child"]), "- alpha\n  - child\n");
   assert.match(app, /taskSubItemsPreview.*addEventListener\("copy", handleTaskSubItemsPreviewCopy/);
   assert.match(app, /event\.clipboardData\.setData\("text\/plain", text\)/);
+});
+
+test("vault file list can load from persisted snapshot before a fresh scan", () => {
+  assert.match(server, /function readVaultFilesSnapshot/);
+  assert.match(server, /function writeVaultFilesSnapshot/);
+  assert.match(server, /function vaultFilesSnapshotPath/);
+  assert.match(server, /if \(!forceRefresh\) \{[\s\S]*?readVaultFilesSnapshot/);
+  assert.match(server, /stale: true/);
+  assert.match(server, /writeVaultFilesSnapshot\(sourceRoot, name, vaultFilesCache\)/);
+  assert.match(app, /scheduleVaultSnapshotRefresh/);
+  assert.match(app, /\/api\/vault\$\{forceRefresh \? "\?refresh=1" : ""\}/);
+  assert.match(app, /if \(vault\.stale\) scheduleVaultSnapshotRefresh\(\)/);
 });
 
 test("task edit delete closes the native dialog before showing app confirm", () => {

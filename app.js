@@ -310,6 +310,8 @@ const state = {
   calendarDate: new Date(),
   calendarMode: "month",
   vaultSyncing: false,
+  vaultSnapshotRefreshTimer: null,
+  vaultSnapshotRefreshInFlight: false,
   calendarRefreshInFlight: false,
   calendarRefreshTimer: null,
   calendarFilterTimer: null,
@@ -2315,6 +2317,7 @@ async function loadSampleVault() {
       throw new Error("vault payload invalid");
     }
     hydrateServerVault(vault.name || "vault", vault.files || [], Boolean(vault.writable));
+    if (vault.stale) scheduleVaultSnapshotRefresh();
   } catch {
     try {
       const response = await fetch("/api/sample-vault", { cache: "no-store" });
@@ -2322,6 +2325,7 @@ async function loadSampleVault() {
       const vault = await response.json();
       if (!vault || !Array.isArray(vault.files)) throw new Error("sample vault payload invalid");
       hydrateServerVault(vault.name || "sample-vault", vault.files || [], Boolean(vault.writable));
+      if (vault.stale) scheduleVaultSnapshotRefresh();
     } catch {
       const files = Object.entries(SAMPLE_FILES).map(([path, content]) => ({ path, content }));
       hydrateServerVault("Sample vault", files, false);
@@ -2434,6 +2438,11 @@ function resetVault() {
   state.calendarKind = "tasks";
   state.calendarTaskOpenSuppressedUntil = 0;
   state.calendarDateOpenSuppressedUntil = 0;
+  state.vaultSnapshotRefreshInFlight = false;
+  if (state.vaultSnapshotRefreshTimer) {
+    window.clearTimeout(state.vaultSnapshotRefreshTimer);
+    state.vaultSnapshotRefreshTimer = null;
+  }
   state.matrixTaskDrag = null;
   state.matrixExpandedTasks = new Set();
   state.matrixSortModes = defaultMatrixSortModes();
@@ -9877,15 +9886,27 @@ async function deleteVaultFileByPath(filePath) {
   }
 }
 
-async function reloadVaultFileList() {
+function scheduleVaultSnapshotRefresh(delay = 250) {
+  if (state.vaultSnapshotRefreshTimer || state.vaultSnapshotRefreshInFlight) return;
+  state.vaultSnapshotRefreshTimer = window.setTimeout(() => {
+    state.vaultSnapshotRefreshTimer = null;
+    reloadVaultFileList({ forceRefresh: true });
+  }, delay);
+}
+
+async function reloadVaultFileList({ forceRefresh = false } = {}) {
   try {
-    const res = await fetch("/api/vault", { cache: "no-store" });
+    if (forceRefresh) state.vaultSnapshotRefreshInFlight = true;
+    const res = await fetch(`/api/vault${forceRefresh ? "?refresh=1" : ""}`, { cache: "no-store" });
     if (!res.ok) return;
     const vault = await res.json();
     if (!vault || !Array.isArray(vault.files)) return;
+    if (vault.stale) scheduleVaultSnapshotRefresh();
+    state.serverVaultWritable = Boolean(vault.writable);
+    state.vaultName = vault.name || state.vaultName;
     state.files.clear();
     state.directories.clear();
-    state.root = makeDirNode(vault.name || state.vaultName, "");
+    state.root = makeDirNode(state.vaultName, "");
     state.directories.set("", state.root);
     vault.files.forEach((file) => {
       const normalizedPath = normalizeVaultPath(file.path);
@@ -9919,7 +9940,12 @@ async function reloadVaultFileList() {
     });
     refreshDirectoryMetadata();
     renderTree();
-  } catch {}
+    loadCalendarCache().finally(() => scheduleCalendarRefresh(0));
+    refreshRecentFilesCache();
+  } catch {
+  } finally {
+    if (forceRefresh) state.vaultSnapshotRefreshInFlight = false;
+  }
 }
 
 async function deleteVaultFolder(folderPath) {

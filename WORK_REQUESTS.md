@@ -142,3 +142,4 @@
 - 2026-06-30: Preserve task priority when moving a 1d task to completed.
 - 2026-06-30: Copy task content as Markdown bullets.
 - 2026-07-01: Limit mindmap theme choices to light themes in light mode and dark themes in dark mode.
+- 2026-07-01: Make calendar open as fast as possible by using a persisted vault file-list snapshot before background refresh.

@@ -84,6 +84,7 @@ const PINNED_TABS_VAULT_PATH = ".viewer-pinned-tabs.json";
 let vaultFilesCache = null;
 let vaultFilesCachedAt = 0;
 const VAULT_FILES_CACHE_TTL = 60_000; // re-stat after 60 s as a safety net
+const VAULT_FILES_SNAPSHOT_VERSION = 1;
 
 function invalidateVaultFilesCache() {
   vaultFilesCache = null;
@@ -164,12 +165,12 @@ const server = http.createServer((req, res) => {
   }
 
   if (requestPath === "/api/vault") {
-    sendVault(res, vaultRoot, vaultName);
+    sendVault(res, vaultRoot, vaultName, { forceRefresh: url.searchParams.get("refresh") === "1" });
     return;
   }
 
   if (requestPath === "/api/sample-vault") {
-    sendVault(res, bundledSampleRoot, "sample-vault");
+    sendVault(res, bundledSampleRoot, "sample-vault", { forceRefresh: url.searchParams.get("refresh") === "1" });
     return;
   }
 
@@ -383,11 +384,27 @@ function getLanAddresses() {
     .map((item) => item.address);
 }
 
-function sendVault(res, sourceRoot, name) {
+function sendVault(res, sourceRoot, name, { forceRefresh = false } = {}) {
   const now = Date.now();
-  if (vaultFilesCache && now - vaultFilesCachedAt < VAULT_FILES_CACHE_TTL) {
-    sendJson(res, 200, { name, writable: !readOnly, files: vaultFilesCache });
+  if (!forceRefresh && vaultFilesCache && now - vaultFilesCachedAt < VAULT_FILES_CACHE_TTL) {
+    sendJson(res, 200, { name, writable: !readOnly, files: vaultFilesCache, stale: false, syncedAt: vaultFilesCachedAt });
     return;
+  }
+
+  if (!forceRefresh) {
+    const snapshot = readVaultFilesSnapshot(sourceRoot, name);
+    if (snapshot) {
+      vaultFilesCache = snapshot.files;
+      vaultFilesCachedAt = Number(snapshot.syncedAt) || now;
+      sendJson(res, 200, {
+        name: snapshot.name || name,
+        writable: !readOnly,
+        files: snapshot.files,
+        stale: true,
+        syncedAt: snapshot.syncedAt || 0,
+      });
+      return;
+    }
   }
 
   fs.readdir(sourceRoot, { withFileTypes: true }, (error) => {
@@ -400,9 +417,46 @@ function sendVault(res, sourceRoot, name) {
     const createdTimes = readCreatedTimes();
     vaultFilesCache = readVaultFiles(sourceRoot, "", createdTimes);
     vaultFilesCachedAt = Date.now();
+    writeVaultFilesSnapshot(sourceRoot, name, vaultFilesCache);
     writeCreatedTimes(createdTimes);
-    sendJson(res, 200, { name, writable: !readOnly, files: vaultFilesCache });
+    sendJson(res, 200, { name, writable: !readOnly, files: vaultFilesCache, stale: false, syncedAt: vaultFilesCachedAt });
   });
+}
+
+function vaultFilesSnapshotPath(sourceRoot, name) {
+  const hash = crypto.createHash("sha1").update(`${path.resolve(sourceRoot)}:${name}`).digest("hex");
+  return path.join(calendarCacheRoot, `vault-files-${hash}.json`);
+}
+
+function readVaultFilesSnapshot(sourceRoot, name) {
+  try {
+    const raw = fs.readFileSync(vaultFilesSnapshotPath(sourceRoot, name), "utf8");
+    const snapshot = JSON.parse(raw);
+    if (snapshot.version !== VAULT_FILES_SNAPSHOT_VERSION) return null;
+    if (!Array.isArray(snapshot.files)) return null;
+    return snapshot;
+  } catch {
+    return null;
+  }
+}
+
+function writeVaultFilesSnapshot(sourceRoot, name, files) {
+  try {
+    fs.mkdirSync(calendarCacheRoot, { recursive: true });
+    fs.writeFileSync(
+      vaultFilesSnapshotPath(sourceRoot, name),
+      JSON.stringify({
+        version: VAULT_FILES_SNAPSHOT_VERSION,
+        sourceRoot: path.resolve(sourceRoot),
+        name,
+        syncedAt: vaultFilesCachedAt || Date.now(),
+        files,
+      }),
+      "utf8",
+    );
+  } catch {
+    // Snapshot cache is best-effort; live scanning remains the fallback.
+  }
 }
 
 function readVaultFiles(dir, prefix, createdTimes) {
