@@ -133,3 +133,4 @@
 - 2026-06-30: Merge task 1d delete action visually into each task row, change delete icon, and color matching dates/priorities consistently in task metadata.
 - 2026-06-30: Remove matrix-shell gap, align task 1d metadata/delete columns, force recurring moves to daily recurring, reset moves out to medium todo, distinguish priority labels, and open recurring tasks in view mode.
 - 2026-06-30: Fix task 1d metadata overlap by combining date/time and flag priority, and add per-quadrant sort options.
+- 2026-06-30: Restyle task 1d quadrant sort controls, add per-quadrant ascending/descending toggles, and move task counts beside titles.

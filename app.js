@@ -17,6 +17,9 @@ const TASK_REPEAT_WEEKDAYS_BY_DATE = ["일", "월", "화", "수", "목", "금", 
 function defaultMatrixSortModes() {
   return { active: "priority", completed: "priority", recurring: "priority", deferred: "priority" };
 }
+function defaultMatrixSortDirections() {
+  return { active: "asc", completed: "asc", recurring: "asc", deferred: "asc" };
+}
 function setTasksDirty() { try { localStorage.setItem(TASKS_DIRTY_KEY, "1"); } catch {} }
 function clearTasksDirty() { try { localStorage.removeItem(TASKS_DIRTY_KEY); } catch {} }
 function isTasksDirty() { try { return localStorage.getItem(TASKS_DIRTY_KEY) === "1"; } catch { return false; } }
@@ -384,6 +387,7 @@ const state = {
   fullscreenFallback: false,
   matrixExpandedTasks: new Set(),
   matrixSortModes: defaultMatrixSortModes(),
+  matrixSortDirections: defaultMatrixSortDirections(),
   fontDeviceKey: "",
   sseSource: null,
   documentRenderToken: 0,
@@ -2408,6 +2412,7 @@ function resetVault() {
   state.matrixTaskDrag = null;
   state.matrixExpandedTasks = new Set();
   state.matrixSortModes = defaultMatrixSortModes();
+  state.matrixSortDirections = defaultMatrixSortDirections();
   state.vaultLoaded = false;
   state.contentSearchMatches = null;
   if (state.calendarRefreshTimer) {
@@ -8484,7 +8489,7 @@ function renderEisenhowerMatrix() {
     ...quadrant,
     tasks: tasks
       .filter((task) => matrixTaskPlacement(task) === quadrant.key)
-      .sort((a, b) => compareMatrixTasksByMode(a, b, matrixSortModeForKey(quadrant.key))),
+      .sort((a, b) => compareMatrixTasksByMode(a, b, matrixSortModeForKey(quadrant.key), matrixSortDirectionForKey(quadrant.key))),
   }));
 
   els.calendarView.innerHTML = `
@@ -8527,21 +8532,25 @@ function renderCalendarFilterToggleButton(extraClass = "") {
 
 function renderMatrixQuadrant(quadrant) {
   const sortMode = matrixSortModeForKey(quadrant.key);
+  const sortDirection = matrixSortDirectionForKey(quadrant.key);
   return `
     <section class="matrix-quadrant ${quadrant.key}" data-matrix-key="${quadrant.key}">
       <header>
         <strong>
           <span aria-hidden="true">${quadrant.icon}</span>
           ${escapeHtml(quadrant.title)}
+          <span class="matrix-quadrant-count">${quadrant.tasks.length}</span>
         </strong>
         <span class="matrix-quadrant-controls">
-          <select class="matrix-sort-select" data-matrix-sort="${escapeAttribute(quadrant.key)}" aria-label="${escapeAttribute(quadrant.title)} 정렬">
-            <option value="priority" ${sortMode === "priority" ? "selected" : ""}>중요도</option>
-            <option value="deadline" ${sortMode === "deadline" ? "selected" : ""}>마감일</option>
-            <option value="time" ${sortMode === "time" ? "selected" : ""}>시간</option>
-            <option value="title" ${sortMode === "title" ? "selected" : ""}>이름</option>
-          </select>
-          <span>${quadrant.tasks.length}</span>
+          <span class="matrix-sort-control">
+            <select class="matrix-sort-select" data-matrix-sort="${escapeAttribute(quadrant.key)}" aria-label="${escapeAttribute(quadrant.title)} 정렬">
+              <option value="priority" ${sortMode === "priority" ? "selected" : ""}>중요도</option>
+              <option value="deadline" ${sortMode === "deadline" ? "selected" : ""}>마감일</option>
+              <option value="time" ${sortMode === "time" ? "selected" : ""}>시간</option>
+              <option value="title" ${sortMode === "title" ? "selected" : ""}>이름</option>
+            </select>
+            <button class="matrix-sort-direction" type="button" data-matrix-sort-direction="${escapeAttribute(quadrant.key)}" aria-label="${escapeAttribute(quadrant.title)} ${sortDirection === "asc" ? "오름차순" : "내림차순"}" title="${sortDirection === "asc" ? "오름차순" : "내림차순"}">${sortDirection === "asc" ? "↑" : "↓"}</button>
+          </span>
         </span>
       </header>
       <div class="matrix-task-list">
@@ -8716,11 +8725,17 @@ function matrixSortModeForKey(key) {
   return state.matrixSortModes?.[key] || "priority";
 }
 
-function compareMatrixTasksByMode(a, b, mode) {
-  if (mode === "deadline") return compareMatrixDeadlineFirst(a, b);
-  if (mode === "time") return compareMatrixTimeFirst(a, b);
-  if (mode === "title") return a.text.localeCompare(b.text, "ko") || compareMatrixTaskOrder(a, b);
-  return compareMatrixTaskOrder(a, b);
+function matrixSortDirectionForKey(key) {
+  return state.matrixSortDirections?.[key] || "asc";
+}
+
+function compareMatrixTasksByMode(a, b, mode, direction = "asc") {
+  let result = 0;
+  if (mode === "deadline") result = compareMatrixDeadlineFirst(a, b);
+  else if (mode === "time") result = compareMatrixTimeFirst(a, b);
+  else if (mode === "title") result = a.text.localeCompare(b.text, "ko") || compareMatrixTaskOrder(a, b);
+  else result = compareMatrixTaskOrder(a, b);
+  return direction === "desc" ? -result : result;
 }
 
 function compareMatrixDeadlineFirst(a, b) {
@@ -8764,6 +8779,16 @@ function bindMatrixEvents() {
       const mode = select.value;
       if (!key || !["priority", "deadline", "time", "title"].includes(mode)) return;
       state.matrixSortModes[key] = mode;
+      renderCalendar();
+    });
+  });
+
+  els.calendarView.querySelectorAll("[data-matrix-sort-direction]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const key = button.getAttribute("data-matrix-sort-direction");
+      if (!key) return;
+      const current = matrixSortDirectionForKey(key);
+      state.matrixSortDirections[key] = current === "asc" ? "desc" : "asc";
       renderCalendar();
     });
   });
