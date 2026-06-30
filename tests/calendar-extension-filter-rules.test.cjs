@@ -134,3 +134,18 @@ test("matrix hides explanatory rules and wraps full task text inside cards", () 
   assert.match(styles, /\.matrix-task-meta \{[\s\S]*?overflow-wrap: anywhere/);
   assert.match(styles, /\.matrix-task-attitude \{[\s\S]*?overflow-wrap: anywhere/);
 });
+
+test("matrix task rows keep title attitude and metadata in separate rows", () => {
+  const styles = fs.readFileSync("styles.css", "utf8");
+  const taskBody = styles.match(/\.matrix-task \{[\s\S]*?\n\}/)?.[0] || "";
+  const titleBody = styles.match(/\.matrix-task-title \{[\s\S]*?\n\}/)?.[0] || "";
+  const attitudeBody = styles.match(/\.matrix-task-attitude \{[\s\S]*?\n\}/)?.[0] || "";
+  const metaBody = styles.match(/\.matrix-task-meta \{[\s\S]*?\n\}/)?.[0] || "";
+  assert.match(taskBody, /flex: 0 0 auto/);
+  assert.match(taskBody, /line-height: 1\.35/);
+  assert.match(titleBody, /flex: 0 0 auto/);
+  assert.match(attitudeBody, /display: block/);
+  assert.match(attitudeBody, /width: 100%/);
+  assert.match(metaBody, /flex: 0 0 auto/);
+  assert.match(metaBody, /width: 100%/);
+});

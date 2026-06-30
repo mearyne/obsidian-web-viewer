@@ -124,3 +124,4 @@
 - 2026-06-30: Rework task 1d into today progress, completed, routine, and deferred sections with drag-to-complete, low-priority/deferred grouping, and routine click checks.
 - 2026-06-30: Remove task 1d explanatory rules text and clamp matrix task text so it stays inside cards.
 - 2026-06-30: Stop task 1d matrix titles from being line-clamped while keeping long text wrapped inside cards.
+- 2026-06-30: Prevent task 1d matrix card rows from shrinking and overlapping title, attitude, and metadata spans.
