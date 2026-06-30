@@ -34,6 +34,15 @@ test("inline mindmap theme changes are stored on the current mindmap document", 
   assert.doesNotMatch(app, /\[field\]: normalizeMindmapThemeValue\(themeSelect\.value, selectedMindmapThemeName\(\)\)/);
 });
 
+test("mindmap theme selectors are filtered by light and dark mode", () => {
+  assert.match(app, /function mindmapThemeMode/);
+  assert.match(app, /function mindmapThemeOptionsForMode/);
+  assert.match(app, /function currentMindmapThemeMode/);
+  assert.match(app, /renderMindmapThemeOptions\(state\.mindmapOptions\.lightTheme, "light"\)/);
+  assert.match(app, /renderMindmapThemeOptions\(state\.mindmapOptions\.darkTheme, "dark"\)/);
+  assert.match(app, /renderMindmapThemeOptions\(selectedMindmapThemeName\(\), currentMindmapThemeMode\(\)\)/);
+});
+
 test("mindmap toolbar remains visible in light mode", () => {
   assert.match(app, /const toolbarModeClass = canEdit \? "mindmap-toolbar-panel--edit" : "mindmap-toolbar-panel--readonly"/);
   assert.match(app, /<details class="mindmap-toolbar-panel \$\{toolbarModeClass\}"/);

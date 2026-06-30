@@ -3618,9 +3618,29 @@ function renderMindmapLayoutOptions(selectedLayout = null) {
   return MINDMAP_LAYOUT_OPTIONS.map((option) => `<option value="${option.value}"${option.value === layout ? " selected" : ""}>${option.label}</option>`).join("");
 }
 
-function renderMindmapThemeOptions(selectedTheme = null) {
-  const theme = normalizeMindmapThemeValue(selectedTheme, selectedMindmapThemeName());
-  return MINDMAP_ALL_THEME_OPTIONS.map((option) => `<option value="${option.value}"${option.value === theme ? " selected" : ""}>${option.label}</option>`).join("");
+function currentMindmapThemeMode() {
+  return document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+}
+
+function mindmapThemeMode(value) {
+  const normalized = String(value || "").replace(MINDMAP_DEMO_THEME_PREFIX, "").toLowerCase();
+  if (/(^|[-_])dark($|[-_])|night|black/.test(normalized)) return "dark";
+  if (/(^|[-_])light($|[-_])|white/.test(normalized)) return "light";
+  return "";
+}
+
+function mindmapThemeOptionsForMode(mode = "") {
+  const normalizedMode = mode === "dark" || mode === "light" ? mode : "";
+  if (!normalizedMode) return MINDMAP_ALL_THEME_OPTIONS;
+  return MINDMAP_ALL_THEME_OPTIONS.filter((option) => mindmapThemeMode(option.value) === normalizedMode);
+}
+
+function renderMindmapThemeOptions(selectedTheme = null, mode = "") {
+  const options = mindmapThemeOptionsForMode(mode);
+  const fallback = options[0]?.value || selectedMindmapThemeName();
+  const normalizedTheme = normalizeMindmapThemeValue(selectedTheme, fallback);
+  const theme = options.some((option) => option.value === normalizedTheme) ? normalizedTheme : fallback;
+  return options.map((option) => `<option value="${option.value}"${option.value === theme ? " selected" : ""}>${option.label}</option>`).join("");
 }
 
 function renderMindmapBaseStyleOptions(selectedStyle = null) {
@@ -3742,7 +3762,10 @@ function syncMindmapOptionInputs() {
   if (lightTheme) lightTheme.value = state.mindmapOptions.lightTheme;
   if (darkTheme) darkTheme.value = state.mindmapOptions.darkTheme;
   if (baseStyle) baseStyle.value = state.mindmapOptions.baseStyle;
-  if (toolbarTheme) toolbarTheme.value = selectedMindmapThemeName();
+  if (toolbarTheme) {
+    toolbarTheme.innerHTML = renderMindmapThemeOptions(selectedMindmapThemeName(), currentMindmapThemeMode());
+    toolbarTheme.value = selectedMindmapThemeName();
+  }
   if (autoFit) autoFit.checked = state.mindmapOptions.autoFit;
   if (advancedTools) advancedTools.checked = state.mindmapOptions.advancedTools;
   if (showLineMarker) showLineMarker.checked = state.mindmapOptions.showLineMarker;
@@ -4983,7 +5006,9 @@ function getMindmapLineColor() {
 }
 
 function selectedMindmapThemeName() {
-  return getMindmapRuntimeThemeForDocument(state.currentPath, { fallbackTheme: selectedMindmapGlobalThemeName() });
+  const fallbackTheme = selectedMindmapGlobalThemeName();
+  const theme = getMindmapRuntimeThemeForDocument(state.currentPath, { fallbackTheme });
+  return mindmapThemeMode(theme) === currentMindmapThemeMode() ? theme : fallbackTheme;
 }
 
 function selectedMindmapGlobalThemeName() {
@@ -5056,11 +5081,19 @@ function applyMindmapBaseStyleToThemeConfig(config, style = state.mindmapOptions
 }
 
 function updateVisibleMindmapTheme() {
+  syncVisibleMindmapThemeSelect();
   const jm = state.mindmapInstance;
   if (jm?.setThemeConfig && !els.mindmapShell?.hidden) {
     jm.setThemeConfig(getMindmapThemeConfig());
     refreshVisibleMindmapThemeData();
   }
+}
+
+function syncVisibleMindmapThemeSelect() {
+  const toolbarTheme = els.mindmapShell?.querySelector("[data-mindmap-theme-select]");
+  if (!toolbarTheme) return;
+  toolbarTheme.innerHTML = renderMindmapThemeOptions(selectedMindmapThemeName(), currentMindmapThemeMode());
+  toolbarTheme.value = selectedMindmapThemeName();
 }
 
 function refreshVisibleMindmapThemeData() {
@@ -5333,13 +5366,13 @@ function renderMindmapDocument() {
           <label>
             <span>Light theme</span>
             <select data-mindmap-light-theme-select>
-              ${renderMindmapThemeOptions(state.mindmapOptions.lightTheme)}
+              ${renderMindmapThemeOptions(state.mindmapOptions.lightTheme, "light")}
             </select>
           </label>
           <label>
             <span>Dark theme</span>
             <select data-mindmap-dark-theme-select>
-              ${renderMindmapThemeOptions(state.mindmapOptions.darkTheme)}
+              ${renderMindmapThemeOptions(state.mindmapOptions.darkTheme, "dark")}
             </select>
           </label>
           <label>
@@ -5454,7 +5487,7 @@ function buildMindmapLayoutToolbarSection() {
   themeLabel.textContent = "Theme";
   const themeSelect = document.createElement("select");
   themeSelect.setAttribute("data-mindmap-theme-select", "");
-  themeSelect.innerHTML = renderMindmapThemeOptions(selectedMindmapThemeName());
+  themeSelect.innerHTML = renderMindmapThemeOptions(selectedMindmapThemeName(), currentMindmapThemeMode());
   themeRow.append(themeLabel, themeSelect);
 
   toolbar.insertBefore(themeRow, toolbar.firstElementChild);

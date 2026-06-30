@@ -141,3 +141,4 @@
 - 2026-06-30: Fix mindmap toolbar overlap/default frame text/text color presets/Shift horizontal scroll, merged-document mindmap links, task duplicate child content cleanup, and mobile 1d whitespace.
 - 2026-06-30: Preserve task priority when moving a 1d task to completed.
 - 2026-06-30: Copy task content as Markdown bullets.
+- 2026-07-01: Limit mindmap theme choices to light themes in light mode and dark themes in dark mode.
