@@ -129,3 +129,4 @@
 - 2026-06-30: 1d matrix에 task 하위 항목 접기/펼치기, 전체 토글, compact subitem styling, gap 3px, 중요도/마감일 정렬을 적용.
 - 2026-06-30: Move task 1d quick add below active tasks, remove per-task left expand icon, add right-side task delete button, and shrink quick-add height.
 - 2026-06-30: Apply 30d priority-based background colors to task 1d matrix cards.
+- 2026-06-30: Prevent horizontal scrolling in task 1d rows and keep low-priority tasks in Today Progress while Deferred only shows postponed tasks.

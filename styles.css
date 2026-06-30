@@ -4937,6 +4937,12 @@ button:disabled {
   min-width: 0;
 }
 
+.matrix-task-row > button:is(.matrix-task) {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+}
+
 
 .matrix-task {
   align-items: center;

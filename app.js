@@ -8685,7 +8685,7 @@ function compareMatrixDateTasks(a, b) {
 function matrixTaskPlacement(task) {
   if (task.isRecurring) return "recurring";
   if (task.checked) return "completed";
-  if (task.deferred || isLowPriorityTask(task)) return "deferred";
+  if (task.deferred) return "deferred";
   return "active";
 }
 function bindMatrixEvents() {

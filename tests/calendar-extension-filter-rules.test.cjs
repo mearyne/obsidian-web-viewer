@@ -105,7 +105,8 @@ test("matrix uses today progress completed routine and deferred sections", () =>
   assert.match(app, /function matrixTaskPlacement\(task\)/);
   assert.match(app, /if \(task\.isRecurring\) return "recurring"/);
   assert.match(app, /if \(task\.checked\) return "completed"/);
-  assert.match(app, /if \(task\.deferred \|\| isLowPriorityTask\(task\)\) return "deferred"/);
+  assert.match(app, /if \(task\.deferred\) return "deferred"/);
+  assert.doesNotMatch(app, /if \(task\.deferred \|\| isLowPriorityTask\(task\)\) return "deferred"/);
   assert.match(app, /function compareMatrixTodoTasks\(a, b\)/);
   assert.match(app, /function compareMatrixDateTasks\(a, b\)/);
   assert.match(app, /completed: \{ key: "completed", checked: true/);
@@ -213,6 +214,7 @@ test("matrix task rows put delete action on the right and shrink quick add heigh
   const quickAddBody = styles.match(/\.matrix-quick-add \{[\s\S]*?\n\}/)?.[0] || "";
   const quickInputBody = styles.match(/\.matrix-quick-add input \{[\s\S]*?\n\}/)?.[0] || "";
   const quickButtonBody = styles.match(/\.matrix-quick-add button \{[\s\S]*?\n\}/)?.[0] || "";
+  const rowTaskBody = styles.match(/\.matrix-task-row > button:is\(\.matrix-task\) \{[\s\S]*?\n\}/)?.[0] || "";
   assert.match(renderTaskBody, /matrix-task-row/);
   assert.match(renderTaskBody, /matrix-task-delete/);
   assert.match(renderTaskBody, /data-matrix-delete-path/);
@@ -224,6 +226,16 @@ test("matrix task rows put delete action on the right and shrink quick add heigh
   assert.match(quickInputBody, /padding: 2px 6px/);
   assert.match(quickButtonBody, /font-size: 70%/);
   assert.match(quickButtonBody, /padding: 2px 6px/);
+  assert.match(rowTaskBody, /flex: 1 1 auto/);
+  assert.match(rowTaskBody, /min-width: 0/);
+  assert.match(rowTaskBody, /width: auto/);
+});
+
+test("matrix active keeps low priority tasks while deferred only shows postponed tasks", () => {
+  const placementBody = app.match(/function matrixTaskPlacement\(task\)[\s\S]*?\n}\r?\nfunction bindMatrixEvents/)?.[0] || "";
+  assert.match(placementBody, /if \(task\.deferred\) return "deferred"/);
+  assert.doesNotMatch(placementBody, /isLowPriorityTask\(task\)/);
+  assert.match(placementBody, /return "active"/);
 });
 
 test("matrix task cards use 30d priority background colors", () => {
