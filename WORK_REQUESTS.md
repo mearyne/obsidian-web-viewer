@@ -138,3 +138,4 @@
 - 2026-06-30: Fix mindmap creation suffix, node context menu, tools drawer, subtree text color, selected-node bold, arrow toggle, associative line, outer frame, and 30d calendar next-week/deferred/priority sorting behavior.
 - 2026-06-30: Fix mindmap node context menu, move subtree color/associate line/outer frame controls to the toolbar, make Tools layout/theme changes apply immediately, tighten outer frame padding, and make task 1d open on Today.
 - 2026-06-30: Fix mindmap toolbar overlap and context actions, sync mindmap root title on rename, add task duplicate source links, open merged document links in reusable new tabs, and reset 1d to Today.
+- 2026-06-30: Fix mindmap toolbar overlap/default frame text/text color presets/Shift horizontal scroll, merged-document mindmap links, task duplicate child content cleanup, and mobile 1d whitespace.

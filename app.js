@@ -6,6 +6,11 @@ const CONTENT_HISTORY_LIMIT = 50;
 const MERGED_DOCUMENT_CONFIRM_THRESHOLD = 20;
 const DEFAULT_CALENDAR_EXTENSION_EXCLUDES = ["png", "jpg", "gif"];
 const DEFAULT_MINDMAP_IMAGE_SIZE = { width: 120, height: 80, custom: false };
+const MINDMAP_TEXT_COLOR_PRESETS = [
+  "#111827", "#ef4444", "#f97316", "#eab308",
+  "#22c55e", "#14b8a6", "#0ea5e9", "#2563eb",
+  "#7c3aed", "#d946ef", "#ec4899", "#64748b",
+];
 const TASK_KIND_SCHEDULE = "\uC77C\uC815";
 const TASK_KIND_TODO = "\uD560\uC77C";
 const TASK_KIND_RECURRING = "\uBC18\uBCF5";
@@ -49,7 +54,8 @@ const TAB_ORDER_RULES = globalThis.TabOrderRules || {
   },
 };
 const LINK_OPEN_RULES = globalThis.LinkOpenRules || {
-  resolveWikiLinkOpenMode({ forceNewTab = false, embeddedNote = false, mindmapEmbed = false, targetMindmap = false } = {}) {
+  resolveWikiLinkOpenMode({ forceNewTab = false, embeddedNote = false, mergedDocument = false, mindmapEmbed = false, targetMindmap = false } = {}) {
+    if (mergedDocument) return "new-tab";
     if (mindmapEmbed || targetMindmap) return "current-tab";
     return forceNewTab || embeddedNote ? "new-tab" : "current-tab";
   },
@@ -5288,9 +5294,12 @@ function renderMindmapDocument() {
             <button type="button" data-mindmap-action="tools" aria-label="Tools" title="Tools">Tools</button>
           </div>
           <div class="mindmap-toolbar-row mindmap-toolbar-feature-row">
-            <input type="color" data-mindmap-subtree-color value="#1e293b" data-edit-only aria-label="선택 노드와 하위 노드 글자색" title="선택 노드와 하위 노드 글자색" />
             <button type="button" data-mindmap-action="associate-line" data-edit-only aria-label="선택 노드 연결선" title="선택 노드 연결선">Link</button>
             <button type="button" data-mindmap-action="outer-frame" data-edit-only aria-label="선택 노드 외곽 프레임" title="선택 노드 외곽 프레임">Frame</button>
+          </div>
+          <div class="mindmap-toolbar-row mindmap-toolbar-color-row">
+            <input type="color" data-mindmap-subtree-color value="#1e293b" data-edit-only aria-label="선택 노드와 하위 노드 글자색" title="선택 노드와 하위 노드 글자색" />
+            ${MINDMAP_TEXT_COLOR_PRESETS.map((color) => `<button type="button" class="mindmap-color-preset" data-mindmap-color-preset="${color}" data-edit-only aria-label="글자색 ${color}" title="글자색 ${color}" style="--preset-color:${color}"></button>`).join("")}
           </div>
           <div class="mindmap-toolbar-row mindmap-toolbar-search-row">
             <input class="mindmap-search-input" type="search" data-mindmap-search placeholder="검색" aria-label="마인드맵 내부 검색" />
@@ -5365,6 +5374,7 @@ function renderMindmapDocument() {
     canvas.focus({ preventScroll: true });
   });
   canvas?.addEventListener("contextmenu", showMindmapContextMenu, true);
+  canvas?.addEventListener("wheel", handleMindmapShiftWheel, { passive: false });
   canvas?.addEventListener("touchstart", handleMindmapPinchStart, { passive: false });
   canvas?.addEventListener("touchmove", handleMindmapPinchMove, { passive: false });
   canvas?.addEventListener("touchend", handleMindmapPinchEnd, { passive: false });
@@ -5391,6 +5401,8 @@ function renderSimpleMindMapDocument(data, canvas) {
     handleNodePasteImg: handleMindmapNodePasteImage,
     defaultInsertSecondLevelNodeText: "새 노드",
     defaultInsertBelowSecondLevelNodeText: "새 노드",
+    defaultAssociativeLineText: "연결",
+    defaultOuterFrameText: "프레임",
     enableShortcutOnlyWhenMouseInSvg: true,
     customCheckEnableShortcut: shouldEnableMindmapShortcut,
     enableAutoEnterTextEditWhenKeydown: true,
@@ -5495,6 +5507,14 @@ function bindMindmapToolbarControls() {
   els.mindmapShell?.querySelector("[data-mindmap-options]")?.addEventListener("change", handleMindmapOptionInput);
   els.mindmapShell?.querySelector("[data-mindmap-subtree-color]")?.addEventListener("input", (event) => {
     applyMindmapTextColorToSelectedSubtree(event.target.value);
+  });
+  els.mindmapShell?.querySelectorAll("[data-mindmap-color-preset]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const color = button.getAttribute("data-mindmap-color-preset") || "";
+      const input = els.mindmapShell?.querySelector("[data-mindmap-subtree-color]");
+      if (input) input.value = color;
+      applyMindmapTextColorToSelectedSubtree(color);
+    });
   });
   syncMindmapOptionInputs();
   updateMindmapEditOnlyControls();
@@ -5686,6 +5706,17 @@ function downloadTextFile(filename, content, type = "text/plain;charset=utf-8") 
 function fitMindmapToView() {
   const jm = state.mindmapInstance;
   jm?.view?.fit?.();
+}
+
+function handleMindmapShiftWheel(event) {
+  if (!event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return;
+  const canvas = event.currentTarget;
+  if (!canvas) return;
+  const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+  if (!delta) return;
+  event.preventDefault();
+  event.stopPropagation();
+  canvas.scrollLeft += delta;
 }
 
 function handleMindmapKeydown(event) {
@@ -10987,7 +11018,7 @@ async function showTaskCreateDialog(dueDate, startDate = "", prefill = null) {
   if (els.taskTitleInput) els.taskTitleInput.value = prefill?.text || "";
   if (els.taskCreateSubItemsInput) {
     const sourceLink = prefill ? taskSourceDocumentLink(prefill) : "";
-    const existingBody = prefill ? taskSubItemsToEditableText(prefill.subItems) : "";
+    const existingBody = prefill ? taskLinkSubItemsToEditableText(prefill.subItems) : "";
     els.taskCreateSubItemsInput.value = [sourceLink, existingBody].filter(Boolean).join("\n");
   }
   if (els.taskStartTimeInput) {
@@ -11828,6 +11859,16 @@ function taskSubItemsToEditableText(subItems) {
       return /^[-*+]\s+/.test(body) ? `${indent}${body}` : `${indent}- ${body}`;
     })
     .join("\n");
+}
+
+function taskLinkSubItemsToEditableText(subItems) {
+  if (!subItems || !subItems.length) return "";
+  return taskSubItemsToEditableText(subItems).split("\n").filter(taskSubItemLineHasLink).join("\n");
+}
+
+function taskSubItemLineHasLink(line) {
+  const text = String(line || "");
+  return /\[\[[^\]]+\]\]/.test(text) || /\[[^\]]+\]\([^)]+\)/.test(text) || /https?:\/\/\S+/i.test(text);
 }
 
 function taskSourceDocumentLink(task) {

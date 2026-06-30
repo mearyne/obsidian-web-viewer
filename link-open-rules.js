@@ -4,6 +4,7 @@
   root.LinkOpenRules = api;
 })(typeof globalThis !== "undefined" ? globalThis : window, function () {
   function resolveWikiLinkOpenMode({ forceNewTab = false, embeddedNote = false, mergedDocument = false, mindmapEmbed = false, targetMindmap = false } = {}) {
+    if (mergedDocument) return "new-tab";
     if (mindmapEmbed || targetMindmap) return "current-tab";
     return forceNewTab || embeddedNote || mergedDocument ? "new-tab" : "current-tab";
   }

@@ -2599,7 +2599,10 @@ button:disabled {
   justify-content: center;
   line-height: 1;
   min-width: 34px;
+  overflow: hidden;
   padding: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   width: auto;
 }
 
@@ -2617,17 +2620,38 @@ button:disabled {
 }
 
 .mindmap-toolbar-text-row {
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .mindmap-toolbar-feature-row {
-  grid-template-columns: 34px 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.mindmap-toolbar-color-row {
+  grid-template-columns: 34px repeat(6, 22px);
 }
 
 .mindmap-toolbar-feature-row button,
 .mindmap-toolbar-text-row button {
   min-width: 0;
   padding: 0 6px;
+}
+
+.mindmap-toolbar-color-row input[type="color"] {
+  background: transparent;
+  border: 0;
+  height: 22px;
+  min-width: 0;
+  padding: 0;
+  width: 34px;
+}
+
+.mindmap-color-preset {
+  background: var(--preset-color) !important;
+  border-color: color-mix(in srgb, var(--preset-color) 72%, #000 28%) !important;
+  height: 22px !important;
+  min-width: 0 !important;
+  width: 22px !important;
 }
 
 .mindmap-tools-drawer {
@@ -5829,6 +5853,11 @@ button.calendar-more {
 }
 
 @media (max-width: 520px) {
+  .matrix-shell {
+    height: auto;
+    min-height: 100%;
+  }
+
   .task-repeat-weekdays {
     align-items: stretch;
   }
@@ -5848,13 +5877,17 @@ button.calendar-more {
   .matrix-grid {
     gap: 6px;
     grid-template-columns: 1fr;
-    grid-template-rows: minmax(220px, 1.2fr) minmax(140px, 0.8fr) minmax(140px, 0.8fr) minmax(110px, 0.65fr);
+    grid-template-rows: none;
   }
 
   .matrix-quadrant.active,
   .matrix-quadrant.deferred {
     grid-column: auto;
     grid-row: auto;
+  }
+
+  .matrix-quadrant {
+    max-height: none;
   }
 
   .matrix-quadrant header {

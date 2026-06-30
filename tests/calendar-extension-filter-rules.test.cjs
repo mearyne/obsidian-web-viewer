@@ -4,6 +4,7 @@ const test = require("node:test");
 
 const app = fs.readFileSync("app.js", "utf8");
 const html = fs.readFileSync("index.html", "utf8");
+const styles = fs.readFileSync("styles.css", "utf8");
 
 test("calendar extension exclude options are present in settings UI and state", () => {
   assert.match(html, /id="calendarCreatedExcludeExtensionsInput"/);
@@ -77,11 +78,20 @@ test("1d task view opens on today by default", () => {
   assert.match(app, /if \(mode === "day"\) \{[\s\S]{0,160}state\.calendarDate = new Date\(\)/);
 });
 
+test("mobile 1d matrix avoids forced leftover vertical whitespace", () => {
+  const mobileBlock = styles.match(/@media \(max-width: 520px\) \{[\s\S]*?\.markdown-body \.heading-level/)?.[0] || "";
+  assert.match(mobileBlock, /\.matrix-shell\s*\{[\s\S]*?height:\s*auto/);
+  assert.match(mobileBlock, /\.matrix-grid\s*\{[\s\S]*?grid-template-rows:\s*none/);
+  assert.match(mobileBlock, /\.matrix-quadrant\s*\{[\s\S]*?max-height:\s*none/);
+});
+
 test("duplicating a task pre-fills the body with a link to the source document", () => {
   assert.match(app, /function taskSourceDocumentLink/);
   const createBody = app.match(/async function showTaskCreateDialog\(dueDate, startDate = "", prefill = null\)[\s\S]*?\n}\r?\n\r?\nfunction positionTaskCreateDialog/)?.[0] || "";
   assert.match(createBody, /taskSourceDocumentLink\(prefill\)/);
-  assert.match(createBody, /taskSubItemsToEditableText\(prefill\.subItems\)/);
+  assert.match(createBody, /taskLinkSubItemsToEditableText\(prefill\.subItems\)/);
+  assert.doesNotMatch(createBody, /taskSubItemsToEditableText\(prefill\.subItems\)/);
+  assert.match(app, /function taskLinkSubItemsToEditableText/);
 });
 
 test("task edit delete closes the native dialog before showing app confirm", () => {

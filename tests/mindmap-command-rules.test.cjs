@@ -492,7 +492,7 @@ test("mindmap selected nodes expose bulk style and library feature actions", () 
   assert.match(app, /data-mindmap-show-line-marker/);
   assert.match(app, /data-mindmap-action="associate-line"/);
   assert.match(app, /data-mindmap-action="outer-frame"/);
-  const toolbarBody = app.match(/<div class="mindmap-toolbar"[\s\S]*?<\/div>\n      <\/details>/)?.[0] || "";
+  const toolbarBody = app.match(/<div class="mindmap-toolbar"[\s\S]*?<aside class="mindmap-tools-drawer"/)?.[0] || "";
   const drawerBody = app.match(/<aside class="mindmap-tools-drawer"[\s\S]*?<div class="mindmap-tools-options"/)?.[0] || "";
   assert.match(toolbarBody, /data-mindmap-subtree-color/);
   assert.match(toolbarBody, /data-mindmap-action="associate-line"/);
@@ -508,18 +508,32 @@ test("mindmap selected nodes expose bulk style and library feature actions", () 
   assert.match(app, /outerFramePaddingY:\s*4/);
   assert.match(toolbarBody, /mindmap-toolbar-text-row/);
   assert.match(toolbarBody, /mindmap-toolbar-feature-row/);
+  assert.match(toolbarBody, /mindmap-toolbar-color-row/);
   assert.match(app, /data-action="frame"/);
   assert.match(app, /data-action="subtree-color"/);
   const textRowBody = styles.match(/\.mindmap-toolbar-text-row\s*\{[\s\S]*?\n\}/)?.[0] || "";
   const featureRowBody = styles.match(/\.mindmap-toolbar-feature-row\s*\{[\s\S]*?\n\}/)?.[0] || "";
+  const colorRowBody = styles.match(/\.mindmap-toolbar-color-row\s*\{[\s\S]*?\n\}/)?.[0] || "";
   const buttonBody = styles.match(/\.mindmap-toolbar button\s*\{[\s\S]*?\n\}/)?.[0] || "";
-  assert.match(textRowBody, /grid-template-columns:\s*repeat\(3,\s*1fr\)/);
-  assert.match(featureRowBody, /grid-template-columns:\s*34px\s+1fr\s+1fr/);
+  assert.match(textRowBody, /grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/);
+  assert.match(featureRowBody, /grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
+  assert.match(colorRowBody, /grid-template-columns:\s*34px\s+repeat\(6,\s*22px\)/);
   assert.match(buttonBody, /font-weight:\s*500/);
+  assert.match(buttonBody, /white-space:\s*nowrap/);
+  assert.match(app, /MINDMAP_TEXT_COLOR_PRESETS/);
+  assert.match(app, /data-mindmap-color-preset/);
   assert.match(app, /function canUseMindmapEditAction/);
   assert.match(app, /if \(action === "frame"\)[\s\S]*addMindmapOuterFrame\(\)/);
   assert.match(app, /data-action="subtree-color"/);
   assert.match(app, /applyMindmapTextColorToSelectedSubtree\(inputEvent\.target\.value\)/);
+});
+
+test("mindmap frame and scroll defaults are localized and horizontal", () => {
+  const app = fs.readFileSync("app.js", "utf8");
+  assert.match(app, /defaultAssociativeLineText:\s*"연결"/);
+  assert.match(app, /defaultOuterFrameText:\s*"프레임"/);
+  assert.match(app, /canvas\?\.addEventListener\("wheel", handleMindmapShiftWheel/);
+  assert.match(app, /function handleMindmapShiftWheel/);
 });
 
 test("mindmap tools layout and theme changes apply to the current document view", () => {
