@@ -50,6 +50,25 @@ test("mindmap toolbar remains visible in light mode", () => {
   assert.match(fs.readFileSync("styles.css", "utf8"), /\.mindmap-toolbar-toggle/);
 });
 
+test("mobile mindmap edit mode keeps the status bar visible", () => {
+  const styles = fs.readFileSync("styles.css", "utf8");
+  assert.match(app, /classList\.toggle\("mindmap-editing-mode"/);
+  assert.match(styles, /\.editing-mode:not\(\.mindmap-editing-mode\) \.app-status-bar/);
+  assert.match(styles, /\.editing-mode\.mindmap-editing-mode \.app-status-bar/);
+});
+
+test("mobile status bar exposes mindmap node edit actions", () => {
+  const styles = fs.readFileSync("styles.css", "utf8");
+  assert.match(app, /function ensureMobileMindmapStatusActions/);
+  assert.match(app, /data-mindmap-status-action/);
+  assert.match(app, /runMindmapToolbarAction\(button\.dataset\.mindmapStatusAction\)/);
+  assert.match(app, /"insert-child",\s*"자식 추가"/);
+  assert.match(app, /"insert-sibling",\s*"형제 추가"/);
+  assert.match(app, /"remove-node",\s*"삭제"/);
+  assert.match(styles, /\.mobile-mindmap-status-actions/);
+  assert.match(styles, /\.editing-mode\.mindmap-editing-mode \.mobile-mindmap-status-actions/);
+});
+
 test("mindmap edit input uses the same node box variables", () => {
   const styles = fs.readFileSync("styles.css", "utf8");
   const inputRule = styles.match(/\.mindmap-canvas input \{[\s\S]*?\}/)?.[0] || "";

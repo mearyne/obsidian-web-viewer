@@ -768,6 +768,28 @@ button:disabled {
   gap: 6px;
 }
 
+.mobile-mindmap-status-actions {
+  align-items: center;
+  display: none;
+  gap: 6px;
+}
+
+.mobile-mindmap-status-action {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  min-height: 30px;
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+
+.mobile-mindmap-status-action:disabled {
+  opacity: 0.45;
+}
+
 .sync-status {
   cursor: pointer;
 }
@@ -6159,8 +6181,17 @@ button.calendar-more {
   .editing-mode .viewer-wrap {
     padding-bottom: 72px;
   }
-  .editing-mode .app-status-bar,
+  .editing-mode:not(.mindmap-editing-mode) .app-status-bar,
   .editing-mode .tab-strip {
+    display: none;
+  }
+  .editing-mode.mindmap-editing-mode .app-status-bar {
+    display: flex;
+  }
+  .editing-mode.mindmap-editing-mode .mobile-mindmap-status-actions {
+    display: flex;
+  }
+  .editing-mode.mindmap-editing-mode .app-status-bar .note-path {
     display: none;
   }
 }

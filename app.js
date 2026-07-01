@@ -5465,6 +5465,7 @@ function renderSimpleMindMapDocument(data, canvas) {
   mindMap.on("contextmenu", showMindmapContextMenu);
   mindMap.on("search_info_change", updateMindmapSearchStatus);
   bindMindmapToolbarControls();
+  updateMobileMindmapStatusActions();
   requestAnimationFrame(() => {
     mindMap.resize();
     if (state.mindmapOptions.autoFit) fitMindmapToView();
@@ -7478,7 +7479,9 @@ async function writeServerFile(path, content, { backup = true } = {}) {
 
 function updateEditButtons() {
   const canEdit = canEditNode(state.currentNode) && state.activeView === "note";
+  const mindmapEditing = state.editMode && state.activeView === "note" && isMindmapDocument(state.currentContent);
   document.documentElement.classList.toggle("editing-mode", state.editMode);
+  document.documentElement.classList.toggle("mindmap-editing-mode", mindmapEditing);
   if (els.editButton) els.editButton.disabled = state.activeView !== "note" || !state.vaultName || !state.currentPath;
   els.webEditButton.disabled = !canEdit || state.autoSaveInFlight;
   els.webEditButton.hidden = state.activeView !== "note";
@@ -7497,6 +7500,7 @@ function updateEditButtons() {
   }
   if (els.editorImageButton) els.editorImageButton.hidden = !(state.editMode && state.serverVaultWritable);
   updateStatusEditButtons();
+  updateMobileMindmapStatusActions();
 }
 
 function renderEditSaveButton() {
@@ -7555,6 +7559,7 @@ function arrangeChromeControls() {
     statusBar.append(historyWrap);
     if (els.markdownToggleButton) statusBar.append(els.markdownToggleButton);
     if (els.documentMindmapToggleButton) statusBar.append(els.documentMindmapToggleButton);
+    ensureMobileMindmapStatusActions(statusBar);
     const isMobile = window.matchMedia("(max-width: 780px)").matches;
     if (isMobile) {
       const mobileRight = document.createElement("div");
@@ -7593,6 +7598,7 @@ function arrangeChromeControls() {
     const mindmapRef = els.notePath?.parentElement === statusBar ? els.notePath : (els.syncStatus?.parentElement === statusBar ? els.syncStatus : null);
     if (els.documentMindmapToggleButton.parentElement !== statusBar) statusBar.insertBefore(els.documentMindmapToggleButton, mindmapRef);
   }
+  ensureMobileMindmapStatusActions(statusBar);
   if (els.notePath && els.notePath.parentElement !== statusBar) statusBar.insertBefore(els.notePath, els.syncStatus);
   if (!document.getElementById("bottomSaveStatus")) {
     const el = document.createElement("span");
@@ -7620,6 +7626,42 @@ function arrangeChromeControls() {
   } else if (els.syncStatus && els.syncStatus.parentElement !== statusBar) {
     statusBar.append(els.syncStatus);
   }
+}
+
+function ensureMobileMindmapStatusActions(statusBar = document.querySelector(".app-status-bar")) {
+  if (!statusBar) return null;
+  let actions = statusBar.querySelector(".mobile-mindmap-status-actions");
+  if (!actions) {
+    actions = document.createElement("div");
+    actions.className = "mobile-mindmap-status-actions";
+    actions.setAttribute("aria-label", "마인드맵 노드 편집");
+    [
+      ["insert-child", "자식 추가", "+자식"],
+      ["insert-sibling", "형제 추가", "+형제"],
+      ["remove-node", "삭제", "삭제"],
+    ].forEach(([action, label, text]) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "mobile-mindmap-status-action";
+      button.setAttribute("data-mindmap-status-action", action);
+      button.setAttribute("aria-label", label);
+      button.title = label;
+      button.textContent = text;
+      button.addEventListener("click", () => runMindmapToolbarAction(button.dataset.mindmapStatusAction));
+      actions.append(button);
+    });
+    const noteRef = els.notePath?.parentElement === statusBar ? els.notePath : null;
+    statusBar.insertBefore(actions, noteRef);
+  }
+  updateMobileMindmapStatusActions(actions);
+  return actions;
+}
+
+function updateMobileMindmapStatusActions(actions = document.querySelector(".mobile-mindmap-status-actions")) {
+  if (!actions) return;
+  const canEdit = canUseMindmapEditAction();
+  actions.hidden = !(state.editMode && state.activeView === "note" && isMindmapDocument(state.currentContent));
+  actions.querySelectorAll("button").forEach((button) => { button.disabled = !canEdit; });
 }
 
 function createStatusEditButton(id, label, title, text, command) {
