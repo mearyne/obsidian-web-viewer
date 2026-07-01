@@ -147,3 +147,4 @@
 - 2026-07-01: Fix mindmap title editing so app shortcuts do not block text input keys.
 - 2026-07-01: Add Ctrl+Shift+B shortcut to wrap the selected mindmap node in a frame.
 - 2026-07-01: Fix dark-mode mindmap node text editing so editor text stays visible.
+- 2026-07-02: Fix bookmarklet web clipper metadata extraction for YouTube videos, including mobile YouTube pages.

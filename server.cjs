@@ -1539,7 +1539,7 @@ function readSettingsFile() {
 
 // oEmbed 프로바이더 목록 (URL 패턴 → oEmbed 엔드포인트)
 const OEMBED_PROVIDERS = [
-  { pattern: /^(www\.)?(youtube\.com|youtu\.be)$/, endpoint: "https://www.youtube.com/oembed", favicon: "https://www.youtube.com/favicon.ico" },
+  { pattern: /^(www\.|m\.)?(youtube\.com|youtu\.be)$/, endpoint: "https://www.youtube.com/oembed", favicon: "https://www.youtube.com/favicon.ico" },
   { pattern: /^(www\.)?vimeo\.com$/, endpoint: "https://vimeo.com/api/oembed.json", favicon: "https://vimeo.com/favicon.ico" },
   { pattern: /^(www\.)?tiktok\.com$/, endpoint: "https://www.tiktok.com/oembed", favicon: "https://www.tiktok.com/favicon.ico" },
   { pattern: /^(www\.)?(twitter\.com|x\.com)$/, endpoint: "https://publish.twitter.com/oembed", favicon: "https://abs.twimg.com/favicons/twitter.2.ico" },
