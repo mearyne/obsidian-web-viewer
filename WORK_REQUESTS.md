@@ -149,3 +149,4 @@
 - 2026-07-01: Fix dark-mode mindmap node text editing so editor text stays visible.
 - 2026-07-02: Fix bookmarklet web clipper metadata extraction for YouTube videos, including mobile YouTube pages.
 - 2026-07-02: Show the app status bar during mobile mindmap editing and add child, sibling, and delete node buttons to it.
+- 2026-07-02: Fix YouTube bookmarklet saves that fail with browser Failed to fetch by adding a navigation fallback path.

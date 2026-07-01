@@ -48,6 +48,20 @@
     el.style.background = color || '#2a2f35';
   }
 
+  function fallbackSaveByNavigation(savePath, title, pageUrl) {
+    var fallbackUrl = SERVER + '/api/clip-url?path=' + encodeURIComponent(savePath)
+      + '&title=' + encodeURIComponent(title)
+      + '&url=' + encodeURIComponent(pageUrl);
+    var popup = window.open(fallbackUrl, '_blank', 'width=420,height=240');
+    if (popup) {
+      try { popup.opener = null; } catch (e) {}
+      showToast('브라우저가 직접 저장을 막아 새 창으로 저장합니다.', '#4a3f2d');
+      return true;
+    }
+    location.href = fallbackUrl;
+    return true;
+  }
+
   function clip(rules) {
     var rawTitle = document.title.trim() || 'Clipped Page';
     var pageUrl = location.href;
@@ -91,6 +105,7 @@
           });
       })
       .catch(function (e) {
+        if (e && e.message === 'Failed to fetch' && fallbackSaveByNavigation(savePath, displayTitle, pageUrl)) return;
         showToast('✗ 저장 실패: ' + e.message, '#4a2d2d');
       });
   }

@@ -337,6 +337,13 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (requestPath === "/api/clip-url") {
+    clipUrlFromBookmarklet(url.searchParams, res).catch((error) => {
+      sendJsonCors(res, 500, { error: error.message || "Clip fallback failed" });
+    });
+    return;
+  }
+
   if (requestPath === "/api/clip") {
     setCorsHeaders(res, "POST, OPTIONS");
     if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return; }
@@ -1800,6 +1807,22 @@ function sendClipBookmarklet(folder, req, res) {
   } catch (error) {
     sendJson(res, 500, { error: error.message || "Bookmarklet build failed" });
   }
+}
+
+async function clipUrlFromBookmarklet(searchParams, res) {
+  const requestedPath = typeof searchParams.get("path") === "string" ? searchParams.get("path") : "";
+  const pageUrl = typeof searchParams.get("url") === "string" ? searchParams.get("url") : "";
+  const title = typeof searchParams.get("title") === "string" ? searchParams.get("title") : "Clipped Page";
+  const esc = (value) => String(value || "").replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  const today = new Date().toISOString().slice(0, 10);
+  let meta = null;
+  try { meta = await fetchMetaWithOEmbed(pageUrl); } catch {}
+  const embed = meta?.title
+    ? `\`\`\`embed\ntitle: "${esc(meta?.title || title)}"\ndescription: "${esc(meta?.description || "")}"\nimage: "${esc(meta?.image || "")}"\nfavicon: "${esc(meta?.favicon || "")}"\nurl: "${esc(pageUrl)}"\n\`\`\``
+    : `\`\`\`embed\nstatus: "loading"\nurl: "${esc(pageUrl)}"\n\`\`\``;
+  const content = `---\ntitle: "${esc(title)}"\nurl: ${pageUrl}\ndate: ${today}\n---\n\n`
+    + embed;
+  clipWebPage(JSON.stringify({ path: requestedPath, content }), res);
 }
 
 function setCorsHeaders(res, methods = "GET, POST, PUT, PATCH, DELETE, OPTIONS") {
